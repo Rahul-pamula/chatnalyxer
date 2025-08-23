@@ -1,1 +1,1 @@
-print("this is tesing purpose")
+print("this is testing purpose")
