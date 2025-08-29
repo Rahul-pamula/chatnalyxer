@@ -1,40 +1,54 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
+
+# ----- User -----
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
 
+
 class UserOut(BaseModel):
     id: int
     username: str
     email: EmailStr
-    class Config:
-        from_attributes = True
 
+    class Config:
+        orm_mode = True   # for SQLAlchemy models
+
+
+# ----- Auth -----
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+
+# ----- Group -----
 class GroupCreate(BaseModel):
     name: str
+
 
 class GroupOut(BaseModel):
     id: int
     name: str
-    class Config:
-        from_attributes = True
 
+    class Config:
+        orm_mode = True
+
+
+# ----- Message -----
 class MessageCreate(BaseModel):
     content: str
     group_id: int
 
+
 class MessageOut(BaseModel):
     id: int
     content: str
-    created_at: datetime
-    sender_id: int
     group_id: int
+    sender_id: int
+    created_at: datetime
+
     class Config:
-        from_attributes = True
+        orm_mode = True
