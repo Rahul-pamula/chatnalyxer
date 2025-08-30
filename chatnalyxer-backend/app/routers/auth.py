@@ -10,7 +10,7 @@ from ..database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-SECRET_KEY = "supersecretkey"   # ⚠️ move to .env
+SECRET_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4"   # ⚠️ move to .env
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
