@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -8,17 +8,22 @@ from passlib.context import CryptContext
 from .. import models, schemas
 from ..database import get_db
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
-
-SECRET_KEY = "supersecretkey"   # ⚠️ move to .env
+# -----------------------
+# JWT / Auth Config
+# -----------------------
+SECRET_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4"  # ⚠️ move to .env
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# ✅ Hashing helpers
+
+# -----------------------
+# Password Helpers
+# -----------------------
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -26,7 +31,9 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-# ✅ Authenticate user with DB
+# -----------------------
+# Authenticate User
+# -----------------------
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not verify_password(password, user.hashed_password):
@@ -34,15 +41,20 @@ def authenticate_user(db: Session, username: str, password: str):
     return user
 
 
-# ✅ JWT helpers
+# -----------------------
+# JWT Helpers
+# -----------------------
 def create_access_token(data: dict, expires_delta: timedelta = None):
+    """Create JWT token with `sub=username`"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-# ✅ Login route
+# -----------------------
+# Routes
+# -----------------------
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
@@ -55,7 +67,9 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     return {"access_token": token, "token_type": "bearer"}
 
 
-# ✅ Get current user
+# -----------------------
+# Get Current User
+# -----------------------
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

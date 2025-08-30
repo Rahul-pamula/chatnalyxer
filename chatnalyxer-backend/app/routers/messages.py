@@ -10,7 +10,7 @@ router = APIRouter(prefix="/messages", tags=["Messages"])
 
 
 # ✅ Create a new message
-@router.post("/", response_model=schemas.MessageOut)
+@router.post("", response_model=schemas.MessageOut)
 def create_message(
     payload: schemas.MessageCreate,
     db: Session = Depends(get_db),
@@ -28,7 +28,7 @@ def create_message(
 
 
 # ✅ Get messages (optionally filter by group_id)
-@router.get("/", response_model=list[schemas.MessageOut])
+@router.get("", response_model=list[schemas.MessageOut])
 def list_messages(
     group_id: Optional[int] = None,
     db: Session = Depends(get_db),
