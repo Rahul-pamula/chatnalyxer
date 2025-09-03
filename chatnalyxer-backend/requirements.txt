@@ -3,4 +3,7 @@ uvicorn[standard]
 SQLAlchemy>=2.0
 psycopg2-binary
 python-dotenv
-pydantic>=2
+pydantic[email]
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]

@@ -1,11 +1,19 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from pydantic import BaseModel
 
+<<<<<<< HEAD
 from pydantic import BaseModel
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+=======
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    
+>>>>>>> feature/backend-auth
 # ----- User -----
 class UserCreate(BaseModel):
     username: str
