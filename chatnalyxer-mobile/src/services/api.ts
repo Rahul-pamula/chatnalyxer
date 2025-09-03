@@ -1,20 +1,38 @@
 import axios from "axios";
+import { BASE_URL } from "../config";
 
-// 👉 Update this to Rahul’s FastAPI base URL when ready
-const baseURL = "http://localhost:8000";
+const client = axios.create({
+  baseURL: BASE_URL,
+  headers: { "Content-Type": "application/json" },
+});
 
-const client = axios.create({ baseURL });
-
-export async function login(email: string, password: string): Promise<string> {
-  // TEMP: simulate login until backend is ready
-  // const { data } = await client.post("/login", { email, password });
-  // return data.token;
-  await new Promise((res) => setTimeout(res, 300));
-  return "demo-token";
+export function setAuthToken(token?: string | null) {
+  if (token) {
+    client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete client.defaults.headers.common["Authorization"];
+  }
 }
 
-export async function register(email: string, password: string): Promise<boolean> {
-  // TEMP: simulate register
-  await new Promise((res) => setTimeout(res, 300));
-  return true;
+// --- Auth ---
+export async function apiLogin(email: string, password: string) {
+  const { data } = await client.post("/auth/login", { email, password });
+  return data; // { user, token }
+}
+
+export async function apiRegister(email: string, password: string) {
+  const { data } = await client.post("/auth/register", { email, password });
+  return data;
+}
+
+// --- Groups ---
+export async function getGroups() {
+  const { data } = await client.get("/groups");
+  return data;
+}
+
+// --- Dashboard ---
+export async function getDashboard() {
+  const { data } = await client.get("/dashboard");
+  return data;
 }
