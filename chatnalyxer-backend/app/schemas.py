@@ -1,17 +1,16 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from pydantic import BaseModel
 
+# ----- Token -----
 class Token(BaseModel):
     access_token: str
-    token_type: str
-    
+    token_type: str = "bearer"
+
 # ----- User -----
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-
 
 class UserOut(BaseModel):
     id: int
@@ -19,19 +18,11 @@ class UserOut(BaseModel):
     email: EmailStr
 
     class Config:
-        orm_mode = True   # for SQLAlchemy models
-
-
-# ----- Auth -----
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
+        orm_mode = True
 
 # ----- Group -----
 class GroupCreate(BaseModel):
     name: str
-
 
 class GroupOut(BaseModel):
     id: int
@@ -40,12 +31,10 @@ class GroupOut(BaseModel):
     class Config:
         orm_mode = True
 
-
 # ----- Message -----
 class MessageCreate(BaseModel):
     content: str
     group_id: int
-
 
 class MessageOut(BaseModel):
     id: int
@@ -56,3 +45,10 @@ class MessageOut(BaseModel):
 
     class Config:
         orm_mode = True
+        
+# ----- Message from WhatsApp Integration -----
+class WhatsAppMessageCreate(BaseModel):
+    content: str
+    sender_name: str
+    group_id: str
+    timestamp: datetime
