@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
 from .. import schemas, models, utils
 from ..database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
 @router.post("/register", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
 def register_user(
@@ -30,10 +35,10 @@ def register_user(
 
 @router.post("/login", response_model=schemas.Token)
 def login_user(
-    credentials: OAuth2PasswordRequestForm = Depends(),
+    credentials: UserLogin,
     db: Session = Depends(get_db)
 ):
-    user = db.query(models.User).filter(models.User.email == credentials.username).first()
+    user = db.query(models.User).filter(models.User.email == credentials.email).first()
     
     # Check if user exists and password is correct
     if not user or not utils.verify(credentials.password, user.hashed_password):
