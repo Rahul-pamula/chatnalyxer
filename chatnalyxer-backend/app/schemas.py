@@ -1,23 +1,29 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional, List
+
+# ----- Token -----
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 # ----- User -----
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     email: EmailStr
+
+class UserCreate(UserBase):
+    username: str
     password: str
 
-class UserOut(BaseModel):
+class UserLogin(UserBase):
+    password: str
+
+class UserOut(UserBase):
     id: int
-    email: EmailStr
+    username: str
 
     class Config:
-        from_attributes = True
-
-# ----- Auth -----
-class TokenResponse(BaseModel):
-    user: UserOut
-    token: str
+        orm_mode = True
 
 # ----- Group -----
 class GroupCreate(BaseModel):
@@ -28,7 +34,7 @@ class GroupOut(BaseModel):
     name: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # ----- Message -----
 class MessageCreate(BaseModel):
@@ -41,23 +47,18 @@ class MessageOut(BaseModel):
     group_id: int
     sender_id: int
     created_at: datetime
+    sender: UserOut
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
-# ----- WhatsApp Integration -----
+# ----- Message from WhatsApp Integration -----
 class WhatsAppMessageCreate(BaseModel):
     content: str
     sender_name: str
     group_id: str
     timestamp: datetime
 
-# ----- Dashboard -----
-class DashboardMessage(BaseModel):
-    id: int
-    sender: str
-    text: str
-    date: str
-
+# ----- Dashboard Response -----
 class DashboardResponse(BaseModel):
-    messages: List[DashboardMessage]
+    messages: List[MessageOut]

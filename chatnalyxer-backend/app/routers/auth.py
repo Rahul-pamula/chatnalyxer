@@ -1,57 +1,48 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from jose import jwt
-from passlib.context import CryptContext
-
-from .. import models, schemas
+from .. import schemas, models, utils
 from ..database import get_db
 
-SECRET_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4"  # TODO: move to .env
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-router = APIRouter(prefix="/auth", tags=["Auth"])
-
-
-def hash_password(password: str):
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-@router.post("/register", response_model=schemas.TokenResponse)
-def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == user.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    hashed_pwd = hash_password(user.password)
-    new_user = models.User(email=user.email, hashed_password=hashed_pwd)
+@router.post("/register", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
+def register_user(
+    user_in: schemas.UserCreate,
+    db: Session = Depends(get_db)
+):
+    # Hash the password before saving it to the database
+    hashed_password = utils.hash(user_in.password)
+    
+    # Create the user in the database
+    new_user = models.User(
+        username=user_in.username,
+        email=user_in.email,
+        hashed_password=hashed_password
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    # Generate and return a token
+    token = utils.create_access_token(data={"user_id": new_user.id})
+    return {"access_token": token, "token_type": "bearer"}
 
-    token = create_access_token({"sub": str(new_user.id)})
-    return {"user": new_user, "token": token}
-
-
-@router.post("/login", response_model=schemas.TokenResponse)
-def login(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
-
-    token = create_access_token({"sub": str(db_user.id)})
-    return {"user": db_user, "token": token}
+@router.post("/login", response_model=schemas.Token)
+def login_user(
+    credentials: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(models.User.email == credentials.username).first()
+    
+    # Check if user exists and password is correct
+    if not user or not utils.verify(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    # Generate and return a token
+    token = utils.create_access_token(data={"user_id": user.id})
+    return {"access_token": token, "token_type": "bearer"}
