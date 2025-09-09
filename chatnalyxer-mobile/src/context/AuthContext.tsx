@@ -1,15 +1,14 @@
-// src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiLogin, apiRegister, setAuthToken } from "../services/api";
 
-type User = { id?: string; email?: string } | null;
+type User = { id?: number; email?: string, username?: string } | null;
 type AuthContextType = {
   token: string | null;
   user: User;
   loading: boolean;
   signIn: (email: string, pwd: string) => Promise<void>;
-  signUp: (email: string, pwd: string) => Promise<void>;
+  signUp: (username: string, email: string, pwd: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -49,8 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (u) await AsyncStorage.setItem("user", JSON.stringify(u));
   };
 
-  const signUp = async (email: string, password: string) => {
-    const data = await apiRegister(email, password);
+  const signUp = async (username: string, email: string, password: string) => {
+    const data = await apiRegister(username, email, password);
     const t = data.token;
     const u = data.user ?? null;
     setToken(t);

@@ -20,9 +20,9 @@ export async function apiLogin(email: string, password: string) {
   return data; // { user, token }
 }
 
-export async function apiRegister(email: string, password: string) {
-  const { data } = await client.post("/auth/register", { email, password });
-  return data;
+export async function apiRegister(username: string, email: string, password: string) {
+  const { data } = await client.post("/auth/register", { username, email, password });
+  return data; // { user, token }
 }
 
 // --- Groups ---

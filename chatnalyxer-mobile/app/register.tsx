@@ -6,17 +6,26 @@ import { useAuth } from "../src/context/AuthContext";
 export default function Register() {
   const router = useRouter();
   const { signUp } = useAuth();
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const onRegister = async () => {
-    await signUp(email, password);
-    router.replace("/groups"); // ✅ replace: don’t go back to register
+    await signUp(username, email, password);
+    router.replace("/groups");
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Create Account</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Username"
+        placeholderTextColor="#888"
+        value={username}
+        onChangeText={setUsername}
+        autoCapitalize="none"
+      />
       <TextInput
         style={styles.input}
         placeholder="Email"
