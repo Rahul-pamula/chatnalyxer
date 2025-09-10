@@ -1,16 +1,22 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from .. import schemas
+from .. import schemas, models
 from ..database import get_db
+from ..deps import get_current_user
+from typing import List
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
-
 @router.get("/", response_model=schemas.DashboardResponse)
-def get_dashboard(db: Session = Depends(get_db)):
+def get_dashboard(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    # This is a temporary placeholder. Rahul will need to find the correct
+    # messages from the database for the authenticated user.
+    # For now, let's just get the latest 50 messages from the database
+    messages = db.query(models.Message).order_by(models.Message.created_at.desc()).limit(50).all()
+    
     return {
-        "messages": [
-            {"id": 1, "sender": "Prof. Sharma", "text": "Exam postponed to next week.", "date": "2025-09-01T10:30:00Z"},
-            {"id": 2, "sender": "Dept Admin", "text": "Cultural fest on Friday!", "date": "2025-08-31T14:45:00Z"},
-        ]
+        "messages": messages
     }

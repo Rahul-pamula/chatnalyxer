@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app import models
 from app.database import engine
-from app.routers import auth, groups, dashboard
+from app.routers import auth, groups, dashboard, messages
 from fastapi.middleware.cors import CORSMiddleware
 
 # Auto-create tables (for dev only)
@@ -36,3 +36,4 @@ def health():
 app.include_router(auth.router)
 app.include_router(groups.router)
 app.include_router(dashboard.router)
+app.include_router(messages.router)
