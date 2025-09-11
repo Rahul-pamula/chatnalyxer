@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -72,35 +73,46 @@ export default function Dashboard() {
     <View style={styles.container}>
       <Text style={styles.title}>Dashboard</Text>
 
-      {/* 🔎 Filters */}
-      <TextInput
-        style={styles.input}
-        placeholder="Filter by sender"
-        value={senderFilter}
-        onChangeText={setSenderFilter}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="From date (YYYY-MM-DD)"
-        value={fromDate}
-        onChangeText={setFromDate}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="To date (YYYY-MM-DD)"
-        value={toDate}
-        onChangeText={setToDate}
-      />
+      <View style={styles.filtersRow}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          placeholder="Filter by sender"
+          value={senderFilter}
+          onChangeText={setSenderFilter}
+        />
+      </View>
 
-      {/* 📩 Messages list */}
+      <View style={styles.filtersRow}>
+        <TextInput
+          style={[styles.input, styles.inputHalf]}
+          placeholder="From (YYYY-MM-DD)"
+          value={fromDate}
+          onChangeText={setFromDate}
+        />
+        <TextInput
+          style={[styles.input, styles.inputHalf]}
+          placeholder="To (YYYY-MM-DD)"
+          value={toDate}
+          onChangeText={setToDate}
+        />
+      </View>
+
       <FlatList
+        contentContainerStyle={styles.listContent}
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.msg}>
-            <Text style={styles.sender}>{item.sender}</Text>
-            <Text>{item.text}</Text>
-            <Text style={styles.date}>{item.date}</Text>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.sender}>{item.sender}</Text>
+              <Text style={styles.date}>{item.date}</Text>
+            </View>
+            <Text style={styles.message}>{item.text}</Text>
+            <View style={styles.cardFooter}>
+              <Pressable style={styles.tag}>
+                <Text style={styles.tagText}>General</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       />
@@ -109,23 +121,36 @@ export default function Dashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1, padding: 16, backgroundColor: "#F7F8FA" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  title: { fontSize: 22, fontWeight: "600", marginBottom: 12, color: "#000" },
+  title: { fontSize: 22, fontWeight: "700", marginBottom: 12, color: "#0F172A" },
+  listContent: { paddingBottom: 16 },
+  filtersRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: "#fff",
+    color: "#0F172A",
   },
-  msg: {
+  inputHalf: { flex: 1 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
     padding: 12,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  sender: { fontWeight: "600", marginBottom: 4 },
-  date: { fontSize: 12, color: "#666", marginTop: 4 },
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  sender: { fontWeight: "700", color: "#0F172A" },
+  date: { fontSize: 12, color: "#64748B" },
+  message: { color: "#0F172A" },
+  cardFooter: { flexDirection: "row", marginTop: 8 },
+  tag: { backgroundColor: "#EEF2FF", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  tagText: { color: "#4F46E5", fontWeight: "600", fontSize: 12 },
 });
