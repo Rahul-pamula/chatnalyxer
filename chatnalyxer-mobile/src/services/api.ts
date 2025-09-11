@@ -1,0 +1,38 @@
+import axios from "axios";
+import { BASE_URL } from "../config";
+
+const client = axios.create({
+  baseURL: BASE_URL,
+  headers: { "Content-Type": "application/json" },
+});
+
+export function setAuthToken(token?: string | null) {
+  if (token) {
+    client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete client.defaults.headers.common["Authorization"];
+  }
+}
+
+// --- Auth ---
+export async function apiLogin(email: string, password: string) {
+  const { data } = await client.post("/auth/login", { email, password });
+  return data; // { user, token }
+}
+
+export async function apiRegister(username: string, email: string, password: string) {
+  const { data } = await client.post("/auth/register", { username, email, password });
+  return data; // { user, token }
+}
+
+// --- Groups ---
+export async function getGroups() {
+  const { data } = await client.get("/groups");
+  return data;
+}
+
+// --- Dashboard ---
+export async function getDashboard() {
+  const { data } = await client.get("/dashboard");
+  return data;
+}
