@@ -6,8 +6,16 @@ from datetime import datetime
 from .. import models, schemas
 from ..database import get_db
 from ..deps import get_current_user
-
 router = APIRouter(prefix="/messages", tags=["Messages"])
+
+# Enable ML analyzer for priority detection
+try:
+    from app.services.ml_analyzer import MLMessageAnalyzer
+    ml_analyzer = MLMessageAnalyzer()
+    print("ML analyzer loaded successfully - priority detection enabled")
+except ImportError as e:
+    ml_analyzer = None
+    print(f"WARNING: ML analyzer import failed: {e} - using fallback values")
 
 # Dependency to check API Key for unauthenticated routes
 def get_api_key(x_api_key: str = Header(...)):
@@ -20,23 +28,58 @@ def create_whatsapp_message(
     db: Session = Depends(get_db),
     api_key_check: str = Depends(get_api_key)
 ):
-    # This is a temporary placeholder. Rahul will need to find the correct
-    # sender_id and group_id from the database using the names/IDs.
-    # For now, let's assume a default user (ID 1) and group (ID 1).
-    sender_id = 1
-    
-    # In the future, Rahul needs to find the group from the database
-    # using payload.group_id (which is a string like "123456@g.us")
-    # and get the integer ID.
-    group_id = 1 # Temporary placeholder
+    # Find the group by WhatsApp ID
+    group = db.query(models.Group).filter(models.Group.whatsapp_id == payload.group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail=f"Group with WhatsApp ID {payload.group_id} not found")
+
+    # Create or get default user for WhatsApp messages
+    default_user = db.query(models.User).filter(models.User.email == "whatsapp@chatnalyxer.com").first()
+    if not default_user:
+        # Create a default user for WhatsApp messages
+        default_user = models.User(
+            username="whatsapp_user",
+            email="whatsapp@chatnalyxer.com",
+            hashed_password="dummy_hash"
+        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
+
+    # Analyze message with ML for priority detection (with fallback)
+    if ml_analyzer:
+        ml_results = ml_analyzer.analyze_message(payload.content, payload.timestamp)
+    else:
+        # Fallback ML results when analyzer is not available
+        ml_results = {
+            'priority_level': 'MEDIUM',
+            'urgency_score': 0.5,
+            'deadline_extracted': None,
+            'extracted_keywords': '[]',
+            'is_priority': 0,
+            'message_category': 'GENERAL',
+            'academic_context': '{}'
+        }
 
     msg = models.Message(
         content=payload.content,
-        group_id=group_id,
-        sender_id=sender_id,
-        created_at=payload.timestamp
+        group_id=group.id,
+        sender_id=default_user.id,
+        created_at=payload.timestamp,
+        priority_level=ml_results['priority_level'],
+        urgency_score=ml_results['urgency_score'],
+        deadline_extracted=ml_results['deadline_extracted'],
+        extracted_keywords=ml_results['extracted_keywords'],
+        is_priority=ml_results['is_priority'],
+        message_category=ml_results.get('message_category', 'GENERAL'),
+        academic_context=ml_results.get('academic_context', '{}')
     )
     db.add(msg); db.commit(); db.refresh(msg)
+
+    # Log priority message detection
+    if ml_results['is_priority']:
+        print(f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
+
     return msg
 
 @router.post("", response_model=schemas.MessageOut)
@@ -60,3 +103,114 @@ def list_messages(
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+@router.get("/public", response_model=list[schemas.MessageOut])
+def list_messages_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint for testing - fetches messages without authentication"""
+    q = db.query(models.Message)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+@router.get("/priority", response_model=list[schemas.MessageOut])
+def list_priority_messages(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Get only priority messages based on ML analysis"""
+    q = db.query(models.Message).filter(models.Message.is_priority == 1)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+@router.get("/priority/public", response_model=list[schemas.MessageOut])
+def list_priority_messages_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint for priority messages - for dashboard"""
+    q = db.query(models.Message).filter(models.Message.is_priority == 1)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+@router.get("/analytics")
+def get_message_analytics(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Get ML analytics data for visualization dashboard"""
+    q = db.query(models.Message)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+
+    messages = q.all()
+
+    # Convert to dict format for analytics
+    message_dicts = []
+    for msg in messages:
+        message_dicts.append({
+            'priority_level': msg.priority_level,
+            'urgency_score': msg.urgency_score,
+            'deadline_extracted': msg.deadline_extracted,
+            'extracted_keywords': msg.extracted_keywords,
+            'is_priority': msg.is_priority,
+            'message_category': getattr(msg, 'message_category', 'GENERAL'),
+            'academic_context': getattr(msg, 'academic_context', '{}')
+        })
+
+    if ml_analyzer:
+        analytics_data = ml_analyzer.get_analytics_data(message_dicts)
+    else:
+        # Fallback analytics when ML analyzer is not available
+        analytics_data = {
+            'total_messages': len(message_dicts),
+            'priority_distribution': {'HIGH': 0, 'MEDIUM': len(message_dicts), 'LOW': 0},
+            'urgency_score_avg': 0.5,
+            'messages_with_deadlines': 0,
+            'top_keywords': []
+        }
+    return analytics_data
+
+@router.get("/analytics/public")
+def get_message_analytics_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint for analytics data - for dashboard"""
+    q = db.query(models.Message)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+
+    messages = q.all()
+
+    # Convert to dict format for analytics
+    message_dicts = []
+    for msg in messages:
+        message_dicts.append({
+            'priority_level': msg.priority_level,
+            'urgency_score': msg.urgency_score,
+            'deadline_extracted': msg.deadline_extracted,
+            'extracted_keywords': msg.extracted_keywords,
+            'is_priority': msg.is_priority,
+            'message_category': getattr(msg, 'message_category', 'GENERAL'),
+            'academic_context': getattr(msg, 'academic_context', '{}')
+        })
+
+    if ml_analyzer:
+        analytics_data = ml_analyzer.get_analytics_data(message_dicts)
+    else:
+        # Fallback analytics when ML analyzer is not available
+        analytics_data = {
+            'total_messages': len(message_dicts),
+            'priority_distribution': {'HIGH': 0, 'MEDIUM': len(message_dicts), 'LOW': 0},
+            'urgency_score_avg': 0.5,
+            'messages_with_deadlines': 0,
+            'top_keywords': []
+        }
+    return analytics_data

@@ -7,6 +7,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class AuthResponse(BaseModel):
+    token: str
+    user: 'UserOut'
+
 # ----- User -----
 class UserBase(BaseModel):
     email: EmailStr
@@ -28,13 +32,24 @@ class UserOut(UserBase):
 # ----- Group -----
 class GroupCreate(BaseModel):
     name: str
+    whatsapp_id: Optional[str] = None
+
+class GroupUpdate(BaseModel):
+    is_selected: bool
 
 class GroupOut(BaseModel):
     id: int
     name: str
+    whatsapp_id: Optional[str] = None
+    is_selected: bool
+    created_at: datetime
 
     class Config:
         orm_mode = True
+
+# ----- WhatsApp Group Sync -----
+class WhatsAppGroupSync(BaseModel):
+    groups: List[dict]  # List of {whatsapp_id, name} from WhatsApp
 
 # ----- Message -----
 class MessageCreate(BaseModel):
@@ -48,6 +63,12 @@ class MessageOut(BaseModel):
     sender_id: int
     created_at: datetime
     sender: UserOut
+    # ML-based priority detection fields
+    priority_level: Optional[str] = "MEDIUM"
+    urgency_score: Optional[float] = 0.5
+    deadline_extracted: Optional[datetime] = None
+    extracted_keywords: Optional[str] = None
+    is_priority: Optional[int] = 0
 
     class Config:
         orm_mode = True

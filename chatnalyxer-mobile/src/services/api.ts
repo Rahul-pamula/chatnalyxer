@@ -31,6 +31,18 @@ export async function getGroups() {
   return data;
 }
 
+export async function updateGroupSelection(groupId: number, isSelected: boolean) {
+  const { data } = await client.put(`/groups/${groupId}/selection`, {
+    is_selected: isSelected,
+  });
+  return data;
+}
+
+export async function getSelectedGroups() {
+  const { data } = await client.get("/groups/selected");
+  return data;
+}
+
 // --- Dashboard ---
 export async function getDashboard() {
   const { data } = await client.get("/dashboard");
