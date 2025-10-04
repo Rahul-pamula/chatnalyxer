@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button, RefreshControl } from 'react-native';
 import { BASE_URL } from '../config';
+import { Linking } from 'react-native';
 
 export default function DashboardScreen({ navigation }) {
   const [selectedGroups, setSelectedGroups] = useState([]);
@@ -135,7 +136,10 @@ export default function DashboardScreen({ navigation }) {
         <Text style={styles.subtitle}>
           Analyzing {selectedGroups.length} group{selectedGroups.length !== 1 ? 's' : ''}
         </Text>
-        <Button title="Change Groups" onPress={handleGoToGroupSelection} />
+        <View style={styles.buttonContainer}>
+          <Button title="Change Groups" onPress={handleGoToGroupSelection} />
+          <Button title="Link WhatsApp Device" onPress={() => Linking.openURL('http://localhost:3000')} />
+        </View>
       </View>
 
       <View style={styles.groupsList}>
@@ -171,6 +175,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   centered: { justifyContent: 'center', alignItems: 'center', flex: 1 },
   header: { marginBottom: 16 },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
   title: { fontSize: 22, fontWeight: '600', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#666', marginBottom: 8 },
   sectionTitle: { fontSize: 16, fontWeight: '500', marginBottom: 8 },

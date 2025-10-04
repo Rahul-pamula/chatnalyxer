@@ -26,7 +26,7 @@ const client = new Client({
   }),
   puppeteer: {
     executablePath: puppeteer.executablePath(), // ensures correct Chromium
-    headless: false, // show Chrome for debugging
+    headless: true, // run headless for server environments
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -39,9 +39,10 @@ const client = new Client({
 
 // ---- QR Code ----
 client.on("qr", (qr) => {
-  console.log("📲 Scan this QR to log in:");
-  qrcode.generate(qr, { small: true });
+  console.log("📲  QR Code received, generate and visit this URL:");
+  console.log(`http://localhost:3000/qr?data=${encodeURIComponent(qr)}`);
 });
+
 
 // ---- When WhatsApp is ready ----
 client.on("ready", async () => {
@@ -58,6 +59,9 @@ client.on("ready", async () => {
 
     console.log(`📌 Found ${allGroups.length} WhatsApp groups`);
 
+    // Sync all groups with backend first
+    await syncGroupsWithBackend(allGroups);
+
     // Load previously selected groups
     selectedGroups = loadSelectedGroups();
 
@@ -65,9 +69,17 @@ client.on("ready", async () => {
     const selectedCount = Object.values(selectedGroups).filter(g => g.selected).length;
 
     if (selectedCount === 0) {
-      // First time or no groups selected - show interactive selection
-      console.log('\n🎯 No groups currently selected for analysis');
-      selectedGroups = await selectGroupsInteractively(allGroups);
+      // First time or no groups selected - select all groups by default
+      console.log('\n🎯 No groups currently selected for analysis - selecting all groups by default');
+      allGroups.forEach(group => {
+        selectedGroups[group.id._serialized] = {
+          name: group.name,
+          selected: true,
+          addedAt: new Date().toISOString()
+        };
+      });
+      saveSelectedGroups(selectedGroups);
+      console.log(`✅ Selected all ${allGroups.length} groups for analysis`);
     } else {
       // Show currently selected groups
       console.log(`\n✅ Currently analyzing ${selectedCount} selected groups:`);
@@ -76,9 +88,6 @@ client.on("ready", async () => {
       });
       console.log('\n💡 Group selection will auto-update when changed via web interface\n');
     }
-
-    // Sync groups with backend
-    await syncGroupsWithBackend(allGroups);
 
     // Start monitoring for group selection changes
     startGroupSelectionMonitoring();
@@ -195,7 +204,7 @@ function startGroupSelectionMonitoring() {
 
       // Check if there are changes
       const hasChanges = currentSelected.length !== newSelected.length ||
-                        !currentSelected.every(id => newSelected.includes(id));
+        !currentSelected.every(id => newSelected.includes(id));
 
       if (hasChanges) {
         console.log('\n🔄 Group selection changed via web interface!');

@@ -14,7 +14,7 @@ export default function Login() {
     try {
       setErr("");
       await signIn(email, password);
-      router.replace("/groups"); // ✅ replace: don’t go back to login
+      router.replace("/dashboard"); // ✅ replace: don’t go back to login
     } catch {
       setErr("Login failed. Try again.");
     }

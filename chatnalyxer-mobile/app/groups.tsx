@@ -33,14 +33,7 @@ export default function Groups() {
     loadGroups();
   }, [token]);
 
-  // Auto-retry loading groups when coming from authentication
-  useEffect(() => {
-    if (token && groups.length === 0 && !loading) {
-      setTimeout(() => {
-        loadGroups();
-      }, 500); // Small delay to ensure API is ready
-    }
-  }, [token, groups.length, loading]);
+
 
   const loadGroups = async () => {
     setLoading(true);

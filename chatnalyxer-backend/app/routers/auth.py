@@ -39,8 +39,9 @@ def register_user(
     db.refresh(new_user)
 
     # Generate and return a token with user data
-    token = utils.create_access_token(data={"user_id": new_user.id})
+    token = utils.create_access_token(data={"sub": new_user.username})
     return {"token": token, "user": new_user}
+
 
 @router.post("/login", response_model=schemas.AuthResponse)
 def login_user(
@@ -58,5 +59,5 @@ def login_user(
         )
 
     # Generate and return a token with user data
-    token = utils.create_access_token(data={"user_id": user.id})
+    token = utils.create_access_token(data={"sub": user.username})
     return {"token": token, "user": user}

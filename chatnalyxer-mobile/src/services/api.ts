@@ -27,7 +27,7 @@ export async function apiRegister(username: string, email: string, password: str
 
 // --- Groups ---
 export async function getGroups() {
-  const { data } = await client.get("/groups");
+  const { data } = await client.get("/groups/");
   return data;
 }
 
@@ -45,6 +45,6 @@ export async function getSelectedGroups() {
 
 // --- Dashboard ---
 export async function getDashboard() {
-  const { data } = await client.get("/dashboard");
+  const { data } = await client.get("/dashboard/");
   return data;
 }
