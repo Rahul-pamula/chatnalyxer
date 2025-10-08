@@ -110,15 +110,18 @@ app.get('/health', (req, res) => {
 
 // API endpoint to update QR code
 app.post('/update-qr', express.json(), (req, res) => {
+  console.log('Received QR update request:', req.body);
   if (req.body.qr) {
     currentQR = req.body.qr;
+    console.log('QR code updated successfully');
     res.json({ success: true });
   } else {
+    console.log('No QR data provided');
     res.status(400).json({ error: 'No QR data provided' });
   }
 });
 
-app.listen(port, () => {
-  console.log(`🔗 QR Code server running at http://localhost:${port}`);
-  console.log(`📱 Visit http://localhost:${port}/qr to see the WhatsApp QR code`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`🔗 QR Code server running at http://0.0.0.0:${port}`);
+  console.log(`📱 Visit http://10.84.19.232:${port}/qr to see the WhatsApp QR code`);
 });

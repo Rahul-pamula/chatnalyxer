@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button, RefreshControl, Alert } from 'react-native';
 import { BASE_URL } from '../src/config';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../src/context/AuthContext';
+import { deleteMessage, deleteAllMessages } from '../src/services/api';
 
 type Group = {
   id: number;
@@ -28,6 +30,7 @@ type Message = {
 
 export default function Dashboard() {
   const router = useRouter();
+  const { token } = useAuth();
   const [selectedGroups, setSelectedGroups] = useState<Group[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +147,66 @@ export default function Dashboard() {
     router.push('/groups');
   };
 
+  const handleDeleteMessage = async (messageId: number) => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMessage(messageId);
+              // Refresh messages after deletion
+              await fetchMessages();
+            } catch (err: any) {
+              console.error('Error deleting message:', err);
+              if (err.response?.status === 401) {
+                Alert.alert('Session Expired', 'Please log in again', [
+                  { text: 'OK', onPress: () => router.push('/login') }
+                ]);
+              } else {
+                Alert.alert('Error', 'Failed to delete message');
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAllMessages = async () => {
+    Alert.alert(
+      'Delete All Messages',
+      'Are you sure you want to delete ALL messages? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAllMessages();
+              // Refresh messages after deletion
+              await fetchMessages();
+            } catch (err: any) {
+              console.error('Error deleting all messages:', err);
+              if (err.response?.status === 401) {
+                Alert.alert('Session Expired', 'Please log in again', [
+                  { text: 'OK', onPress: () => router.push('/login') }
+                ]);
+              } else {
+                Alert.alert('Error', 'Failed to delete all messages');
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleString();
   };
@@ -159,7 +222,16 @@ export default function Dashboard() {
         <View style={styles.messageHeaderLeft}>
           <Text style={styles.groupName}>{item.groupName}</Text>
         </View>
-        <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+        <View style={styles.messageHeaderRight}>
+          <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+          {token && (
+            <Button
+              title="Delete"
+              onPress={() => handleDeleteMessage(item.id)}
+              color="#d32f2f"
+            />
+          )}
+        </View>
       </View>
       <Text style={styles.messageContent}>{item.content}</Text>
       {item.deadline_extracted && (
@@ -218,6 +290,7 @@ export default function Dashboard() {
             title={autoRefreshEnabled ? "Auto-refresh: ON" : "Auto-refresh: OFF"}
             onPress={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
           />
+          <Button title="Delete All" onPress={handleDeleteAllMessages} color="#d32f2f" />
         </View>
         {autoRefreshEnabled && (
           <Text style={styles.autoRefreshText}>
@@ -283,6 +356,9 @@ const styles = StyleSheet.create({
   },
   messageHeaderLeft: {
     flex: 1,
+  },
+  messageHeaderRight: {
+    alignItems: 'flex-end',
   },
   groupName: { fontSize: 14, fontWeight: '500', color: '#0066cc', marginBottom: 4 },
   timestamp: { fontSize: 12, color: '#999' },

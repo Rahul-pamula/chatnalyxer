@@ -38,15 +38,25 @@ const client = new Client({
 });
 
 // ---- QR Code ----
-client.on("qr", (qr) => {
+client.on("qr", async (qr) => {
   console.log("📲  QR Code received, generate and visit this URL:");
   console.log(`http://localhost:3000/qr?data=${encodeURIComponent(qr)}`);
+
+  try {
+    await axios.post('http://10.84.19.232:3000/update-qr', { qr });
+    console.log("✅ QR code sent to server");
+  } catch (error) {
+    console.error("❌ Failed to send QR to server:", error.message);
+  }
 });
 
 
 // ---- When WhatsApp is ready ----
 client.on("ready", async () => {
   console.log("✅ WhatsApp bot is ready!");
+
+  // Wait a bit for the page to fully load
+  await new Promise(resolve => setTimeout(resolve, 5000));
 
   try {
     const chats = await client.getChats();
@@ -128,7 +138,6 @@ async function syncGroupsWithBackend(groups) {
 client.on("message_create", async (msg) => {
   try {
     const chat = await msg.getChat();
-    const contact = await msg.getContact();
 
     if (!chat.isGroup) {
       return;
@@ -144,9 +153,17 @@ client.on("message_create", async (msg) => {
       return;
     }
 
+    let sender_name = 'Unknown';
+    try {
+      const contact = await msg.getContact();
+      sender_name = contact.pushname || contact.name || contact.number || 'Unknown';
+    } catch (error) {
+      console.log('Could not get contact:', error.message);
+    }
+
     const messageData = {
       content: msg.body,
-      sender_name: contact.pushname || contact.name || contact.number,
+      sender_name: sender_name,
       group_id: chat.id._serialized,
       timestamp: new Date(msg.timestamp * 1000).toISOString(),
     };

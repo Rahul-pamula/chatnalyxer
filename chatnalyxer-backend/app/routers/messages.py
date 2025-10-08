@@ -18,9 +18,13 @@ except ImportError as e:
     print(f"WARNING: ML analyzer import failed: {e} - using fallback values")
 
 # Dependency to check API Key for unauthenticated routes
+
+
 def get_api_key(x_api_key: str = Header(...)):
     if x_api_key != "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
+
 
 @router.post("/from-whatsapp", response_model=schemas.MessageOut, status_code=status.HTTP_201_CREATED)
 def create_whatsapp_message(
@@ -29,12 +33,15 @@ def create_whatsapp_message(
     api_key_check: str = Depends(get_api_key)
 ):
     # Find the group by WhatsApp ID
-    group = db.query(models.Group).filter(models.Group.whatsapp_id == payload.group_id).first()
+    group = db.query(models.Group).filter(
+        models.Group.whatsapp_id == payload.group_id).first()
     if not group:
-        raise HTTPException(status_code=404, detail=f"Group with WhatsApp ID {payload.group_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Group with WhatsApp ID {payload.group_id} not found")
 
     # Create or get default user for WhatsApp messages
-    default_user = db.query(models.User).filter(models.User.email == "whatsapp@chatnalyxer.com").first()
+    default_user = db.query(models.User).filter(
+        models.User.email == "whatsapp@chatnalyxer.com").first()
     if not default_user:
         # Create a default user for WhatsApp messages
         default_user = models.User(
@@ -48,7 +55,8 @@ def create_whatsapp_message(
 
     # Analyze message with ML for priority detection (with fallback)
     if ml_analyzer:
-        ml_results = ml_analyzer.analyze_message(payload.content, payload.timestamp)
+        ml_results = ml_analyzer.analyze_message(
+            payload.content, payload.timestamp)
     else:
         # Fallback ML results when analyzer is not available
         ml_results = {
@@ -74,13 +82,17 @@ def create_whatsapp_message(
         message_category=ml_results.get('message_category', 'GENERAL'),
         academic_context=ml_results.get('academic_context', '{}')
     )
-    db.add(msg); db.commit(); db.refresh(msg)
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
 
     # Log priority message detection
     if ml_results['is_priority']:
-        print(f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
+        print(
+            f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
 
     return msg
+
 
 @router.post("", response_model=schemas.MessageOut)
 def create_message(
@@ -89,9 +101,13 @@ def create_message(
     user: models.User = Depends(get_current_user)
 ):
     print("📩 New message:", payload.content, "from group:", payload.group_id)
-    msg = models.Message(content=payload.content, group_id=payload.group_id, sender_id=user.id)
-    db.add(msg); db.commit(); db.refresh(msg)
+    msg = models.Message(content=payload.content,
+                         group_id=payload.group_id, sender_id=user.id)
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
     return msg
+
 
 @router.get("", response_model=list[schemas.MessageOut])
 def list_messages(
@@ -104,6 +120,7 @@ def list_messages(
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
 
+
 @router.get("/public", response_model=list[schemas.MessageOut])
 def list_messages_public(
     group_id: Optional[int] = None,
@@ -114,6 +131,7 @@ def list_messages_public(
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
 
 @router.get("/priority", response_model=list[schemas.MessageOut])
 def list_priority_messages(
@@ -127,6 +145,7 @@ def list_priority_messages(
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
 
+
 @router.get("/priority/public", response_model=list[schemas.MessageOut])
 def list_priority_messages_public(
     group_id: Optional[int] = None,
@@ -137,6 +156,7 @@ def list_priority_messages_public(
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
 
 @router.get("/analytics")
 def get_message_analytics(
@@ -176,6 +196,39 @@ def get_message_analytics(
             'top_keywords': []
         }
     return analytics_data
+
+
+@router.delete("/{message_id}")
+def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Delete a message by ID"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Optional: Check if user owns the message or is admin
+    # For now, allow any authenticated user to delete
+
+    db.delete(message)
+    db.commit()
+    return {"message": "Message deleted successfully"}
+
+
+@router.delete("")
+def delete_all_messages(
+    db: Session = Depends(get_db)
+):
+    """Delete all messages"""
+    print("Deleting all messages")
+    db.query(models.Message).delete()
+    db.commit()
+    print("All messages deleted")
+    return {"message": "All messages deleted successfully"}
+
 
 @router.get("/analytics/public")
 def get_message_analytics_public(

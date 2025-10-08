@@ -3,9 +3,11 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dateutil import parser
+from zoneinfo import ZoneInfo
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class MLMessageAnalyzer:
     """
@@ -14,6 +16,9 @@ class MLMessageAnalyzer:
     """
 
     def __init__(self):
+        # Timezone for India (IST)
+        self.ist = ZoneInfo('Asia/Kolkata')
+
         # High priority keywords (immediate attention required)
         self.high_priority_keywords = [
             'urgent', 'asap', 'immediately', 'deadline', 'submission', 'submit', 'jaldi',
@@ -42,51 +47,55 @@ class MLMessageAnalyzer:
         self.indian_student_terms = {
             # Class cancellation variations
             'class_cancel': ['no class', 'class cancel', 'class cancelled', 'class nahi', 'class off',
-                           'sir not coming', 'mam not coming', 'teacher absent', 'faculty absent',
-                           'prof absent', 'holiday', 'free period', 'no lecture'],
+                             'sir not coming', 'mam not coming', 'teacher absent', 'faculty absent',
+                             'prof absent', 'holiday', 'free period', 'no lecture'],
 
             # Submission related
             'submission': ['submit', 'submission', 'bhej do', 'send kar do', 'file send',
-                         'pdf bhejo', 'assignment submit', 'project submit', 'report submit',
-                         'upload kar do', 'email kar do', 'whatsapp pe bhej'],
+                           'pdf bhejo', 'assignment submit', 'project submit', 'report submit',
+                           'upload kar do', 'email kar do', 'whatsapp pe bhej'],
 
             # Exam related
             'exam': ['exam', 'test', 'quiz', 'viva', 'practical exam', 'lab exam',
-                   'internal', 'unit test', 'mid sem', 'end sem', 'final exam',
-                   'oral exam', 'surprise test', 'assessment'],
+                     'internal', 'unit test', 'mid sem', 'end sem', 'final exam',
+                     'oral exam', 'surprise test', 'assessment'],
 
             # Attendance and reporting
             'attendance': ['attendance', 'proxy', 'present', 'absent', 'bunk',
-                         'attendance lena', 'proxy dena', 'mark present', 'attend karo'],
+                           'attendance lena', 'proxy dena', 'mark present', 'attend karo'],
 
             # Meeting and schedule related
             'meeting': ['meeting', 'meet', 'discussion', 'conference', 'session',
-                      'gathering', 'appointment', 'meeting tomorrow', 'meeting today',
-                      'meeting at', 'important meeting', 'urgent meeting', 'class meeting',
-                      'faculty meeting', 'project meeting', 'group meeting', 'team meeting'],
+                        'gathering', 'appointment', 'meeting tomorrow', 'meeting today',
+                        'meeting at', 'important meeting', 'urgent meeting', 'class meeting',
+                        'faculty meeting', 'project meeting', 'group meeting', 'team meeting'],
 
             # Time indicators
             'time_urgent': ['abhi', 'now', 'turant', 'jaldi', 'fast', 'quick',
-                          'immediately', 'right now', 'asap'],
+                            'immediately', 'right now', 'asap'],
 
             # Common misspellings and variations
             'misspellings': ['tommorow', 'tommorrow', 'tmrw', 'assignmnt', 'submisn',
-                           'attendnce', 'presnt', 'lectr', 'projct', 'reportt']
+                             'attendnce', 'presnt', 'lectr', 'projct', 'reportt']
         }
 
         # Enhanced date patterns for Indian student context
         self.date_patterns = [
-            r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b',  # DD/MM/YYYY or DD-MM-YYYY (Indian format)
+            # DD/MM/YYYY or DD-MM-YYYY (Indian format)
+            r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b',
             r'\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{2,4})\b',
-            r'\b(today|tomorrow|tommorow|tommorrow|tonight|aaj|kal|parso)\b',  # Hindi time references
+            # Hindi time references
+            r'\b(today|tomorrow|tommorow|tommorrow|tonight|aaj|kal|parso)\b',
             r'\bdue\s+on\s+(\w+)\b',  # due on Monday
             r'\bdue\s+(\d{1,2})[/-](\d{1,2})\b',  # due 15/12
             r'\bby\s+(\d{1,2}:\d{2})\s*(am|pm)?\b',  # by 11:59 PM
-            r'\b(tommorow|tomorrow|tmrw|kal)\s+(\d{1,2})\s*(am|pm|baje)\b',  # tomorrow 1pm / kal 2 baje
+            # tomorrow 1pm / kal 2 baje
+            r'\b(tommorow|tomorrow|tmrw|kal)\s+(\d{1,2})\s*(am|pm|baje)\b',
             r'\bnext\s+(week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
             r'\b(agle|next)\s+(hafte|week|monday|tuesday|wednesday|thursday|friday)\b',
             r'\b(\d{1,2})\s+(din|days?)\s+(mein|me|baad)\b',  # 2 din mein
-            r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+ko\b',  # Monday ko
+            # Monday ko
+            r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+ko\b',
             r'\bthis\s+(week|month)\s+end\b',  # this week end
             r'\b(\d{1,2})(st|nd|rd|th)?\s+(se|tak|by)\b'  # 15th tak
         ]
@@ -114,26 +123,33 @@ class MLMessageAnalyzer:
             Dict containing priority_level, urgency_score, deadline_extracted, extracted_keywords, is_priority
         """
         try:
+            # Ensure created_at is in IST timezone
+            created_at = created_at.astimezone(
+                self.ist) if created_at.tzinfo else created_at.replace(tzinfo=self.ist)
             content_lower = content.lower()
 
             # Extract keywords
             keywords = self._extract_keywords(content_lower)
 
             # Calculate urgency score
-            urgency_score = self._calculate_urgency_score(content_lower, keywords)
+            urgency_score = self._calculate_urgency_score(
+                content_lower, keywords)
 
             # Determine priority level
-            priority_level = self._determine_priority_level(urgency_score, keywords)
+            priority_level = self._determine_priority_level(
+                urgency_score, keywords)
 
             # Extract deadline
             deadline = self._extract_deadline(content, created_at)
 
             # Detect message category and context
             message_category = self._detect_message_category(content_lower)
-            academic_context = self._analyze_academic_context(content_lower, keywords)
+            academic_context = self._analyze_academic_context(
+                content_lower, keywords)
 
             # Determine if this is a priority message
-            is_priority = self._is_priority_message(priority_level, urgency_score, deadline, academic_context)
+            is_priority = self._is_priority_message(
+                priority_level, urgency_score, deadline, academic_context)
 
             return {
                 'priority_level': priority_level,
@@ -186,8 +202,10 @@ class MLMessageAnalyzer:
         score = 0.0
 
         # Base score from keywords
-        high_priority_count = sum(1 for kw in keywords if kw in self.high_priority_keywords)
-        medium_priority_count = sum(1 for kw in keywords if kw in self.medium_priority_keywords)
+        high_priority_count = sum(
+            1 for kw in keywords if kw in self.high_priority_keywords)
+        medium_priority_count = sum(
+            1 for kw in keywords if kw in self.medium_priority_keywords)
 
         # High priority keywords contribute more to score
         score += high_priority_count * 0.3
@@ -241,7 +259,7 @@ class MLMessageAnalyzer:
         """
         # Check for explicit high priority indicators (enhanced for Indian context)
         high_priority_indicators = ['urgent', 'asap', 'emergency', 'critical', 'deadline',
-                                  'jaldi', 'turant', 'abhi', 'class_cancel', 'exam']
+                                    'jaldi', 'turant', 'abhi', 'class_cancel', 'exam']
 
         # Class cancellation is always high priority
         if any('class_cancel:' in kw for kw in keywords):
@@ -281,7 +299,8 @@ class MLMessageAnalyzer:
             return day_after_tomorrow.replace(hour=23, minute=59, second=59)
 
         # Check for "X din mein" (in X days)
-        days_pattern = re.search(r'(\d+)\s+(din|days?)\s+(mein|me|baad)', content_lower)
+        days_pattern = re.search(
+            r'(\d+)\s+(din|days?)\s+(mein|me|baad)', content_lower)
         if days_pattern:
             days = int(days_pattern.group(1))
             future_date = created_at + timedelta(days=days)
@@ -296,9 +315,13 @@ class MLMessageAnalyzer:
                     date_str = match.group(0)
                     parsed_date = parser.parse(date_str, fuzzy=True)
 
+                    # Localize to IST timezone
+                    parsed_date = parsed_date.replace(tzinfo=self.ist)
+
                     # If the parsed date is in the past, assume it's for next year
                     if parsed_date < created_at:
-                        parsed_date = parsed_date.replace(year=created_at.year + 1)
+                        parsed_date = parsed_date.replace(
+                            year=created_at.year + 1)
 
                     return parsed_date
 
@@ -348,19 +371,22 @@ class MLMessageAnalyzer:
         }
 
         # Check for deadline indicators with context
-        deadline_indicators = ['due', 'deadline', 'submit', 'by', 'before', 'tak']
+        deadline_indicators = ['due', 'deadline',
+                               'submit', 'by', 'before', 'tak']
         if any(indicator in content for indicator in deadline_indicators):
             context['has_deadline'] = True
             context['has_context'] = True
 
         # Check for urgency with context
-        urgency_indicators = ['urgent', 'asap', 'jaldi', 'turant', 'abhi', 'immediately']
+        urgency_indicators = ['urgent', 'asap',
+                              'jaldi', 'turant', 'abhi', 'immediately']
         if any(indicator in content for indicator in urgency_indicators):
             context['is_urgent'] = True
             context['has_context'] = True
 
         # Check for faculty involvement
-        faculty_terms = ['sir', 'mam', 'prof', 'teacher', 'faculty', 'hod', 'principal']
+        faculty_terms = ['sir', 'mam', 'prof',
+                         'teacher', 'faculty', 'hod', 'principal']
         if any(term in content for term in faculty_terms):
             context['involves_faculty'] = True
             context['has_context'] = True
@@ -371,14 +397,15 @@ class MLMessageAnalyzer:
             'practical', 'lab', 'class', 'lecture', 'seminar', 'presentation',
             'meeting', 'discussion', 'conference', 'session'
         ]
-        academic_count = sum(1 for term in academic_indicators if term in content.lower())
+        academic_count = sum(
+            1 for term in academic_indicators if term in content.lower())
         if academic_count >= 1 and context['message_length'] >= 3:
             context['has_context'] = True
 
         # Special case: meetings with time and place are always important
         if ('meeting' in content.lower() and
             any(time_word in content.lower() for time_word in ['tomorrow', 'today', 'at', 'am', 'pm']) and
-            context['message_length'] >= 5):
+                context['message_length'] >= 5):
             context['has_context'] = True
             context['is_urgent'] = True
 
@@ -409,7 +436,7 @@ class MLMessageAnalyzer:
         if not deadline:
             return 0.0
 
-        now = datetime.now()
+        now = datetime.now(self.ist)
         time_diff = deadline - now
         hours_until_deadline = time_diff.total_seconds() / 3600
 
@@ -431,7 +458,7 @@ class MLMessageAnalyzer:
     def _is_priority_message(self, priority_level: str, urgency_score: float, deadline: Optional[datetime], academic_context: Dict = None) -> bool:
         """
         Determine if a message should be considered priority based on multiple factors.
-        Enhanced with stricter criteria to reduce false positives.
+        Lowered thresholds for better priority detection.
         """
         if academic_context is None:
             academic_context = {}
@@ -440,48 +467,37 @@ class MLMessageAnalyzer:
         deadline_score = self._calculate_deadline_proximity_score(deadline)
         total_urgency = urgency_score + deadline_score
 
-        # HIGH priority messages need higher threshold AND context
-        if priority_level == 'HIGH':
-            # Require meaningful academic context for HIGH priority
-            if not academic_context.get('has_context', False):
-                return False  # No context = not priority
-
-            # For HIGH priority with context, check various criteria
-            if total_urgency >= 0.7 and academic_context.get('message_length', 0) >= 3:
-                return True
-            if academic_context.get('is_urgent', False) and academic_context.get('has_deadline', False):
-                return True
-            if academic_context.get('involves_faculty', False) and total_urgency >= 0.6:
-                return True
-            # Class cancellations are always priority
-            if academic_context.get('academic_action') == 'CLASS_CANCEL':
-                return True
-            return False
-
-        # Medium priority with very high urgency score
-        if priority_level == 'MEDIUM' and total_urgency >= 0.8:  # Increased threshold
+        # HIGH priority messages with context are priority
+        if priority_level == 'HIGH' and academic_context.get('has_context', False):
             return True
 
-        # Messages with deadlines within 2 days (stricter)
+        # Medium priority with moderate urgency score
+        if priority_level == 'MEDIUM' and total_urgency >= 0.5:
+            return True
+
+        # Messages with deadlines within 3 days
         if deadline:
             days_until_deadline = (deadline - datetime.now()).days
-            if days_until_deadline <= 2 and total_urgency >= 0.4:  # Need some urgency too
+            if days_until_deadline <= 3 and total_urgency >= 0.3:
                 return True
 
-        # Very high urgency score regardless of priority level
-        if total_urgency >= 0.9:  # Increased threshold
+        # High urgency score regardless of priority level
+        if total_urgency >= 0.7:
             return True
 
-        # Academic context based priority (stricter)
+        # Academic context based priority
         if (academic_context.get('is_urgent', False) and
             academic_context.get('has_deadline', False) and
-            total_urgency >= 0.5):
+                total_urgency >= 0.4):
             return True
 
-        # Faculty involvement with high urgency (stricter)
+        # Faculty involvement with moderate urgency
         if (academic_context.get('involves_faculty', False) and
-            total_urgency >= 0.6 and
-            academic_context.get('has_deadline', False)):
+                total_urgency >= 0.4):
+            return True
+
+        # Class cancellations are always priority
+        if academic_context.get('academic_action') == 'CLASS_CANCEL':
             return True
 
         return False
@@ -509,7 +525,8 @@ class MLMessageAnalyzer:
 
         total_messages = len(messages)
         priority_counts = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
-        category_counts = {'CLASS_CANCEL': 0, 'SUBMISSION': 0, 'EXAM': 0, 'ATTENDANCE': 0, 'GENERAL': 0}
+        category_counts = {'CLASS_CANCEL': 0, 'SUBMISSION': 0,
+                           'EXAM': 0, 'ATTENDANCE': 0, 'GENERAL': 0}
         urgency_scores = []
         all_keywords = []
         deadline_count = 0
@@ -551,14 +568,17 @@ class MLMessageAnalyzer:
         for keyword in all_keywords:
             keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
 
-        top_keywords = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_keywords = sorted(keyword_counts.items(),
+                              key=lambda x: x[1], reverse=True)[:10]
 
         # Count urgent categories
         urgent_category_counts = {}
         for cat in urgent_categories:
-            urgent_category_counts[cat] = urgent_category_counts.get(cat, 0) + 1
+            urgent_category_counts[cat] = urgent_category_counts.get(
+                cat, 0) + 1
 
-        sorted_urgent_categories = sorted(urgent_category_counts.items(), key=lambda x: x[1], reverse=True)
+        sorted_urgent_categories = sorted(
+            urgent_category_counts.items(), key=lambda x: x[1], reverse=True)
 
         return {
             'total_messages': total_messages,
@@ -567,5 +587,6 @@ class MLMessageAnalyzer:
             'urgency_score_avg': sum(urgency_scores) / len(urgency_scores) if urgency_scores else 0.0,
             'messages_with_deadlines': deadline_count,
             'top_keywords': top_keywords,
-            'urgent_categories': sorted_urgent_categories[:5]  # Top 5 urgent categories
+            # Top 5 urgent categories
+            'urgent_categories': sorted_urgent_categories[:5]
         }

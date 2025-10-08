@@ -43,6 +43,17 @@ export async function getSelectedGroups() {
   return data;
 }
 
+// --- Messages ---
+export async function deleteMessage(messageId: number) {
+  const { data } = await client.delete(`/messages/${messageId}`);
+  return data;
+}
+
+export async function deleteAllMessages() {
+  const { data } = await client.delete('/messages');
+  return data;
+}
+
 // --- Dashboard ---
 export async function getDashboard() {
   const { data } = await client.get("/dashboard/");
