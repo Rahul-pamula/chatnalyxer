@@ -10,3 +10,4 @@ passlib[bcrypt]
 python-dateutil
 nltk
 regex
+google-generativeai

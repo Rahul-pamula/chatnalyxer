@@ -26,7 +26,7 @@ const client = new Client({
   }),
   puppeteer: {
     executablePath: puppeteer.executablePath(), // ensures correct Chromium
-    headless: true, // run headless for server environments
+    headless: false, // run with visible browser for QR scanning
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -38,22 +38,47 @@ const client = new Client({
 });
 
 // ---- QR Code ----
-client.on("qr", async (qr) => {
-  console.log("📲  QR Code received, generate and visit this URL:");
-  console.log(`http://localhost:3000/qr?data=${encodeURIComponent(qr)}`);
+let qrReceivedCallback = null;
 
-  try {
-    await axios.post('http://10.84.19.232:3000/update-qr', { qr });
-    console.log("✅ QR code sent to server");
-  } catch (error) {
-    console.error("❌ Failed to send QR to server:", error.message);
+client.on("qr", async (qr) => {
+  if (qrReceivedCallback) {
+    qrReceivedCallback(qr);
   }
 });
+
+export function startClient(qrCallback) {
+  qrReceivedCallback = qrCallback;
+  client.initialize();
+}
+
+export function stopClient() {
+  client.destroy();
+}
 
 
 // ---- When WhatsApp is ready ----
 client.on("ready", async () => {
   console.log("✅ WhatsApp bot is ready!");
+
+  // Send status to backend
+  try {
+    await axios.post('http://127.0.0.1:8000/whatsapp/status', { message: '✅ WhatsApp bot is ready!', ready: true });
+  } catch (error) {
+    console.log('Error sending status to backend:', error.message);
+  }
+
+  client.on('group_join', async (notification) => {
+    console.log('Bot added to group:', notification.chat.name);
+    // Sync groups immediately
+    try {
+      const chats = await client.getChats();
+      const currentGroups = chats.filter((chat) => chat.isGroup);
+      await syncGroupsWithBackend(currentGroups);
+      allGroups = currentGroups;
+    } catch (err) {
+      console.log('Error syncing groups on group join:', err.message);
+    }
+  });
 
   // Wait a bit for the page to fully load
   await new Promise(resolve => setTimeout(resolve, 5000));
@@ -71,7 +96,17 @@ client.on("ready", async () => {
 
     // Sync all groups with backend first
     await syncGroupsWithBackend(allGroups);
-
+    // Periodic sync of groups every 5 minutes
+    setInterval(async () => {
+      try {
+        const chats = await client.getChats();
+        const currentGroups = chats.filter((chat) => chat.isGroup);
+        await syncGroupsWithBackend(currentGroups);
+        allGroups = currentGroups;
+      } catch (err) {
+        console.log('Error syncing groups periodically:', err.message);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
     // Load previously selected groups
     selectedGroups = loadSelectedGroups();
 

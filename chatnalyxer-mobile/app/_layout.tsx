@@ -10,6 +10,7 @@ export default function RootLayout() {
         <Stack initialRouteName="login">
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="register" options={{ headerShown: false }} />
+          <Stack.Screen name="setup" options={{ title: "WhatsApp Setup" }} />
           <Stack.Screen name="groups" options={{ title: "Select Groups" }} />
           <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
         </Stack>

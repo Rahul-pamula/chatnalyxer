@@ -10,8 +10,7 @@ router = APIRouter(prefix="/messages", tags=["Messages"])
 
 # Enable ML analyzer for priority detection
 try:
-    from app.services.ml_analyzer import MLMessageAnalyzer
-    ml_analyzer = MLMessageAnalyzer()
+    from app.services.ml_analyzer import analyzer as ml_analyzer
     print("ML analyzer loaded successfully - priority detection enabled")
 except ImportError as e:
     ml_analyzer = None

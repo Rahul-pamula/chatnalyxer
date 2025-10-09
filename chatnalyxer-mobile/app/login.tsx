@@ -4,21 +4,21 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { useAuth } from "../src/context/AuthContext";
 
 export default function Login() {
-  const router = useRouter();
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
+  const router = useRouter();
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
 
-  const onLogin = async () => {
-    try {
-      setErr("");
-      await signIn(email, password);
-      router.replace("/dashboard"); // ✅ replace: don’t go back to login
-    } catch {
-      setErr("Login failed. Try again.");
-    }
-  };
+  const onLogin = async () => {
+    try {
+      setErr("");
+      await signIn(email, password);
+      router.replace("/setup"); // Navigate to setup page after login
+    } catch {
+      setErr("Login failed. Try again.");
+    }
+  };
 
   return (
     <View style={styles.container}>
