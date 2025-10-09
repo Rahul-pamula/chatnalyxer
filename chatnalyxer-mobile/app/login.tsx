@@ -14,7 +14,8 @@ export default function Login() {
     try {
       setErr("");
       await signIn(email, password);
-      router.replace("/setup"); // Navigate to setup page after login
+      // After login, navigate to setup page to connect WhatsApp
+      router.replace("/setup");
     } catch {
       setErr("Login failed. Try again.");
     }

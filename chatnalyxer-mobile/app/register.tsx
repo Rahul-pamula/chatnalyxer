@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "../src/context/AuthContext";
 
 export default function Register() {
@@ -11,8 +11,13 @@ export default function Register() {
   const [password, setPassword] = useState("");
 
   const onRegister = async () => {
-    await signUp(username, email, password);
-    router.replace("/groups");
+    try {
+      await signUp(username, email, password);
+      // Navigate to login page after successful registration
+      router.replace("/login");
+    } catch (error) {
+      Alert.alert("Registration Failed", "Please try again.");
+    }
   };
 
   return (
@@ -58,7 +63,7 @@ export default function Register() {
           <Text style={styles.primaryBtnText}>Create account</Text>
         </Pressable>
 
-        <Pressable style={styles.linkBtn} onPress={() => router.replace("/login") }>
+        <Pressable style={styles.linkBtn} onPress={() => router.replace("/login")}>
           <Text style={styles.linkBtnText}>I already have an account</Text>
         </Pressable>
       </View>

@@ -13,6 +13,7 @@ class User(Base):
 
     # relationship
     messages = relationship("Message", back_populates="sender")
+    groups = relationship("GroupMember", back_populates="user")
 
 
 class Group(Base):
@@ -26,6 +27,17 @@ class Group(Base):
 
     # relationship
     messages = relationship("Message", back_populates="group")
+    members = relationship("GroupMember", back_populates="group")
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+
+    user = relationship("User", back_populates="groups")
+    group = relationship("Group", back_populates="members")
 
 class Message(Base):
     __tablename__ = "messages"

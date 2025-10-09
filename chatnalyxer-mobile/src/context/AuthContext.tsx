@@ -49,14 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (username: string, email: string, password: string) => {
-    const data = await apiRegister(username, email, password);
-    const t = data.token;
-    const u = data.user ?? null;
-    setToken(t);
-    setUser(u);
-    setAuthToken(t);
-    await AsyncStorage.setItem("token", t);
-    if (u) await AsyncStorage.setItem("user", JSON.stringify(u));
+    await apiRegister(username, email, password);
+    // Do not set auth state after registration, user needs to login manually
   };
 
   const signOut = async () => {

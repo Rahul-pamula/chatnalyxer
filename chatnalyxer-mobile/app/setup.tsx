@@ -58,16 +58,21 @@ export default function SetupScreen() {
             });
             if (response.ok) {
                 const data = await response.json();
-                setWhatsappStatusMessage(data.message || '');
-                setIsWhatsAppConnected(data.ready || false);
+                if (data.message || data.ready) {
+                    setWhatsappStatusMessage(data.message || '');
+                    setIsWhatsAppConnected(data.ready || false);
+                } else {
+                    setWhatsappStatusMessage('WhatsApp not linked');
+                    setIsWhatsAppConnected(false);
+                }
             } else {
                 setIsWhatsAppConnected(false);
-                setWhatsappStatusMessage('Not connected');
+                setWhatsappStatusMessage('WhatsApp not linked');
             }
         } catch (error) {
             console.log('WhatsApp connection check failed:', error);
             setIsWhatsAppConnected(false);
-            setWhatsappStatusMessage('Connection check failed');
+            setWhatsappStatusMessage('WhatsApp not linked');
         } finally {
             setIsCheckingConnection(false);
         }
@@ -102,6 +107,7 @@ export default function SetupScreen() {
     };
 
     const handleContinueToGroups = () => {
+        // After WhatsApp connection, navigate to groups page where user can see their groups
         router.push('/groups');
     };
 

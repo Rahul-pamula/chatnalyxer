@@ -98,7 +98,12 @@ export default function Groups() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Manage Groups</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Manage Groups</Text>
+        <Pressable style={styles.refreshBtn} onPress={loadGroups}>
+          <Text style={styles.refreshBtnText}>Refresh</Text>
+        </Pressable>
+      </View>
       <Text style={styles.subtitle}>
         {selectedCount} of {groups.length} groups selected for analysis
       </Text>
@@ -151,7 +156,10 @@ export default function Groups() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "#F7F8FA" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 16 },
-  title: { fontSize: 22, fontWeight: "700", marginBottom: 4, color: "#0F172A" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+  title: { fontSize: 22, fontWeight: "700", color: "#0F172A" },
+  refreshBtn: { backgroundColor: "#E2E8F0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  refreshBtnText: { color: "#475569", fontWeight: "600", fontSize: 14 },
   subtitle: { fontSize: 14, color: "#64748B", marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: "600", color: "#0F172A", marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: "#64748B", textAlign: "center", marginBottom: 20 },

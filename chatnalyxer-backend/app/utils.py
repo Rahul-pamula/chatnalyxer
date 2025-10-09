@@ -14,11 +14,19 @@ ALGORITHM = "HS256"
 
 def hash(password: str):
     """Hashes a password using bcrypt."""
+    # Truncate password to 72 bytes as required by bcrypt
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password = password_bytes[:72].decode('utf-8', errors='ignore')
     return pwd_context.hash(password)
 
 
 def verify(plain_password: str, hashed_password: str):
     """Verifies a plain-text password against a hashed one."""
+    # Truncate plain password to 72 bytes as required by bcrypt
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        plain_password = password_bytes[:72].decode('utf-8', errors='ignore')
     return pwd_context.verify(plain_password, hashed_password)
 
 
