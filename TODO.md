@@ -1,0 +1,11 @@
+- [x] Add readiness check in message_create handler to skip if client not authenticated
+- [x] Wrap message processing in try-catch with ProtocolError handling to restart client
+- [x] Increase initial delay in 'ready' event to 10000ms for page stabilization
+- [x] Add more puppeteer args for stability if needed
+- [x] Update whatsapp-web.js to latest version
+- [x] Add retry mechanism for getChats operations
+- [x] Add unhandled rejection handler for ProtocolError
+- [x] Change user-data-dir to persistent location
+- [x] Remove QR sending to server
+- [x] Remove QR display in terminal
+- [x] Test the changes by running the integration

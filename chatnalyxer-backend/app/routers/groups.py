@@ -129,3 +129,17 @@ def get_selected_groups(current_user: models.User = Depends(get_current_user), d
         models.Group.is_selected == 1
     ).all()
     return user_groups
+
+
+@router.get("/selected/{user_id}", response_model=list[schemas.GroupOut])
+def get_selected_groups_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    api_key_check: str = Depends(get_api_key)
+):
+    """Get selected groups for a specific user (for WhatsApp integration)"""
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == user_id,
+        models.Group.is_selected == 1
+    ).all()
+    return user_groups

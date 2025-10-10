@@ -7,6 +7,11 @@ import { BASE_URL, QR_URL } from '../src/config';
 export default function SetupScreen() {
     const router = useRouter();
     const { token, user } = useAuth();
+
+    if (!token) {
+        router.push('/login');
+        return null;
+    }
     const [isCheckingConnection, setIsCheckingConnection] = useState(false);
     const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
     const [previousConnectionStatus, setPreviousConnectionStatus] = useState(false);
