@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button, RefreshCon
 import { BASE_URL } from '../src/config';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
-import { deleteMessage, deleteAllMessages } from '../src/services/api';
+import { deleteMessage, deleteAllMessages, getSelectedGroups } from '../src/services/api';
 
 type Group = {
   id: number;
@@ -62,13 +62,7 @@ export default function Dashboard() {
   const fetchSelectedGroups = async () => {
     try {
       setError(null);
-      const response = await fetch(`${BASE_URL}/groups/selected`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await getSelectedGroups();
       setSelectedGroups(data);
 
       if (data.length === 0) {
@@ -148,33 +142,20 @@ export default function Dashboard() {
   };
 
   const handleDeleteMessage = async (messageId: number) => {
-    Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteMessage(messageId);
-              // Refresh messages after deletion
-              await fetchMessages();
-            } catch (err: any) {
-              console.error('Error deleting message:', err);
-              if (err.response?.status === 401) {
-                Alert.alert('Session Expired', 'Please log in again', [
-                  { text: 'OK', onPress: () => router.push('/login') }
-                ]);
-              } else {
-                Alert.alert('Error', 'Failed to delete message');
-              }
-            }
-          },
-        },
-      ]
-    );
+    try {
+      await deleteMessage(messageId);
+      // Refresh messages after deletion
+      await fetchMessages();
+    } catch (err: any) {
+      console.error('Error deleting message:', err);
+      if (err.response?.status === 401) {
+        Alert.alert('Session Expired', 'Please log in again', [
+          { text: 'OK', onPress: () => router.push('/login') }
+        ]);
+      } else {
+        Alert.alert('Error', 'Failed to delete message');
+      }
+    }
   };
 
   const handleDeleteAllMessages = async () => {
@@ -224,13 +205,11 @@ export default function Dashboard() {
         </View>
         <View style={styles.messageHeaderRight}>
           <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
-          {token && (
-            <Button
-              title="Delete"
-              onPress={() => handleDeleteMessage(item.id)}
-              color="#d32f2f"
-            />
-          )}
+          <Button
+            title="Delete"
+            onPress={() => handleDeleteMessage(item.id)}
+            color="#d32f2f"
+          />
         </View>
       </View>
       <Text style={styles.messageContent}>{item.content}</Text>
@@ -290,6 +269,7 @@ export default function Dashboard() {
             title={autoRefreshEnabled ? "Auto-refresh: ON" : "Auto-refresh: OFF"}
             onPress={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
           />
+          <Button title="Trash Bin" onPress={() => router.push('/trash')} />
           <Button title="Delete All" onPress={handleDeleteAllMessages} color="#d32f2f" />
         </View>
         {autoRefreshEnabled && (

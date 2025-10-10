@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 from datetime import datetime
 
@@ -114,7 +115,7 @@ def list_messages(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    q = db.query(models.Message)
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
@@ -126,7 +127,7 @@ def list_messages_public(
     db: Session = Depends(get_db)
 ):
     """Public endpoint for testing - fetches messages without authentication"""
-    q = db.query(models.Message)
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
@@ -139,7 +140,8 @@ def list_priority_messages(
     user: models.User = Depends(get_current_user)
 ):
     """Get only priority messages based on ML analysis"""
-    q = db.query(models.Message).filter(models.Message.is_priority == 1)
+    q = db.query(models.Message).filter(
+        models.Message.is_priority == 1, models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
@@ -151,7 +153,8 @@ def list_priority_messages_public(
     db: Session = Depends(get_db)
 ):
     """Public endpoint for priority messages - for dashboard"""
-    q = db.query(models.Message).filter(models.Message.is_priority == 1)
+    q = db.query(models.Message).filter(
+        models.Message.is_priority == 1, models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
@@ -164,7 +167,7 @@ def get_message_analytics(
     user: models.User = Depends(get_current_user)
 ):
     """Get ML analytics data for visualization dashboard"""
-    q = db.query(models.Message)
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
 
@@ -200,33 +203,86 @@ def get_message_analytics(
 @router.delete("/{message_id}")
 def delete_message(
     message_id: int,
-    db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
-    """Delete a message by ID"""
+    """Soft delete a message by ID"""
     message = db.query(models.Message).filter(
         models.Message.id == message_id).first()
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # Optional: Check if user owns the message or is admin
-    # For now, allow any authenticated user to delete
-
-    db.delete(message)
+    message.deleted_at = func.now()
     db.commit()
-    return {"message": "Message deleted successfully"}
+    return {"message": "Message moved to trash successfully"}
 
 
 @router.delete("")
 def delete_all_messages(
     db: Session = Depends(get_db)
 ):
-    """Delete all messages"""
-    print("Deleting all messages")
-    db.query(models.Message).delete()
+    """Soft delete all messages"""
+    print("Moving all messages to trash")
+    db.query(models.Message).update({models.Message.deleted_at: func.now()})
     db.commit()
-    print("All messages deleted")
-    return {"message": "All messages deleted successfully"}
+    print("All messages moved to trash")
+    return {"message": "All messages moved to trash successfully"}
+
+
+@router.get("/trash", response_model=list[schemas.MessageOut])
+def list_trash_messages(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """List trashed messages for the user"""
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_not(
+        None), models.Message.sender_id == user.id)
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.deleted_at.desc()).limit(100).all()
+
+
+@router.post("/{message_id}/restore", response_model=schemas.MessageOut)
+def restore_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Restore a trashed message"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.sender_id == user.id,
+        models.Message.deleted_at.is_not(None)
+    ).first()
+    if not message:
+        raise HTTPException(
+            status_code=404, detail="Message not found in trash")
+
+    message.deleted_at = None
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+@router.delete("/{message_id}/permanent")
+def permanent_delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Permanently delete a trashed message"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.sender_id == user.id,
+        models.Message.deleted_at.is_not(None)
+    ).first()
+    if not message:
+        raise HTTPException(
+            status_code=404, detail="Message not found in trash")
+
+    db.delete(message)
+    db.commit()
+    return {"message": "Message permanently deleted"}
 
 
 @router.get("/analytics/public")
@@ -235,7 +291,7 @@ def get_message_analytics_public(
     db: Session = Depends(get_db)
 ):
     """Public endpoint for analytics data - for dashboard"""
-    q = db.query(models.Message)
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
 

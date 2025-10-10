@@ -16,7 +16,7 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 
 class MLMessageAnalyzer:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
 
         # Keyword patterns for fallback analysis
         self.high_priority_keywords = [

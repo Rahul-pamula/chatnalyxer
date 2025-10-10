@@ -2,14 +2,17 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
-// Store the latest QR code
-let currentQR = null;
+// Store the latest QR code per user
+let currentQRs = {};
 
 app.get('/qr', (req, res) => {
-  const qrData = req.query.data;
-  if (qrData) {
-    currentQR = qrData;
+  const userId = req.query.user_id;
+  if (!userId) {
+    res.status(400).send('user_id query parameter required');
+    return;
   }
+
+  const currentQR = currentQRs[userId];
 
   if (!currentQR) {
     res.send(`
@@ -111,13 +114,14 @@ app.get('/health', (req, res) => {
 // API endpoint to update QR code
 app.post('/update-qr', express.json(), (req, res) => {
   console.log('Received QR update request:', req.body);
-  if (req.body.qr) {
-    currentQR = req.body.qr;
-    console.log('QR code updated successfully');
+  const { qr, user_id } = req.body;
+  if (qr && user_id) {
+    currentQRs[user_id] = qr;
+    console.log('QR code updated successfully for user:', user_id);
     res.json({ success: true });
   } else {
-    console.log('No QR data provided');
-    res.status(400).json({ error: 'No QR data provided' });
+    console.log('No QR or user_id data provided');
+    res.status(400).json({ error: 'No QR or user_id data provided' });
   }
 });
 

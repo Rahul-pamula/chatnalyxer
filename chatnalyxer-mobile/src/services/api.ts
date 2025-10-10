@@ -54,6 +54,25 @@ export async function deleteAllMessages() {
   return data;
 }
 
+export async function getTrashMessages(groupId?: number) {
+  let url = '/messages/trash';
+  if (groupId) {
+    url += `?group_id=${groupId}`;
+  }
+  const { data } = await client.get(url);
+  return data;
+}
+
+export async function restoreMessage(messageId: number) {
+  const { data } = await client.post(`/messages/${messageId}/restore`);
+  return data;
+}
+
+export async function permanentDeleteMessage(messageId: number) {
+  const { data } = await client.delete(`/messages/${messageId}/permanent`);
+  return data;
+}
+
 // --- Dashboard ---
 export async function getDashboard() {
   const { data } = await client.get("/dashboard/");

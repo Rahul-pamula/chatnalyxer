@@ -1,6 +1,5 @@
 import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
-import puppeteer from "puppeteer";
 import qrcode from "qrcode-terminal";
 import axios from "axios";
 import os from "node:os";
@@ -14,6 +13,9 @@ import {
   getSelectedGroupNames
 } from "./services/groupSelector.js";
 
+// Get user_id from command line argument
+const user_id = process.argv[2] || "default";
+
 // Global variable to store selected groups
 let selectedGroups = {};
 let allGroups = [];
@@ -21,11 +23,11 @@ let allGroups = [];
 // ---- WhatsApp client ----
 const client = new Client({
   authStrategy: new LocalAuth({
-    clientId: "chatnalyxer-bot",
-    dataPath: path.join(os.homedir(), ".wwebjs-sessions"),
+    clientId: `chatnalyxer-bot-${user_id}`,
+    dataPath: path.join(os.homedir(), `.wwebjs-sessions-${user_id}`),
   }),
   puppeteer: {
-    executablePath: puppeteer.executablePath(), // ensures correct Chromium
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // use system Chrome
     headless: false, // run with visible browser for QR scanning
     args: [
       "--no-sandbox",
@@ -33,6 +35,12 @@ const client = new Client({
       "--disable-dev-shm-usage",
       "--disable-gpu",
       "--disable-features=site-per-process",
+      "--disable-web-security",
+      "--disable-features=VizDisplayCompositor",
+      "--user-data-dir=/tmp/whatsapp-chrome-data",
+      "--disable-extensions",
+      "--no-first-run",
+      "--no-default-browser-check",
     ],
   },
 });
@@ -41,6 +49,16 @@ const client = new Client({
 let qrReceivedCallback = null;
 
 client.on("qr", async (qr) => {
+  // Send QR to QR server
+  try {
+    await axios.post('http://localhost:3000/update-qr', { qr, user_id });
+  } catch (e) {
+    console.log('Failed to send QR to server');
+  }
+
+  // Show QR in terminal
+  qrcode.generate(qr, { small: true });
+
   if (qrReceivedCallback) {
     qrReceivedCallback(qr);
   }
@@ -62,7 +80,7 @@ client.on("ready", async () => {
 
   // Send status to backend
   try {
-    await axios.post('http://127.0.0.1:8000/whatsapp/status', { message: '✅ WhatsApp bot is ready!', ready: true });
+    await axios.post(`${BASE_URL}/whatsapp/status`, { message: '✅ WhatsApp bot is ready!', ready: true, user_id });
   } catch (error) {
     console.log('Error sending status to backend:', error.message);
   }

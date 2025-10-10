@@ -6,7 +6,7 @@ import { BASE_URL, QR_URL } from '../src/config';
 
 export default function SetupScreen() {
     const router = useRouter();
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [isCheckingConnection, setIsCheckingConnection] = useState(false);
     const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
     const [previousConnectionStatus, setPreviousConnectionStatus] = useState(false);
@@ -89,8 +89,9 @@ export default function SetupScreen() {
             });
 
             if (response.ok) {
-                // Open the QR page in browser
-                const url = QR_URL;
+                // Open the QR page in browser with user_id
+                const userId = user?.id || '';
+                const url = `${QR_URL}?user_id=${userId}`;
                 if (Platform.OS === 'web') {
                     window.open(url, '_blank');
                 } else {
