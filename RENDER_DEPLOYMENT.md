@@ -104,11 +104,14 @@ RATE_LIMIT_WINDOW_MINUTES=60
 1. Click "Create Background Worker"
 2. Wait for deployment
 
-### 4.5 Link WhatsApp (One-Time Setup)
-1. Go to worker logs
-2. Look for QR code or pairing code
-3. Scan with your admin WhatsApp
-4. Session will be saved to persistent disk
+### 4.5 Link WhatsApp (Easy Method)
+Since we deployed as a Web Service, you can simply:
+1. Open your WhatsApp Service URL in a browser (e.g., `https://chatnalyxer-whatsapp.onrender.com`)
+2. You will see the **QR Code** on the screen
+3. Scan with your admin WhatsApp (Linked Devices)
+4. Screen will update to say "✅ WhatsApp Connected!"
+
+*Note: You can also check the logs if you prefer.*
 
 ---
 
