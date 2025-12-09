@@ -23,101 +23,135 @@ if (!fs.existsSync(AUTH_FOLDER)) {
     fs.mkdirSync(AUTH_FOLDER, { recursive: true });
 }
 
-async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-    const { version, isLatest } = await fetchLatestBaileysVersion();
+// Connection Logic
+async function connectToWhatsApp(autoRetry = false) {
+    // If already ready, don't reconnect
+    if (isClientReady && sock?.ws?.isOpen) return;
 
-    console.log(`Using WA v${version.join('.')}, isLatest: ${isLatest}`);
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+        const { version, isLatest } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
-        version,
-        auth: state,
-        // printQRInTerminal: true, // Deprecated and causes log spam
-        logger: pino({ level: 'silent' }),
-        browser: ['Chatnalyxer', 'Chrome', '120.0.6099.199'], // Updated browser signature
-        syncFullHistory: false,
-        connectTimeoutMs: 60000, // Increase timeout
-        keepAliveIntervalMs: 10000,
-        retryRequestDelayMs: 5000
-    });
+        console.log(`Using WA v${version.join('.')}, isLatest: ${isLatest}`);
 
-    sock.ev.on('creds.update', saveCreds);
+        sock = makeWASocket({
+            version,
+            auth: state,
+            logger: pino({ level: 'silent' }),
+            browser: ['Chatnalyxer', 'Chrome', '120.0.6099.199'],
+            syncFullHistory: false,
+            connectTimeoutMs: 60000,
+            keepAliveIntervalMs: 10000,
+            retryRequestDelayMs: 5000,
+            qrMaxRetries: 5 // Stop generating QRs after 5 tries
+        });
 
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        sock.ev.on('creds.update', saveCreds);
 
-        if (qr) {
-            currentQR = qr;
-            console.log("📸 QR Code received! Scan now.");
-            isClientReady = false;
-        }
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-        if (connection === 'close') {
-            isClientReady = false;
-            currentQR = null;
-
-            // Detailed error logging
-            const error = lastDisconnect?.error;
-            const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
-
-            console.log('❌ Connection closed details:', {
-                error: error?.message || 'Unknown Error',
-                stack: error?.stack,
-                statusCode,
-                reason: DisconnectReason[statusCode] || 'Unknown Reason'
-            });
-
-            // Reconnection Logic
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-            if (shouldReconnect) {
-                // If 405 (Method Not Allowed), wait longer (60s).
-                // For "undefined" status (socket closed), also wait a bit (5s) to avoid loops.
-                const delay = (statusCode === 405) ? 60000 : 5000;
-                console.log(`🔄 Reconnecting in ${delay / 1000}s...`);
-                setTimeout(connectToWhatsApp, delay);
-            } else {
-                console.log("⛔ Logged out. Please rescan QR code.");
+            if (qr) {
+                currentQR = qr;
+                isClientReady = false;
+                console.log("📸 New QR Code generated");
             }
-        } else if (connection === 'open') {
-            console.log('✅ WhatsApp Connected!');
-            isClientReady = true;
-            currentQR = null;
-        }
-    });
+
+            if (connection === 'close') {
+                isClientReady = false;
+                currentQR = null;
+
+                const error = lastDisconnect?.error;
+                const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
+
+                console.log(`❌ Connection closed. Status: ${statusCode}.`);
+
+                // Only auto-reconnect if it was a network glitch, NOT a logout/timeout
+                if (shouldReconnect && autoRetry) {
+                    setTimeout(() => connectToWhatsApp(true), 3000);
+                } else if (statusCode === 408) {
+                    console.log("⚠️ QR Timeout. Waiting for user to press 'Connect'.");
+                }
+            } else if (connection === 'open') {
+                console.log('✅ WhatsApp Connected!');
+                isClientReady = true;
+                currentQR = null;
+            }
+        });
+    } catch (err) {
+        console.error("Setup error:", err);
+    }
 }
 
-// Start connection
-connectToWhatsApp();
+// Start immediately? No, wait for user or persisted session?
+// Try to connect once on boot. If session exists, it will connect. If not, it will generate QR.
+connectToWhatsApp(true);
 
-// --- API ROUTES (Compatible with previous version) ---
+// --- API ROUTES ---
 
-// 1. UI for QR Code (SPA)
+app.post('/connect', (req, res) => {
+    console.log("📢 User requested manual connection");
+    connectToWhatsApp(true);
+    res.json({ message: 'Connection started' });
+});
+
+app.post('/disconnect', async (req, res) => {
+    console.log("🛑 User requested disconnect");
+    try {
+        await sock?.logout();
+        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+        isClientReady = false;
+        currentQR = null;
+        res.json({ message: 'Disconnected and session cleared' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// UI Route
 app.get('/', (req, res) => {
     res.send(`
         <html>
             <head>
-                <title>WhatsApp OTP Service</title>
+                <title>WhatsApp Manager</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
                     body { font-family: system-ui, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
                     .container { background: white; padding: 30px; border-radius: 12px; max-width: 500px; margin: 40px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
                     img { max-width: 100%; border-radius: 8px; margin: 20px 0; }
-                    .success { color: #008000; font-weight: bold; font-size: 1.5em; }
-                    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
-                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                    .btn { padding: 10px 20px; border-radius: 5px; border: none; font-size: 16px; cursor: pointer; margin: 5px; }
+                    .btn-primary { background: #008069; color: white; }
+                    .btn-danger { background: #dc3545; color: white; }
+                    .status-box { padding: 15px; background: #e9ecef; border-radius: 8px; margin-bottom: 20px; }
+                    .green { color: #008000; font-weight: bold; }
+                    .red { color: #dc3545; font-weight: bold; }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>WhatsApp OTP Service</h1>
-                    <div id="content">
-                        <div class="spinner"></div>
-                        <p>Connecting...</p>
+                    <h1>WhatsApp Manager</h1>
+                    
+                    <div id="status-area" class="status-box">
+                        <p>Status: <span id="status-text">Checking...</span></p>
+                    </div>
+
+                    <div id="actions">
+                        <button onclick="triggerConnect()" class="btn btn-primary">Link WhatsApp / Refresh QR</button>
+                        <button onclick="triggerDisconnect()" class="btn btn-danger">Disconnect & Reset</button>
+                    </div>
+
+                    <div id="qr-area" style="display:none;">
+                        <h3>Scan Code</h3>
+                        <img id="qr-img" src="" />
+                        <p>Open WhatsApp > Linked Devices > Link a Device</p>
                     </div>
                 </div>
+
                 <script>
-                    const contentDiv = document.getElementById('content');
+                    const statusText = document.getElementById('status-text');
+                    const qrArea = document.getElementById('qr-area');
+                    const qrImg = document.getElementById('qr-img');
                     let lastQR = '';
 
                     async function checkStatus() {
@@ -126,24 +160,37 @@ app.get('/', (req, res) => {
                             const data = await res.json();
 
                             if (data.ready) {
-                                contentDiv.innerHTML = \`
-                                    <div class="success">✅ WhatsApp Connected!</div>
-                                    <p>Service is ready (Lightweight Engine).</p>
-                                \`;
+                                statusText.innerHTML = '<span class="green">✅ Connected</span>';
+                                qrArea.style.display = 'none';
                             } else if (data.qr) {
+                                statusText.innerHTML = '<span class="red">⚠️ Not Connected (Waiting for Scan)</span>';
                                 if (data.qr !== lastQR) {
                                     lastQR = data.qr;
-                                    contentDiv.innerHTML = \`
-                                        <h3>Scan to Connect</h3>
-                                        <img src="\${data.qr}" />
-                                        <p>Open WhatsApp > Linked Devices > Link a Device</p>
-                                    \`;
+                                    qrImg.src = data.qr;
+                                    qrArea.style.display = 'block';
                                 }
                             } else {
-                                contentDiv.innerHTML = '<div class="spinner"></div><p>Waiting for QR...</p>';
+                                statusText.innerHTML = '<span>⚪ Disconnected / Idle</span>';
+                                qrArea.style.display = 'none';
                             }
-                        } catch (e) { console.error(e); }
+                        } catch (e) {
+                            statusText.innerText = 'Error connecting to server';
+                        }
                     }
+
+                    async function triggerConnect() {
+                        statusText.innerText = 'Starting connection...';
+                        await fetch('/connect', { method: 'POST' });
+                        checkStatus();
+                    }
+
+                    async function triggerDisconnect() {
+                        if(!confirm('Are you sure? This will wipe the session.')) return;
+                        statusText.innerText = 'Disconnecting...';
+                        await fetch('/disconnect', { method: 'POST' });
+                        checkStatus();
+                    }
+
                     setInterval(checkStatus, 2000);
                     checkStatus();
                 </script>
