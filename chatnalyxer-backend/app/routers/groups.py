@@ -67,6 +67,14 @@ def sync_groups_from_whatsapp(
     """Sync groups from WhatsApp integration service"""
     created_count = 0
     updated_count = 0
+    
+    # Verify user exists
+    user = db.query(models.User).filter(models.User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {payload.user_id} not found"
+        )
 
     for group_data in payload.groups:
         whatsapp_id = group_data.get('whatsapp_id')
@@ -99,23 +107,23 @@ def sync_groups_from_whatsapp(
             group = new_group
             created_count += 1
 
-        # For sync, assign to all users for now, since integration doesn't specify user
-        # In future, pass user_id in payload
-        all_users = db.query(models.User).all()
-        for user in all_users:
-            membership = db.query(models.GroupMember).filter(
-                models.GroupMember.user_id == user.id,
-                models.GroupMember.group_id == group.id
-            ).first()
-            if not membership:
-                new_membership = models.GroupMember(
-                    user_id=user.id, group_id=group.id)
-                db.add(new_membership)
+        # Assign group to the specific user only
+        membership = db.query(models.GroupMember).filter(
+            models.GroupMember.user_id == payload.user_id,
+            models.GroupMember.group_id == group.id
+        ).first()
+        
+        if not membership:
+            new_membership = models.GroupMember(
+                user_id=payload.user_id,
+                group_id=group.id
+            )
+            db.add(new_membership)
 
     db.commit()
 
     return {
-        "message": f"Synced groups: {created_count} created, {updated_count} updated",
+        "message": f"Synced groups for user {payload.user_id}: {created_count} created, {updated_count} updated",
         "created": created_count,
         "updated": updated_count
     }

@@ -1,3 +1,4 @@
+
 import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
@@ -16,6 +17,14 @@ import {
 // Handle unhandled rejections to catch ProtocolErrors
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+
+  // Ignore "Evaluation failed" errors - these happen during pairing code generation
+  // but the code is actually generated successfully before the error occurs
+  if (reason && reason.message && reason.message.includes("Evaluation failed")) {
+    console.log("⚠️ Ignoring 'Evaluation failed' error - pairing code was already generated");
+    return;
+  }
+
   if (reason && reason.message && reason.message.includes("Execution context was destroyed")) {
     console.log("🔄 Unhandled ProtocolError — restarting client...");
     client.destroy();
@@ -23,21 +32,26 @@ process.on('unhandledRejection', (reason, promise) => {
   }
 });
 
-// Get user_id from command line argument
+// Get user_id and phone_number from command line argument
 const user_id = process.argv[2] || "default";
+const phoneNumber = process.argv[3]; // Phone number passed from backend
 
 // Global variable to store selected groups
 let selectedGroups = {};
 let allGroups = [];
-
 // ---- WhatsApp client ----
-const client = new Client({
+// Tweak for Mac: Use system Chrome (ARM64 Native)
+const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const fs = await import('fs');
+
+const clientOptions = {
   authStrategy: new LocalAuth({
     clientId: `chatnalyxer-bot-${user_id}`,
     dataPath: path.join(os.homedir(), `.wwebjs-sessions-${user_id}`),
   }),
   puppeteer: {
-    headless: false, // run with visible browser for QR scanning
+    executablePath: fs.existsSync(chromePath) ? chromePath : undefined,
+    headless: true, // Run INVISIBLE (Headless)
     ignoreHTTPSErrors: true,
     args: [
       "--no-sandbox",
@@ -46,29 +60,66 @@ const client = new Client({
       "--disable-gpu",
       "--disable-features=site-per-process",
       "--disable-web-security",
-      "--disable-features=VizDisplayCompositor",
-      `--user-data-dir=${path.join(os.homedir(), `whatsapp-data-${user_id}`)}`,
-      "--disable-extensions",
       "--no-first-run",
-      "--no-default-browser-check",
-      "--disable-background-timer-throttling",
-      "--disable-renderer-backgrounding",
-      "--disable-backgrounding-occluded-windows",
-      "--disable-ipc-flooding-protection",
-      "--no-zygote",
-      "--disable-gpu-sandbox",
-      "--disable-software-rasterizer",
-      "--ignore-certificate-errors",
-      "--ignore-ssl-errors",
-      "--disable-blink-features=AutomationControlled",
+      "--no-default-browser-check"
     ],
   },
-});
+};
 
-// ---- QR Code ----
+// If phone number is provided, enable native Pairing Code support
+if (phoneNumber) {
+  console.log(`📱 Configuring for Phone Number Pairing: ${phoneNumber}`);
+  clientOptions.pairWithPhoneNumber = {
+    phoneNumber: phoneNumber,
+    showNotification: true,
+  };
+}
+
+const client = new Client(clientOptions);
+
+// ---- QR Code / Pairing Code ----
 let qrReceivedCallback = null;
 
+// Listen for Pairing Code event (Native Support)
+client.on("code", async (code) => {
+  console.log(`✅ Pairing Code received via native event: ${code}`);
+  try {
+    const response = await axios.post(`${BASE_URL}/whatsapp/status`, {
+      message: 'Enter Pairing Code in WhatsApp',
+      ready: false,
+      user_id,
+      qr_code: null,
+      pairing_code: code
+    });
+    console.log(`Backend notified of code: ${code}`);
+  } catch (error) {
+    console.error('❌ Failed to send pairing code to backend:', error.message);
+  }
+});
+
 client.on("qr", async (qr) => {
+  // If native pairing is enabled, we shouldn't really see QR codes, but safe to handle.
+  // Unless phoneNumber was NOT provided.
+
+  if (phoneNumber) {
+    console.log("⚠️ QR Code received despite Pairing Mode being active. This might be a fallback or glitch.");
+    // We do NOT want to show QR if we expect Pairing Code.
+    return;
+  }
+
+  console.log("QR Code received", qr.substring(0, 20) + "...");
+  try {
+    await axios.post(`${BASE_URL}/whatsapp/status`, {
+      message: 'Scan QR Code in App',
+      ready: false,
+      user_id,
+      qr_code: qr,
+      pairing_code: null
+    });
+  } catch (error) {
+    console.log('Error sending QR to backend:', error.message);
+  }
+
   if (qrReceivedCallback) {
     qrReceivedCallback(qr);
   }
@@ -129,8 +180,9 @@ client.on("ready", async () => {
     }
   });
 
-  // Wait a bit for the page to fully load
-  await new Promise(resolve => setTimeout(resolve, 10000));
+
+  // Wait a bit for the page to fully load (reduced from 10s to 3s for better UX)
+  await new Promise(resolve => setTimeout(resolve, 3000));
 
   try {
     const chats = await safeGetChats();
@@ -203,7 +255,10 @@ async function syncGroupsWithBackend(groups) {
 
     await axios.post(
       `${BASE_URL}/groups/sync-from-whatsapp`,
-      { groups: groupsData },
+      {
+        user_id: parseInt(user_id),  // Include user_id to associate groups with this user
+        groups: groupsData
+      },
       {
         headers: {
           "x-api-key": API_KEY,
@@ -212,7 +267,7 @@ async function syncGroupsWithBackend(groups) {
       }
     );
 
-    console.log('✅ Groups synced with backend');
+    console.log(`✅ Groups synced with backend for user ${user_id}`);
   } catch (error) {
     console.error('❌ Error syncing groups with backend:', error.response?.data || error.message);
   }
@@ -227,8 +282,10 @@ client.on("message_create", async (msg) => {
 
   try {
     const chat = await msg.getChat();
+    console.log(`DEBUG: Raw message received from ${chat.name || 'Unknown Chat'}: ${msg.body}`);
 
     if (!chat.isGroup) {
+      console.log(`DEBUG: Ignoring non-group message from ${chat.name}`);
       return;
     }
 
@@ -352,4 +409,17 @@ function startGroupSelectionMonitoring() {
 }
 
 // ---- Start client ----
+console.log('🚀 Starting WhatsApp Client Initialization...');
+try {
+  await axios.post(`${BASE_URL}/whatsapp/status`, {
+    message: 'Initializing WhatsApp Client...',
+    ready: false,
+    user_id,
+    qr_code: null,
+    pairing_code: null
+  });
+} catch (error) {
+  console.log('⚠️ Failed to send initial status:', error.message);
+}
+
 client.initialize();

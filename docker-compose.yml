@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  chatnalyxer:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist WhatsApp Sessions
+      - ./whatsapp_sessions:/root/.wwebjs-sessions-default
+      - ./whatsapp_sessions:/root/.wwebjs-sessions
+      # Persist SQLite DB
+      - ./data:/app/backend/data
+      - ./db:/app/backend/db.sqlite3
+    environment:
+      - DATABASE_URL=sqlite:///./db.sqlite3
+      - SECRET_KEY=your-secret-key-change-me
+      - ALLOWED_ORIGINS=*
+      # Add other env vars from .env here
+    restart: always

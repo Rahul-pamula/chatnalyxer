@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, Button, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { BASE_URL, QR_URL } from '../src/config';
 
@@ -8,18 +9,24 @@ export default function SetupScreen() {
     const router = useRouter();
     const { token, user } = useAuth();
 
-    if (!token) {
-        router.push('/login');
-        return null;
-    }
     const [isCheckingConnection, setIsCheckingConnection] = useState(false);
     const [isWhatsAppConnected, setIsWhatsAppConnected] = useState(false);
     const [previousConnectionStatus, setPreviousConnectionStatus] = useState(false);
     const [whatsappStatusMessage, setWhatsappStatusMessage] = useState('');
+    const [qrCode, setQrCode] = useState<string | null>(null);
+    const [pairingCode, setPairingCode] = useState<string | null>(null);
 
     useEffect(() => {
-        checkWhatsAppConnection();
-    }, []);
+        if (!token) {
+            router.replace('/login');
+        }
+    }, [token]);
+
+    useEffect(() => {
+        if (token) {
+            checkWhatsAppConnection();
+        }
+    }, [token]);
 
     useEffect(() => {
         if (isWhatsAppConnected && !previousConnectionStatus) {
@@ -42,13 +49,16 @@ export default function SetupScreen() {
                 });
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('WhatsApp Status Poll:', JSON.stringify(data));
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
+                    setQrCode(data.qr_code || null);
+                    setPairingCode(data.pairing_code || null); // Add this line
                 }
             } catch (error) {
                 console.log('Failed to fetch WhatsApp status:', error);
             }
-        }, 3000); // Poll every 3 seconds
+        }, 1000); // Poll every 1 second (was 3s)
 
         return () => clearInterval(interval);
     }, [token]);
@@ -66,9 +76,13 @@ export default function SetupScreen() {
                 if (data.message || data.ready) {
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
+                    setQrCode(data.qr_code || null);
+                    setPairingCode(data.pairing_code || null);
                 } else {
                     setWhatsappStatusMessage('WhatsApp not linked');
                     setIsWhatsAppConnected(false);
+                    setQrCode(null);
+                    setPairingCode(null);
                 }
             } else {
                 setIsWhatsAppConnected(false);
@@ -94,20 +108,59 @@ export default function SetupScreen() {
             });
 
             if (response.ok) {
-                // Open the QR page in browser with user_id
-                const userId = user?.id || '';
-                const url = `${QR_URL}?user_id=${userId}`;
-                if (Platform.OS === 'web') {
-                    window.open(url, '_blank');
-                } else {
-                    Linking.openURL(url).catch(() => {
-                        Alert.alert('Error', 'Failed to open browser for QR code');
-                    });
-                }
+                Alert.alert(
+                    'Generating Pairing Code',
+                    'Please wait 5-10 seconds while we generate your pairing code...'
+                );
+
+                // Wait 5 seconds before starting to poll
+                // This gives the WhatsApp integration time to generate the code
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                // Now start polling for the pairing code
+                let attempts = 0;
+                const maxAttempts = 15; // Poll for up to 15 seconds
+                const checkInterval = setInterval(async () => {
+                    attempts++;
+                    try {
+                        const statusResponse = await fetch(`${BASE_URL}/whatsapp/status`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                            },
+                        });
+                        if (statusResponse.ok) {
+                            const data = await statusResponse.json();
+                            console.log('Status check:', data);
+                            if (data.pairing_code) {
+                                setPairingCode(data.pairing_code);
+                                setWhatsappStatusMessage(data.message || 'Pairing code received');
+                                clearInterval(checkInterval);
+                                Alert.alert(
+                                    'Pairing Code Ready!',
+                                    `Your code is: ${data.pairing_code}\n\nEnter this in WhatsApp → Settings → Linked Devices → Link with phone number`
+                                );
+                            } else if (data.qr_code) {
+                                setQrCode(data.qr_code);
+                                clearInterval(checkInterval);
+                            }
+                        }
+                    } catch (err) {
+                        console.log('Status check error:', err);
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        Alert.alert(
+                            'Timeout',
+                            'Pairing code generation is taking longer than expected. Please check the backend logs or try again.'
+                        );
+                    }
+                }, 1000); // Check every second
             } else {
                 Alert.alert('Error', 'Failed to start WhatsApp integration');
             }
         } catch (error) {
+            console.log('handleGenerateQR error:', error);
             Alert.alert('Error', 'Failed to start WhatsApp integration');
         }
     };
@@ -156,24 +209,49 @@ export default function SetupScreen() {
                     </View>
                 ) : (
                     <View style={styles.setupContainer}>
-                        <Text style={styles.instructionTitle}>How to connect:</Text>
-                        <Text style={styles.instructionText}>
-                            1. Click "Generate QR Code" below{'\n'}
-                            2. A Chrome window will open with WhatsApp Web{'\n'}
-                            3. Open WhatsApp on your phone{'\n'}
-                            4. Go to Settings → Linked Devices{'\n'}
-                            5. Tap "Link a Device"{'\n'}
-                            6. Scan the QR code in the Chrome window{'\n'}
-                            7. Return to this app and continue
-                        </Text>
-
-                        <View style={styles.buttonContainer}>
-                            <Button
-                                title="Generate QR Code"
-                                onPress={handleGenerateQR}
-                                color="#0066cc"
-                            />
-                        </View>
+                        {pairingCode ? (
+                            <View style={styles.qrContainer}>
+                                <Text style={styles.instructionTitle}>Enter this Code in WhatsApp:</Text>
+                                <View style={styles.codeWrapper}>
+                                    <Text style={styles.pairingCodeText}>
+                                        {pairingCode.split('').join(' ')}
+                                    </Text>
+                                </View>
+                                <Text style={styles.instructionText}>
+                                    1. Open WhatsApp on your phone{'\n'}
+                                    2. Go to Linked Devices → Link a Device{'\n'}
+                                    3. Select "Link with phone number instead"{'\n'}
+                                    4. Enter the code above
+                                </Text>
+                            </View>
+                        ) : qrCode ? (
+                            <View style={styles.qrContainer}>
+                                <Text style={styles.instructionTitle}>Scan this QR Code:</Text>
+                                <View style={styles.qrWrapper}>
+                                    <QRCode
+                                        value={qrCode}
+                                        size={250}
+                                    />
+                                </View>
+                                <Text style={styles.instructionText}>
+                                    Open WhatsApp → Linked Devices → Link a Device
+                                </Text>
+                            </View>
+                        ) : (
+                            <>
+                                <Text style={styles.instructionTitle}>Connect your WhatsApp</Text>
+                                <Text style={styles.instructionText}>
+                                    We will link the phone number you logged in with using a Pairing Code.
+                                </Text>
+                                <View style={styles.buttonContainer}>
+                                    <Button
+                                        title="Get Pairing Code"
+                                        onPress={handleGenerateQR}
+                                        color="#0066cc"
+                                    />
+                                </View>
+                            </>
+                        )}
                     </View>
                 )}
             </View>
@@ -260,12 +338,32 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: '#333',
         marginBottom: 15,
+        textAlign: 'center',
     },
     instructionText: {
         fontSize: 14,
         color: '#555',
         lineHeight: 20,
         marginBottom: 20,
+        textAlign: 'center',
+    },
+    qrContainer: {
+        alignItems: 'center',
+        padding: 10,
+    },
+    qrWrapper: {
+        padding: 10,
+        backgroundColor: 'white',
+        borderRadius: 10,
+        marginBottom: 20,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     buttonContainer: {
         gap: 10,
@@ -289,5 +387,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#333',
         marginBottom: 10,
+    },
+    codeWrapper: {
+        padding: 20,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 8,
+        marginVertical: 20,
+        width: '100%',
+        alignItems: 'center',
+    },
+    pairingCodeText: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#333',
+        letterSpacing: 4,
     },
 });

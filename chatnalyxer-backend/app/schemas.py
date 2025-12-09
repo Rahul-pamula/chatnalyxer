@@ -18,24 +18,39 @@ class AuthResponse(BaseModel):
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    phone_number: str
 
 
 class UserCreate(UserBase):
     username: str
-    password: str
 
 
 class UserLogin(UserBase):
-    password: str
+    pass  # Only phone_number needed for OTP login
 
 
-class UserOut(UserBase):
+class UserOut(BaseModel):
     id: int
     username: str
+    phone_number: Optional[str] = None
+    is_verified: bool
+    email: Optional[EmailStr] = None
 
     class Config:
         orm_mode = True
+
+
+# ----- OTP Authentication -----
+
+
+class OTPRequest(BaseModel):
+    username: str
+    phone_number: str
+
+
+class OTPVerify(BaseModel):
+    phone_number: str
+    otp_code: str
 
 # ----- Group -----
 
@@ -63,6 +78,7 @@ class GroupOut(BaseModel):
 
 
 class WhatsAppGroupSync(BaseModel):
+    user_id: int  # User ID to associate groups with
     groups: List[dict]  # List of {whatsapp_id, name} from WhatsApp
 
 # ----- Message -----

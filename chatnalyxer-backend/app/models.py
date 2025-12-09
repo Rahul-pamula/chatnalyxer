@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, func
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, func, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 from sqlalchemy.sql import func
+from datetime import datetime, timedelta
 
 
 class User(Base):
@@ -9,12 +10,26 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    phone_number = Column(String(20), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    hashed_password = Column(String(255), nullable=True)
+    is_verified = Column(Integer, default=0, nullable=False)  # 0=not verified, 1=verified
 
     # relationship
     messages = relationship("Message", back_populates="sender")
     groups = relationship("GroupMember", back_populates="user")
+
+
+class OTP(Base):
+    __tablename__ = "otps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String(20), index=True, nullable=False)
+    otp_code = Column(String(6), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_used = Column(Integer, default=0, nullable=False)  # 0=not used, 1=used
+    attempts = Column(Integer, default=0, nullable=False)
 
 
 class Group(Base):

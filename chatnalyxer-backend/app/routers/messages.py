@@ -47,27 +47,33 @@ def create_whatsapp_message(
         default_user = models.User(
             username="whatsapp_user",
             email="whatsapp@chatnalyxer.com",
-            hashed_password="dummy_hash"
+            hashed_password="dummy_hash",
+            phone_number="0000000000",
+            is_verified=True
         )
         db.add(default_user)
         db.commit()
         db.refresh(default_user)
 
     # Analyze message with ML for priority detection (with fallback)
+    ml_results = {
+        'priority_level': 'MEDIUM',
+        'urgency_score': 0.5,
+        'deadline_extracted': None,
+        'extracted_keywords': '[]',
+        'is_priority': 0,
+        'message_category': 'GENERAL',
+        'academic_context': '{}'
+    }
+
     if ml_analyzer:
-        ml_results = ml_analyzer.analyze_message(
-            payload.content, payload.timestamp)
-    else:
-        # Fallback ML results when analyzer is not available
-        ml_results = {
-            'priority_level': 'MEDIUM',
-            'urgency_score': 0.5,
-            'deadline_extracted': None,
-            'extracted_keywords': '[]',
-            'is_priority': 0,
-            'message_category': 'GENERAL',
-            'academic_context': '{}'
-        }
+        try:
+            ml_results = ml_analyzer.analyze_message(
+                payload.content, payload.timestamp)
+        except Exception as e:
+            print(f"WARNING: ML Analysis failed (quota or error): {e}")
+            # Keep default/fallback values defined above
+            pass
 
     msg = models.Message(
         content=payload.content,
