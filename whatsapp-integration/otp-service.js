@@ -1,5 +1,5 @@
 import express from 'express';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import QRCode from 'qrcode';
@@ -25,14 +25,20 @@ if (!fs.existsSync(AUTH_FOLDER)) {
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+
+    console.log(`Using WA v${version.join('.')}, isLatest: ${isLatest}`);
 
     sock = makeWASocket({
+        version,
         auth: state,
         // printQRInTerminal: true, // Deprecated and causes log spam
         logger: pino({ level: 'silent' }),
-        browser: ['Chatnalyxer', 'Chrome', '1.0.0'],
+        browser: ['Chatnalyxer', 'Chrome', '120.0.6099.199'], // Updated browser signature
         syncFullHistory: false,
         connectTimeoutMs: 60000, // Increase timeout
+        keepAliveIntervalMs: 10000,
+        retryRequestDelayMs: 5000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -42,7 +48,7 @@ async function connectToWhatsApp() {
 
         if (qr) {
             currentQR = qr;
-            console.log("📸 QR Code received! Please scan.");
+            console.log("📸 QR Code received! Scan now.");
             isClientReady = false;
         }
 
@@ -50,16 +56,19 @@ async function connectToWhatsApp() {
             isClientReady = false;
             currentQR = null;
 
-            const statusCode = (lastDisconnect?.error instanceof Boom)?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            const error = lastDisconnect?.error;
+            const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
+
+            // if logged out or 405 (temp ban/ratelimit), be careful
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
 
             console.log(`❌ Connection closed. Status: ${statusCode}. Reconnecting: ${shouldReconnect}`);
 
             if (shouldReconnect) {
-                // If 405 (Method Not Allowed), it often means temp ban or version mismatch. 
-                // Wait longer.
-                const delay = statusCode === 405 ? 5000 : 2000;
-                setTimeout(connectToWhatsApp, delay);
+                setTimeout(connectToWhatsApp, 2000);
+            } else if (statusCode === 405) {
+                console.log("⚠️ Received 405 error. Waiting 60s before retry to clear rate limit...");
+                setTimeout(connectToWhatsApp, 60000);
             }
         } else if (connection === 'open') {
             console.log('✅ WhatsApp Connected!');
