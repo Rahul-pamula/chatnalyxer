@@ -39,6 +39,7 @@ const client = new Client({
   puppeteer: {
     headless: false, // run with visible browser for QR scanning
     ignoreHTTPSErrors: true,
+    timeout: 60000, // Increase timeout to 60 seconds
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -61,6 +62,26 @@ const client = new Client({
       "--ignore-certificate-errors",
       "--ignore-ssl-errors",
       "--disable-blink-features=AutomationControlled",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-sync",
+      "--disable-translate",
+      "--hide-scrollbars",
+      "--metrics-recording-only",
+      "--mute-audio",
+      "--no-crash-upload",
+      "--disable-component-extensions-with-background-pages",
+      "--disable-features=TranslateUI",
+      "--disable-ipc-flooding-protection",
+      "--disable-hang-monitor",
+      "--disable-prompt-on-repost",
+      "--force-color-profile=srgb",
+      "--disable-component-update",
+      "--disable-domain-reliability",
+      "--disable-client-side-phishing-detection",
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows",
     ],
   },
 });
