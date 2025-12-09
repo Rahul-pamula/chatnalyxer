@@ -9,11 +9,14 @@ echo "Stopping backend..."
 pkill -f "uvicorn app.main:app"
 
 echo "Stopping mobile app..."
+pkill -f "uvicorn app.main:app"
 pkill -f "expo start"
 pkill -f "npm start"
+pkill -f "node.*index.js"
+pkill -f "ngrok"
+pkill -f "localtunnel"
 
 echo "Stopping WhatsApp integration..."
-pkill -f "node.*index.js"
 pkill -f "node.*otp-service"
 
 echo "Stopping ngrok tunnels..."

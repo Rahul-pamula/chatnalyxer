@@ -29,12 +29,12 @@ uvicorn app.main:app --host 0.0.0.0 --reload > /tmp/backend.log 2>&1 &
 echo "   ✅ Backend started"
 sleep 3
 
-# Start WhatsApp integration
+# Start WhatsApp OTP Service
 echo ""
-echo "2️⃣ Starting WhatsApp integration (preserving session)..."
+echo "2️⃣ Starting WhatsApp OTP Service..."
 cd ../whatsapp-integration
 ./start_otp.sh > /tmp/whatsapp.log 2>&1 &
-echo "   ✅ WhatsApp integration started (session preserved)"
+echo "   ✅ WhatsApp OTP service started"
 sleep 2
 
 # Start mobile app

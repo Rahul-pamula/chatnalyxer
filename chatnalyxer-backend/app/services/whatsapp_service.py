@@ -1,12 +1,12 @@
 """
-WhatsApp Service - Send messages via Local Native OTP Service
+WhatsApp Service - Send messages via Local OTP Service
 """
 import re
 import requests
 import os
 from typing import Optional
 
-# Native OTP Service Configuration
+# Local OTP Service Configuration
 OTP_SERVICE_URL = os.getenv("OTP_SERVICE_URL", "http://localhost:3001")
 
 
@@ -27,7 +27,7 @@ def format_phone_number(phone_number: str) -> str:
 
 def send_otp_message(phone_number: str, otp_code: str) -> tuple[bool, str]:
     """
-    Send OTP via Local Native Service
+    Send OTP via Local OTP Service
     Returns: (success, error_message)
     """
     try:
@@ -37,7 +37,7 @@ def send_otp_message(phone_number: str, otp_code: str) -> tuple[bool, str]:
         # Create OTP message
         message = f"🔐 *Chatnalyxer OTP Verification*\n\nYour OTP code is: *{otp_code}*\n\nThis code will expire in 5 minutes.\nDo not share this code with anyone."
         
-        # Native Service endpoint
+        # Local OTP Service endpoint
         url = f"{OTP_SERVICE_URL}/send-otp"
         
         payload = {
@@ -45,7 +45,7 @@ def send_otp_message(phone_number: str, otp_code: str) -> tuple[bool, str]:
             "message": message
         }
         
-        print(f"📤 Sending OTP to {phone_number} via Native Service...")
+        print(f"📤 Sending OTP to {phone_number} via Local OTP Service...")
         
         response = requests.post(
             url,
@@ -64,7 +64,7 @@ def send_otp_message(phone_number: str, otp_code: str) -> tuple[bool, str]:
             return False, f"Failed: {error_msg}"
             
     except requests.exceptions.ConnectionError:
-        error_msg = "WhatsApp OTP Service is offline. Please run 'node otp-service.js' in whatsapp-integration folder."
+        error_msg = "WhatsApp OTP Service is offline. Please run: ./start_whatsapp_otp.sh"
         print(f"❌ {error_msg}")
         return False, error_msg
     except Exception as e:
@@ -75,7 +75,7 @@ def send_otp_message(phone_number: str, otp_code: str) -> tuple[bool, str]:
 
 def send_welcome_message(phone_number: str, username: str) -> tuple[bool, str]:
     """
-    Send welcome message to new user via Native Service
+    Send welcome message to new user via Local OTP Service
     Returns: (success, error_message)
     """
     try:
@@ -104,9 +104,9 @@ def send_welcome_message(phone_number: str, username: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def check_waha_status() -> tuple[bool, str]:
+def check_otp_service_status() -> tuple[bool, str]:
     """
-    Check if Native OTP Service is available
+    Check if Local OTP Service is available
     Returns: (is_available, status_message)
     """
     try:
@@ -116,11 +116,11 @@ def check_waha_status() -> tuple[bool, str]:
         if response.status_code == 200:
             data = response.json()
             if data.get('status') == 'ready':
-                return True, "WhatsApp Service Ready"
+                return True, "WhatsApp OTP Service Ready"
             else:
-                return False, "WhatsApp Service Initializing (Scan QR Code in Terminal)"
+                return False, "WhatsApp OTP Service Initializing"
         else:
-            return False, "WhatsApp Service Offline"
+            return False, "WhatsApp OTP Service Offline"
             
     except Exception:
-        return False, "WhatsApp Service Offline (Run 'node otp-service.js')"
+        return False, "WhatsApp OTP Service Offline (Run ./start_whatsapp_otp.sh)"
