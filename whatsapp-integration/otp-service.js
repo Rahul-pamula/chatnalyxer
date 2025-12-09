@@ -59,8 +59,19 @@ const client = new Client({
             "--disable-renderer-backgrounding",
             "--enable-features=NetworkService,NetworkServiceInProcess"
         ],
+        "--disable-renderer-backgrounding",
+        "--enable-features=NetworkService,NetworkServiceInProcess"
+        ],
     },
+webVersion: '2.2403.2', // Pin version for stability
+    webVersionCache: { type: 'none' }, // Disable caching to free init memory
 });
+
+// Mock request interception to save memory (Block images/css)
+// Note: whatsapp-web.js requires Puppeteer to handle this manually if needed, 
+// but passing args is cleaner. Above args block some, but manual interception is best.
+// However, LocalAuth manages the page. We can't easily intercept without hacking.
+// We rely on the flags above.
 
 client.on("qr", (qr) => {
     currentQR = qr;
@@ -68,15 +79,32 @@ client.on("qr", (qr) => {
     qrcodeTerminal.generate(qr, { small: true });
 });
 
-client.on("ready", () => {
+// Resource blocking to save memory
+client.on('ready', () => {
     console.log("✅ WhatsApp OTP service is ready!");
     isClientReady = true;
     whatsappClient = client;
     currentQR = null;
 });
 
-client.on("disconnected", () => {
-    console.log("❌ WhatsApp client disconnected");
+client.on('authenticated', () => {
+    console.log("🔐 Authenticated successfully! Waiting for sync...");
+});
+
+client.on('auth_failure', (msg) => {
+    console.error("❌ Authentication failure:", msg);
+});
+
+client.on('loading_screen', (percent, message) => {
+    console.log(`⏳ Loading: ${percent}% - ${message}`);
+});
+
+client.on('change_state', (state) => {
+    console.log("🔄 Connection state changed:", state);
+});
+
+client.on("disconnected", (reason) => {
+    console.log("❌ WhatsApp client disconnected:", reason);
     isClientReady = false;
     currentQR = null;
 });
