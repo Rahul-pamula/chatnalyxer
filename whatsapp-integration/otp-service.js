@@ -94,7 +94,7 @@ app.get('/', async (req, res) => {
             const qrImage = await QRCode.toDataURL(currentQR);
             return res.send(`
                 <html>
-                    <head><title>Scan QR Code</title><meta http-equiv="refresh" content="3"></head>
+                    <head><title>Scan QR Code</title><meta http-equiv="refresh" content="15"></head>
                     <body style="font-family: sans-serif; text-align: center; padding: 50px;">
                         <h1>Scan this QR Code</h1>
                         <img src="${qrImage}" style="width: 300px; height: 300px;" />
