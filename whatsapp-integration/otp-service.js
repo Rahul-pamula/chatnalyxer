@@ -57,11 +57,12 @@ const client = new Client({
             "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints",
             "--disable-ipc-flooding-protection",
             "--disable-renderer-backgrounding",
-            "--enable-features=NetworkService,NetworkServiceInProcess"
+            "--enable-features=NetworkService,NetworkServiceInProcess",
+            "--disable-software-rasterizer",
+            "--mute-audio"
         ],
     },
-    webVersion: '2.2403.2', // Pin version for stability
-    webVersionCache: { type: 'none' }, // Disable caching to free init memory
+    // Removed version pin to allow auto-selection of most stable version
 });
 
 // Mock request interception to save memory (Block images/css)
