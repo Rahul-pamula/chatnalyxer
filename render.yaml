@@ -38,7 +38,3 @@ services:
     healthCheckPath: /health
     buildCommand: cd whatsapp-integration && npm install
     startCommand: cd whatsapp-integration && node otp-service.js
-    disk:
-      name: whatsapp-sessions
-      mountPath: /opt/render/.wwebjs-sessions-otp
-      sizeGB: 1

@@ -93,16 +93,10 @@ RATE_LIMIT_WINDOW_MINUTES=60
 ### 4.3 Add Environment Variables
 - `PORT`: `3001`
 
-### 4.4 Add Persistent Disk
-1. Scroll to "Disks"
-2. Click "Add Disk"
-3. **Name**: `whatsapp-sessions`
-4. **Mount Path**: `/opt/render/.wwebjs-sessions-otp`
-5. **Size**: 1 GB
-
 ### 4.4 Deploy
-1. Click "Create Background Worker"
-2. Wait for deployment
+Click "Create Web Service".
+
+**Note about Free Tier**: Since we are not using a paid persistent disk, if the app restarts, you may need to re-scan the QR code. We recommend setting up a "Keep Alive" ping (see below) to prevent it from sleeping.
 
 ### 4.5 Link WhatsApp (Easy Method)
 Since we deployed as a Web Service, you can simply:
