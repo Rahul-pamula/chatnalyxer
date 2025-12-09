@@ -112,7 +112,17 @@ RATE_LIMIT_WINDOW_MINUTES=60
 
 ---
 
-## Step 5: Update Mobile App
+## Step 5: Connect Backend to WhatsApp Service (Critical!)
+
+1. **Copy WhatsApp Service URL** from Render Dashboard (e.g., `https://chatnalyxer-whatsapp.onrender.com`)
+2. Go to **Backend Service** → **Environment**
+3. Edit `OTP_SERVICE_URL`
+4. Change value from `http://localhost:3001` to your **WhatsApp Service URL**
+5. Click **Save Changes** (Backend will restart)
+
+---
+
+## Step 6: Update Mobile App
 
 ### 5.1 Update Config
 Edit `chatnalyxer-mobile/src/config.ts`:
