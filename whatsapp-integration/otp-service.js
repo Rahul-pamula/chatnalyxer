@@ -56,19 +56,28 @@ async function connectToWhatsApp() {
             isClientReady = false;
             currentQR = null;
 
+            // Detailed error logging
             const error = lastDisconnect?.error;
             const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
 
-            // if logged out or 405 (temp ban/ratelimit), be careful
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
+            console.log('❌ Connection closed details:', {
+                error: error?.message || 'Unknown Error',
+                stack: error?.stack,
+                statusCode,
+                reason: DisconnectReason[statusCode] || 'Unknown Reason'
+            });
 
-            console.log(`❌ Connection closed. Status: ${statusCode}. Reconnecting: ${shouldReconnect}`);
+            // Reconnection Logic
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
             if (shouldReconnect) {
-                setTimeout(connectToWhatsApp, 2000);
-            } else if (statusCode === 405) {
-                console.log("⚠️ Received 405 error. Waiting 60s before retry to clear rate limit...");
-                setTimeout(connectToWhatsApp, 60000);
+                // If 405 (Method Not Allowed), wait longer (60s).
+                // For "undefined" status (socket closed), also wait a bit (5s) to avoid loops.
+                const delay = (statusCode === 405) ? 60000 : 5000;
+                console.log(`🔄 Reconnecting in ${delay / 1000}s...`);
+                setTimeout(connectToWhatsApp, delay);
+            } else {
+                console.log("⛔ Logged out. Please rescan QR code.");
             }
         } else if (connection === 'open') {
             console.log('✅ WhatsApp Connected!');
