@@ -75,60 +75,95 @@ client.on("disconnected", () => {
 client.initialize();
 
 // Routes
-app.get('/', async (req, res) => {
-    try {
-        if (isClientReady) {
-            return res.send(`
-                <html>
-                    <head><title>WhatsApp Status</title><meta http-equiv="refresh" content="2"></head>
-                    <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                        <h1 style="color: green;">✅ WhatsApp Connected!</h1>
-                        <p>The OTP service is ready to send messages.</p>
-                        <p><small>Last updated: ${new Date().toLocaleTimeString()}</small></p>
-                    </body>
-                </html>
-            `);
-        }
-
-        if (currentQR) {
-            const qrImage = await QRCode.toDataURL(currentQR);
-            return res.send(`
-                <html>
-                    <head><title>Scan QR Code</title><meta http-equiv="refresh" content="15"></head>
-                    <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-                        <h1>Scan this QR Code</h1>
-                        <img src="${qrImage}" style="width: 300px; height: 300px;" />
-                        <p>Open WhatsApp > Linked Devices > Link a Device</p>
-                        <p style="color: #666;">Code updates automatically.</p>
-                    </body>
-                </html>
-            `);
-        }
-
-        return res.send(`
-            <html>
-                <head><title>Initializing...</title><meta http-equiv="refresh" content="3"></head>
-                <body style="font-family: sans-serif; text-align: center; padding: 50px; background-color: #f5f5f5;">
-                    <h1>⏳ Initializing WhatsApp...</h1>
-                    <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        <p><strong>Status:</strong> Waiting for QR Code...</p>
-                        <p>If this is the first time running, it may be <strong>downloading Chromium</strong> (150MB+).</p>
-                        <p>This can take <strong>1-3 minutes</strong> depending on your internet.</p>
-                        <hr/>
-                        <p><small>Checking status again in 3 seconds...</small></p>
-                        <p><small>Last check: ${new Date().toLocaleTimeString()}</small></p>
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head>
+                <title>WhatsApp OTP Service</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    body { font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
+                    .container { background: white; padding: 30px; border-radius: 12px; max-width: 500px; margin: 40px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+                    img { max-width: 100%; border-radius: 8px; margin: 20px 0; }
+                    .status { margin: 15px 0; color: #666; }
+                    .success { color: #008000; font-weight: bold; font-size: 1.2em; }
+                    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>WhatsApp OTP Service</h1>
+                    <div id="content">
+                        <div class="spinner"></div>
+                        <p>Loading status...</p>
                     </div>
-                    <p style="margin-top: 20px;">Check your Terminal window for download progress bars.</p>
-                </body>
-            </html>
-        `);
+                </div>
+
+                <script>
+                    const contentDiv = document.getElementById('content');
+                    let lastQR = '';
+
+                    async function checkStatus() {
+                        try {
+                            const res = await fetch('/status-json');
+                            const data = await res.json();
+
+                            if (data.ready) {
+                                contentDiv.innerHTML = \`
+                                    <div class="success">✅ WhatsApp Connected!</div>
+                                    <p>The service is ready to send OTPs.</p>
+                                    <p><small>\${new Date().toLocaleTimeString()}</small></p>
+                                \`;
+                            } else if (data.qr) {
+                                if (data.qr !== lastQR) {
+                                    lastQR = data.qr;
+                                    contentDiv.innerHTML = \`
+                                        <h3>Scan to Connect</h3>
+                                        <img src="\${data.qr}" />
+                                        <p class="status">Open WhatsApp > Linked Devices > Link a Device</p>
+                                    \`;
+                                }
+                            } else {
+                                contentDiv.innerHTML = \`
+                                    <div class="spinner"></div>
+                                    <p>Initializing WhatsApp...</p>
+                                    <p class="status">Please wait, this may take a minute...</p>
+                                \`;
+                            }
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+
+                    // Poll every 2 seconds
+                    setInterval(checkStatus, 2000);
+                    checkStatus();
+                </script>
+            </body>
+        </html>
+    `);
+});
+
+// JSON Status endpoint for client polling
+app.get('/status-json', async (req, res) => {
+    try {
+        const response = {
+            ready: isClientReady,
+            qr: null
+        };
+
+        if (!isClientReady && currentQR) {
+            response.qr = await QRCode.toDataURL(currentQR);
+        }
+
+        res.json(response);
     } catch (e) {
-        res.status(500).send("Error generating page: " + e.message);
+        res.status(500).json({ error: e.message });
     }
 });
 
-
-// Health check endpoint
+// Health check endpoint (simple)
 app.get('/health', (req, res) => {
     res.json({
         status: isClientReady ? 'ready' : 'not_ready',
