@@ -27,14 +27,11 @@ services:
         value: 60
     healthCheckPath: /
 
-  # WhatsApp OTP Service (Running as Web Service for Free Tier)
-  - type: web
+  # WhatsApp OTP Service
+  - type: worker
     name: chatnalyxer-whatsapp
     runtime: node
     plan: free
-    envVars:
-      - key: PORT
-        value: 3001
     healthCheckPath: /health
     buildCommand: cd whatsapp-integration && npm install
     startCommand: cd whatsapp-integration && node otp-service.js

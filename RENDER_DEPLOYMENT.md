@@ -77,11 +77,10 @@ RATE_LIMIT_WINDOW_MINUTES=60
 
 ## Step 4: Deploy WhatsApp Service
 
-### 4.1 Create Web Service (Important!)
-**Note**: We use "Web Service" instead of "Background Worker" to use the Free Tier.
-
-1. Click "New +" → "**Web Service**"
-2. Connect same repository and branch (`dev_otp_flow`)
+### 4.1 Create Background Worker
+1. Click "New +" → "**Background Worker**"
+2. Connect same repository
+3. Branch: `dev_otp_flow`
 
 ### 4.2 Configure WhatsApp Service
 - **Name**: `chatnalyxer-whatsapp`
@@ -89,9 +88,6 @@ RATE_LIMIT_WINDOW_MINUTES=60
 - **Build Command**: `cd whatsapp-integration && npm install`
 - **Start Command**: `cd whatsapp-integration && node otp-service.js`
 - **Plan**: Free
-
-### 4.3 Add Environment Variables
-- `PORT`: `3001`
 
 ### 4.3 Add Persistent Disk
 1. Scroll to "Disks"
