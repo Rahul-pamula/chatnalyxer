@@ -28,10 +28,11 @@ async function connectToWhatsApp() {
 
     sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
-        logger: pino({ level: 'silent' }), // Suppress detailed logs to save I/O
+        // printQRInTerminal: true, // Deprecated and causes log spam
+        logger: pino({ level: 'silent' }),
         browser: ['Chatnalyxer', 'Chrome', '1.0.0'],
-        syncFullHistory: false, // Critical for memory saving!
+        syncFullHistory: false,
+        connectTimeoutMs: 60000, // Increase timeout
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -41,18 +42,24 @@ async function connectToWhatsApp() {
 
         if (qr) {
             currentQR = qr;
-            console.log("📸 QR Code received!");
+            console.log("📸 QR Code received! Please scan.");
             isClientReady = false;
         }
 
         if (connection === 'close') {
             isClientReady = false;
             currentQR = null;
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('❌ Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
+
+            const statusCode = (lastDisconnect?.error instanceof Boom)?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            console.log(`❌ Connection closed. Status: ${statusCode}. Reconnecting: ${shouldReconnect}`);
+
             if (shouldReconnect) {
-                // Reconnect with delay to prevent loops
-                setTimeout(connectToWhatsApp, 2000);
+                // If 405 (Method Not Allowed), it often means temp ban or version mismatch. 
+                // Wait longer.
+                const delay = statusCode === 405 ? 5000 : 2000;
+                setTimeout(connectToWhatsApp, delay);
             }
         } else if (connection === 'open') {
             console.log('✅ WhatsApp Connected!');
