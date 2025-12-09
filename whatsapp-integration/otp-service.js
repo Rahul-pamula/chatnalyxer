@@ -59,11 +59,8 @@ const client = new Client({
             "--disable-renderer-backgrounding",
             "--enable-features=NetworkService,NetworkServiceInProcess"
         ],
-        "--disable-renderer-backgrounding",
-        "--enable-features=NetworkService,NetworkServiceInProcess"
-        ],
     },
-webVersion: '2.2403.2', // Pin version for stability
+    webVersion: '2.2403.2', // Pin version for stability
     webVersionCache: { type: 'none' }, // Disable caching to free init memory
 });
 
