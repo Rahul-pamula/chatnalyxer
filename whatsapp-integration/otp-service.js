@@ -1,116 +1,73 @@
 import express from 'express';
-import pkg from "whatsapp-web.js";
-const { Client, LocalAuth } = pkg;
-import os from "node:os";
-import path from "node:path";
-
-import qrcodeTerminal from 'qrcode-terminal';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import pino from 'pino';
 import QRCode from 'qrcode';
+import fs from 'fs';
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
-// Handle unhandled rejections to catch ProtocolErrors
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    if (reason && reason.message && reason.message.includes("Execution context was destroyed")) {
-        console.log("🔄 OTP Service: Execution context destroyed - ignoring to keep service alive.");
-    }
-});
-
 // Global state
-let whatsappClient = null;
+let sock;
 let isClientReady = false;
 let currentQR = null;
 
-// Tweak for Mac: Use system Chrome (ARM64 Native)
-const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const fs = await import('fs');
+// Auth state folder
+const AUTH_FOLDER = '/opt/render/.wwebjs-sessions-otp/baileys_auth_info';
 
-// Initialize WhatsApp client
-const client = new Client({
-    authStrategy: new LocalAuth({
-        clientId: "chatnalyxer-otp-service",
-        dataPath: path.join(os.homedir(), `.wwebjs-sessions-otp`),
-    }),
-    puppeteer: {
-        executablePath: fs.existsSync(chromePath) ? chromePath : undefined,
-        headless: true, // Run INVISIBLE (Headless)
-        ignoreHTTPSErrors: true,
-        args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-accelerated-2d-canvas",
-            "--no-first-run",
-            "--no-zygote",
-            "--single-process",
-            "--disable-gpu",
-            "--disable-extensions",
-            "--disable-background-networking",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints",
-            "--disable-ipc-flooding-protection",
-            "--disable-renderer-backgrounding",
-            "--enable-features=NetworkService,NetworkServiceInProcess",
-            "--disable-software-rasterizer",
-            "--mute-audio"
-        ],
-    },
-    // Removed version pin to allow auto-selection of most stable version
-});
+// Ensure auth folder exists
+if (!fs.existsSync(AUTH_FOLDER)) {
+    fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+}
 
-// Mock request interception to save memory (Block images/css)
-// Note: whatsapp-web.js requires Puppeteer to handle this manually if needed, 
-// but passing args is cleaner. Above args block some, but manual interception is best.
-// However, LocalAuth manages the page. We can't easily intercept without hacking.
-// We rely on the flags above.
+async function connectToWhatsApp() {
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
 
-client.on("qr", (qr) => {
-    currentQR = qr;
-    console.log("QR Code received. Scan with WhatsApp:");
-    qrcodeTerminal.generate(qr, { small: true });
-});
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' }), // Suppress detailed logs to save I/O
+        browser: ['Chatnalyxer', 'Chrome', '1.0.0'],
+        syncFullHistory: false, // Critical for memory saving!
+    });
 
-// Resource blocking to save memory
-client.on('ready', () => {
-    console.log("✅ WhatsApp OTP service is ready!");
-    isClientReady = true;
-    whatsappClient = client;
-    currentQR = null;
-});
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('authenticated', () => {
-    console.log("🔐 Authenticated successfully! Waiting for sync...");
-});
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-client.on('auth_failure', (msg) => {
-    console.error("❌ Authentication failure:", msg);
-});
+        if (qr) {
+            currentQR = qr;
+            console.log("📸 QR Code received!");
+            isClientReady = false;
+        }
 
-client.on('loading_screen', (percent, message) => {
-    console.log(`⏳ Loading: ${percent}% - ${message}`);
-});
+        if (connection === 'close') {
+            isClientReady = false;
+            currentQR = null;
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('❌ Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
+            if (shouldReconnect) {
+                // Reconnect with delay to prevent loops
+                setTimeout(connectToWhatsApp, 2000);
+            }
+        } else if (connection === 'open') {
+            console.log('✅ WhatsApp Connected!');
+            isClientReady = true;
+            currentQR = null;
+        }
+    });
+}
 
-client.on('change_state', (state) => {
-    console.log("🔄 Connection state changed:", state);
-});
+// Start connection
+connectToWhatsApp();
 
-client.on("disconnected", (reason) => {
-    console.log("❌ WhatsApp client disconnected:", reason);
-    isClientReady = false;
-    currentQR = null;
-});
+// --- API ROUTES (Compatible with previous version) ---
 
-// Initialize client
-client.initialize();
-
-// Routes
+// 1. UI for QR Code (SPA)
 app.get('/', (req, res) => {
     res.send(`
         <html>
@@ -118,11 +75,10 @@ app.get('/', (req, res) => {
                 <title>WhatsApp OTP Service</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
-                    body { font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
+                    body { font-family: system-ui, sans-serif; text-align: center; padding: 20px; background: #f0f2f5; }
                     .container { background: white; padding: 30px; border-radius: 12px; max-width: 500px; margin: 40px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
                     img { max-width: 100%; border-radius: 8px; margin: 20px 0; }
-                    .status { margin: 15px 0; color: #666; }
-                    .success { color: #008000; font-weight: bold; font-size: 1.2em; }
+                    .success { color: #008000; font-weight: bold; font-size: 1.5em; }
                     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
                     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                 </style>
@@ -132,10 +88,9 @@ app.get('/', (req, res) => {
                     <h1>WhatsApp OTP Service</h1>
                     <div id="content">
                         <div class="spinner"></div>
-                        <p>Loading status...</p>
+                        <p>Connecting...</p>
                     </div>
                 </div>
-
                 <script>
                     const contentDiv = document.getElementById('content');
                     let lastQR = '';
@@ -148,8 +103,7 @@ app.get('/', (req, res) => {
                             if (data.ready) {
                                 contentDiv.innerHTML = \`
                                     <div class="success">✅ WhatsApp Connected!</div>
-                                    <p>The service is ready to send OTPs.</p>
-                                    <p><small>\${new Date().toLocaleTimeString()}</small></p>
+                                    <p>Service is ready (Lightweight Engine).</p>
                                 \`;
                             } else if (data.qr) {
                                 if (data.qr !== lastQR) {
@@ -157,22 +111,14 @@ app.get('/', (req, res) => {
                                     contentDiv.innerHTML = \`
                                         <h3>Scan to Connect</h3>
                                         <img src="\${data.qr}" />
-                                        <p class="status">Open WhatsApp > Linked Devices > Link a Device</p>
+                                        <p>Open WhatsApp > Linked Devices > Link a Device</p>
                                     \`;
                                 }
                             } else {
-                                contentDiv.innerHTML = \`
-                                    <div class="spinner"></div>
-                                    <p>Initializing WhatsApp...</p>
-                                    <p class="status">Please wait, this may take a minute...</p>
-                                \`;
+                                contentDiv.innerHTML = '<div class="spinner"></div><p>Waiting for QR...</p>';
                             }
-                        } catch (e) {
-                            console.error(e);
-                        }
+                        } catch (e) { console.error(e); }
                     }
-
-                    // Poll every 2 seconds
                     setInterval(checkStatus, 2000);
                     checkStatus();
                 </script>
@@ -181,25 +127,18 @@ app.get('/', (req, res) => {
     `);
 });
 
-// JSON Status endpoint for client polling
 app.get('/status-json', async (req, res) => {
     try {
-        const response = {
-            ready: isClientReady,
-            qr: null
-        };
-
+        const response = { ready: isClientReady, qr: null };
         if (!isClientReady && currentQR) {
             response.qr = await QRCode.toDataURL(currentQR);
         }
-
         res.json(response);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// Health check endpoint (simple)
 app.get('/health', (req, res) => {
     res.json({
         status: isClientReady ? 'ready' : 'not_ready',
@@ -207,62 +146,33 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Send OTP endpoint
 app.post('/send-otp', async (req, res) => {
     try {
         const { phone_number, message } = req.body;
+        if (!phone_number || !message) return res.status(400).json({ error: 'Missing fields' });
+        if (!isClientReady) return res.status(503).json({ error: 'Service not ready' });
 
-        if (!phone_number || !message) {
-            return res.status(400).json({ error: 'phone_number and message are required' });
-        }
+        // Format phone (Baileys requires proper JID)
+        let jid = phone_number.replace(/\D/g, '');
+        if (!jid.endsWith('@s.whatsapp.net')) jid += '@s.whatsapp.net';
 
-        if (!isClientReady) {
-            return res.status(503).json({ error: 'WhatsApp service is not ready yet' });
-        }
+        await sock.sendMessage(jid, { text: message });
 
-        // Send message
-        await whatsappClient.sendMessage(phone_number, message);
-
-        console.log(`✅ OTP sent to ${phone_number}`);
+        console.log(`✅ OTP sent to ${jid}`);
         res.json({ success: true, message: 'OTP sent successfully' });
-
     } catch (error) {
         console.error('Error sending OTP:', error);
-        res.status(500).json({
-            error: 'Failed to send OTP',
-            details: error.message
-        });
+        res.status(500).json({ error: 'Failed' });
     }
 });
 
-// Send general message endpoint
+// Legacy route support
 app.post('/send-message', async (req, res) => {
-    try {
-        const { phone_number, message } = req.body;
-
-        if (!phone_number || !message) {
-            return res.status(400).json({ error: 'phone_number and message are required' });
-        }
-
-        if (!isClientReady) {
-            return res.status(503).json({ error: 'WhatsApp service is not ready yet' });
-        }
-
-        // Send message
-        await whatsappClient.sendMessage(phone_number, message);
-
-        console.log(`✅ Message sent to ${phone_number}`);
-        res.json({ success: true, message: 'Message sent successfully' });
-
-    } catch (error) {
-        console.error('Error sending message:', error);
-        res.status(500).json({
-            error: 'Failed to send message',
-            details: error.message
-        });
-    }
+    // Redirect logic to send-otp since they are identical here
+    req.url = '/send-otp';
+    app._router.handle(req, res);
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 WhatsApp OTP service running on port ${PORT}`);
+    console.log(`🚀 Lightweight WhatsApp (Baileys) running on port ${PORT}`);
 });
