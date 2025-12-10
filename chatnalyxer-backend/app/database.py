@@ -13,11 +13,27 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Ensure SSL mode for Supabase (fixes SSL connection closed error)
-if "supabase" in DATABASE_URL and "sslmode" not in DATABASE_URL:
-    delimiter = "&" if "?" in DATABASE_URL else "?"
-    DATABASE_URL += f"{delimiter}sslmode=require"
+if "supabase" in DATABASE_URL:
+    # Add SSL parameters if not present
+    if "sslmode" not in DATABASE_URL:
+        delimiter = "&" if "?" in DATABASE_URL else "?"
+        DATABASE_URL += f"{delimiter}sslmode=require"
 
-engine = create_engine(DATABASE_URL)
+# Create engine with connection pooling settings for Supabase
+engine_kwargs = {
+    "pool_pre_ping": True,  # Test connections before using them
+    "pool_recycle": 300,    # Recycle connections after 5 minutes
+    "pool_size": 5,         # Smaller pool for development
+    "max_overflow": 10,     # Max extra connections
+    "connect_args": {}
+}
+
+# Add SSL context for Supabase
+if "supabase" in DATABASE_URL:
+    engine_kwargs["connect_args"]["sslmode"] = "require"
+    engine_kwargs["connect_args"]["connect_timeout"] = 10
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

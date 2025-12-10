@@ -7,11 +7,12 @@
         "start": "node otp-service.js"
     },
     "dependencies": {
+        "@hapi/boom": "^10.0.1",
+        "@whiskeysockets/baileys": "^6.7.21",
         "axios": "^1.13.2",
         "express": "^4.18.2",
+        "pino": "^8.21.0",
         "qrcode": "^1.5.4",
-        "qrcode-terminal": "^0.12.0",
-        "@whiskeysockets/baileys": "^6.5.0",
-        "pino": "^8.16.1"
+        "qrcode-terminal": "^0.12.0"
     }
 }

@@ -1,13 +1,7 @@
-import { Platform } from 'react-native';
+// HTTPS Tunnel for Mobile Testing
+const TUNNEL_URL = "https://89e5499bc568.ngrok-free.app";
 
-// Updated dynamically based on development environment
-// REMOTE TESTING: Use ngrok tunnel for all platforms
-const NGROK_TUNNEL_URL = "https://a5bb3882f987.ngrok-free.app";
+export const BASE_URL = TUNNEL_URL;
 
-// For local development only (comment out when using ngrok)
-// const LOCALHOST_URL = "http://localhost:8000";
-
-// Use ngrok tunnel for remote testing on any device
-export const BASE_URL = NGROK_TUNNEL_URL;
-
-export const QR_URL = `${NGROK_TUNNEL_URL}/qr`;
+// For local direct (only if same WiFi):
+// const LOCAL_IP = "http://10.71.39.32:8000";

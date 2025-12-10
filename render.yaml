@@ -10,7 +10,10 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: OTP_SERVICE_URL
-        value: http://localhost:3001
+        fromService:
+          type: web
+          name: chatnalyxer-whatsapp
+          property: host
       - key: SECRET_KEY
         generateValue: true
       - key: ALGORITHM
