@@ -63,10 +63,13 @@ def start_whatsapp(current_user=Depends(get_current_user)):
             
         print(f"🚀 Launching WhatsApp subprocess: {' '.join(cmd)} in {whatsapp_dir}")
         
-        # SELF-HEALING: Install dependencies if missing
+        # SELF-HEALING: Install dependencies if missing OR if specific package is missing
         node_modules_path = os.path.join(whatsapp_dir, "node_modules")
-        if not os.path.exists(node_modules_path):
-            print(f"⚠️ node_modules NOT found at {node_modules_path}. Running 'npm install'...")
+        baileys_path = os.path.join(node_modules_path, "@whiskeysockets", "baileys")
+        
+        # Check if the folder is missing OR if the critical dependency is missing
+        if not os.path.exists(node_modules_path) or not os.path.exists(baileys_path):
+            print(f"⚠️ Dependencies missing (Checked: {baileys_path}). Running 'npm install'...")
             try:
                 # Run npm install with inherited environment
                 install_cmd = ["npm", "install"]
