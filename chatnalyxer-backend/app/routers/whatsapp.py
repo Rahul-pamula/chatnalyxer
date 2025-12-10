@@ -63,23 +63,33 @@ def start_whatsapp(current_user=Depends(get_current_user)):
             
         print(f"🚀 Launching WhatsApp subprocess: {' '.join(cmd)} in {whatsapp_dir}")
         
-        # DEBUG: Check if node_modules exists and has content
+        # SELF-HEALING: Install dependencies if missing
         node_modules_path = os.path.join(whatsapp_dir, "node_modules")
-        if os.path.exists(node_modules_path):
-            print(f"📂 node_modules found at {node_modules_path}")
+        if not os.path.exists(node_modules_path):
+            print(f"⚠️ node_modules NOT found at {node_modules_path}. Running 'npm install'...")
             try:
-                contents = os.listdir(node_modules_path)
-                print(f"📦 node_modules contains {len(contents)} items. First 5: {contents[:5]}")
-                if "@whiskeysockets" in contents:
-                    ws_path = os.path.join(node_modules_path, "@whiskeysockets")
-                    print(f"Found @whiskeysockets. Contents: {os.listdir(ws_path)}")
-                else:
-                    print("⚠️ @whiskeysockets folder NOT found in node_modules")
+                # Run npm install with inherited environment
+                install_cmd = ["npm", "install"]
+                install_result = subprocess.run(
+                    install_cmd, 
+                    cwd=whatsapp_dir, 
+                    capture_output=True, 
+                    text=True,
+                    check=False
+                )
+                print(f"📦 'npm install' finished with return code {install_result.returncode}")
+                if install_result.stdout:
+                    print(f"STDOUT: {install_result.stdout}")
+                if install_result.stderr:
+                    print(f"STDERR: {install_result.stderr}")
+                    
+                if install_result.returncode != 0:
+                    raise Exception(f"'npm install' failed: {install_result.stderr}")
+                    
             except Exception as e:
-                print(f"⚠️ Error listing node_modules: {e}")
-        else:
-            print(f"❌ node_modules directory DOES NOT EXIST at {node_modules_path}")
-
+                print(f"❌ Failed to auto-install dependencies: {e}")
+                # We continue anyway, hoping for the best, or we could raise
+        
         process = subprocess.Popen(cmd, cwd=whatsapp_dir)
         print(f"✅ Subprocess started with PID: {process.pid}")
         
