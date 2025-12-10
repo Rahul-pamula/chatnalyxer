@@ -37,7 +37,7 @@ git push origin dev_otp_flow
    Branch: dev_otp_flow
    Root Directory: chatnalyxer-backend
    Build Command: pip install -r requirements.txt
-   Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   Start Command: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
    ```
 
 5. **Environment Variables** (click "Environment"):
