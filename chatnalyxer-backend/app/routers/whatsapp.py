@@ -62,6 +62,24 @@ def start_whatsapp(current_user=Depends(get_current_user)):
             cmd.append(phone_number)
             
         print(f"🚀 Launching WhatsApp subprocess: {' '.join(cmd)} in {whatsapp_dir}")
+        
+        # DEBUG: Check if node_modules exists and has content
+        node_modules_path = os.path.join(whatsapp_dir, "node_modules")
+        if os.path.exists(node_modules_path):
+            print(f"📂 node_modules found at {node_modules_path}")
+            try:
+                contents = os.listdir(node_modules_path)
+                print(f"📦 node_modules contains {len(contents)} items. First 5: {contents[:5]}")
+                if "@whiskeysockets" in contents:
+                    ws_path = os.path.join(node_modules_path, "@whiskeysockets")
+                    print(f"Found @whiskeysockets. Contents: {os.listdir(ws_path)}")
+                else:
+                    print("⚠️ @whiskeysockets folder NOT found in node_modules")
+            except Exception as e:
+                print(f"⚠️ Error listing node_modules: {e}")
+        else:
+            print(f"❌ node_modules directory DOES NOT EXIST at {node_modules_path}")
+
         process = subprocess.Popen(cmd, cwd=whatsapp_dir)
         print(f"✅ Subprocess started with PID: {process.pid}")
         
