@@ -4,7 +4,7 @@ services:
     name: chatnalyxer-backend
     runtime: python
     plan: free
-    buildCommand: cd chatnalyxer-backend && pip install -r requirements.txt
+    buildCommand: cd whatsapp-integration && npm install && cd ../chatnalyxer-backend && pip install -r requirements.txt
     startCommand: cd chatnalyxer-backend && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
