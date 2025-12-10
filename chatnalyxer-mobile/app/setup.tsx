@@ -204,7 +204,7 @@ export default function SetupScreen() {
                                 </View>
                                 <Text style={styles.instructionText}>
                                     1. Click the notification "Enter code to link device"{'\n'}
-                                    2. Or go to WhatsApp > Linked Devices > Link with phone number{'\n'}
+                                    2. Or go to WhatsApp → Linked Devices → Link with phone number{'\n'}
                                     3. Enter the code above
                                 </Text>
                             </View>
