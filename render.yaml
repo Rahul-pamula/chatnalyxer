@@ -4,10 +4,12 @@ services:
     name: chatnalyxer-backend
     runtime: python
     plan: free
-    buildCommand: pip install -r chatnalyxer-backend/requirements.txt
-    startCommand: cd chatnalyxer-backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd chatnalyxer-backend && pip install -r requirements.txt
+    startCommand: cd chatnalyxer-backend && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
         sync: false
       - key: OTP_SERVICE_URL
         fromService:
@@ -23,7 +25,7 @@ services:
       - key: OTP_EXPIRY_MINUTES
         value: 5
       - key: OTP_MAX_ATTEMPTS
-        value: 30
+        value: 40
       - key: RATE_LIMIT_REQUESTS
         value: 60
       - key: RATE_LIMIT_WINDOW_MINUTES
