@@ -71,27 +71,44 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         if not os.path.exists(node_modules_path) or not os.path.exists(baileys_path):
             print(f"⚠️ Dependencies missing (Checked: {baileys_path}). Running 'npm install'...")
             try:
-                # Run npm install with inherited environment
+                # Run npm install with inherited environment and WAIT for completion
                 install_cmd = ["npm", "install"]
                 install_result = subprocess.run(
                     install_cmd, 
                     cwd=whatsapp_dir, 
                     capture_output=True, 
                     text=True,
-                    check=False
+                    check=True,  # Raise exception on non-zero return code
+                    timeout=120  # 2 minute timeout for npm install
                 )
-                print(f"📦 'npm install' finished with return code {install_result.returncode}")
+                print(f"📦 'npm install' completed successfully")
                 if install_result.stdout:
-                    print(f"STDOUT: {install_result.stdout}")
-                if install_result.stderr:
-                    print(f"STDERR: {install_result.stderr}")
+                    print(f"STDOUT: {install_result.stdout[:500]}")  # Truncate long output
                     
-                if install_result.returncode != 0:
-                    raise Exception(f"'npm install' failed: {install_result.stderr}")
+                # Verify baileys was actually installed
+                if not os.path.exists(baileys_path):
+                    raise Exception(f"Baileys package still not found after npm install at: {baileys_path}")
                     
+                print(f"✅ Baileys package verified at: {baileys_path}")
+                    
+            except subprocess.TimeoutExpired:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="npm install timed out. Please try again or contact support."
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"❌ npm install failed with return code {e.returncode}")
+                print(f"STDERR: {e.stderr}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to install WhatsApp dependencies: {e.stderr[:200]}"
+                )
             except Exception as e:
                 print(f"❌ Failed to auto-install dependencies: {e}")
-                # We continue anyway, hoping for the best, or we could raise
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to prepare WhatsApp integration: {str(e)}"
+                )
         
         process = subprocess.Popen(cmd, cwd=whatsapp_dir)
         print(f"✅ Subprocess started with PID: {process.pid}")
