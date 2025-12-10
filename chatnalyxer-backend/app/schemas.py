@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
 
 # ----- Token -----
 
@@ -122,3 +122,59 @@ class WhatsAppMessageCreate(BaseModel):
 
 class DashboardResponse(BaseModel):
     messages: List[MessageOut]
+
+# ----- AI Integration Schemas -----
+
+class AIAnalysisRequest(BaseModel):
+    content: str
+    sender: str
+    group: str
+    type: str = "text" # text, image, pdf, voice
+
+class AITaskBase(BaseModel):
+    task_description: str
+    priority: Optional[str] = "medium"
+    deadline: Optional[datetime] = None
+    status: Optional[str] = "pending"
+
+class AITaskCreate(AITaskBase):
+    pass
+
+class AITaskUpdate(BaseModel):
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    deadline: Optional[datetime] = None
+
+class AITaskOut(AITaskBase):
+    id: int
+    source_message_id: Optional[int] = None
+    created_by_ai: bool
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AnalyzedMessageOut(BaseModel):
+    id: int
+    group_name: Optional[str]
+    sender_name: Optional[str]
+    message_type: str
+    original_content: str
+    ai_summary: Optional[str]
+    priority: Optional[str]
+    category: Optional[str]
+    action_items: List[str] = []
+    deadline: Optional[datetime]
+    is_important: bool
+    created_at: datetime
+    generated_tasks: List[AITaskOut] = []
+
+    class Config:
+        from_attributes = True
+
+class AIChatRequest(BaseModel):
+    message: str
+
+class AIChatResponse(BaseModel):
+    response: str

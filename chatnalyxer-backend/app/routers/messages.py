@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
@@ -17,6 +17,9 @@ except ImportError as e:
     ml_analyzer = None
     print(f"WARNING: ML analyzer import failed: {e} - using fallback values")
 
+# Import AI Analyzer
+from ..services.ai_analyzer import ai_analyzer
+
 # Dependency to check API Key for unauthenticated routes
 
 
@@ -29,6 +32,7 @@ def get_api_key(x_api_key: str = Header(...)):
 @router.post("/from-whatsapp", response_model=schemas.MessageOut, status_code=status.HTTP_201_CREATED)
 def create_whatsapp_message(
     payload: schemas.WhatsAppMessageCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     api_key_check: str = Depends(get_api_key)
 ):
@@ -96,6 +100,20 @@ def create_whatsapp_message(
     if ml_results['is_priority']:
         print(
             f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
+
+    # 🤖 Trigger Gemini AI Analysis in Background
+    message_data_ai = {
+        'content': payload.content,
+        'sender': payload.sender_name,
+        'group': group.name,
+        'type': 'text' 
+    }
+    background_tasks.add_task(
+        ai_analyzer.analyze_message, 
+        user_id=default_user.id, 
+        message_data=message_data_ai,
+        db=None  # Service will create its own session
+    )
 
     return msg
 
