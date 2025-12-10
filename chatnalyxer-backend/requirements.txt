@@ -43,6 +43,7 @@ pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pydantic==2.12.5
 pydantic_core==2.41.5
+email-validator==2.2.0
 pyparsing==3.2.5
 rsa==4.9.1
 tqdm==4.67.1

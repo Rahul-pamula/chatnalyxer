@@ -37,7 +37,7 @@ class UserOut(BaseModel):
     email: Optional[EmailStr] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # ----- OTP Authentication -----
@@ -72,7 +72,7 @@ class GroupOut(BaseModel):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # ----- WhatsApp Group Sync -----
 
@@ -106,7 +106,7 @@ class MessageOut(BaseModel):
     deleted_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # ----- Message from WhatsApp Integration -----
 
