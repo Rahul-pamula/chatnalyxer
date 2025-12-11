@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Import configuration
-const { BASE_URL, API_KEY } = require('./config.js');
+const { BASE_URL, API_KEY } = require('./config.cjs');
 
 // Get user_id and phone_number from command line arguments
 const user_id = process.argv[2] || "default";
