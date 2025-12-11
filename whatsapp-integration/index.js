@@ -32,7 +32,11 @@ async function connectToWhatsApp() {
             pairing_code: null
         });
     } catch (error) {
-        console.log('⚠️ Failed to send initial status:', error.message);
+        console.log('⚠️ Failed to send initial status. Details:', {
+            message: error.message,
+            code: error.code,
+            url: `${BASE_URL}/whatsapp/status`
+        });
     }
 
     sock = makeWASocket({
@@ -70,7 +74,12 @@ async function connectToWhatsApp() {
                     expired: false
                 });
             } catch (e) {
-                console.log('⚠️ Failed to send QR to backend:', e.message);
+                console.log('⚠️ Failed to send QR to backend. Details:', {
+                    message: e.message,
+                    code: e.code,
+                    url: `${BASE_URL}/whatsapp/status`,
+                    responseData: e.response?.data
+                });
             }
 
             // Clear any existing timeout
