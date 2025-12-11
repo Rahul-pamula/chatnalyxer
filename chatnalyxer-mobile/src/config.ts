@@ -1,13 +1,13 @@
 import { Platform } from 'react-native';
 
-// Updated dynamically based on development environment
-// REMOTE TESTING: Use ngrok tunnel for all platforms
-const NGROK_TUNNEL_URL = "https://a5bb3882f987.ngrok-free.app";
+// Backend deployed on Render
+const RENDER_BACKEND_URL = "https://chatnalyxer-backend.onrender.com";
 
-// For local development only (comment out when using ngrok)
+// For local development (uncomment when testing locally)
 // const LOCALHOST_URL = "http://localhost:8000";
+// export const BASE_URL = LOCALHOST_URL;
 
-// Use ngrok tunnel for remote testing on any device
-export const BASE_URL = NGROK_TUNNEL_URL;
+// Use Render backend for production
+export const BASE_URL = RENDER_BACKEND_URL;
 
-export const QR_URL = `${NGROK_TUNNEL_URL}/qr`;
+export const QR_URL = `${RENDER_BACKEND_URL}/qr`;
