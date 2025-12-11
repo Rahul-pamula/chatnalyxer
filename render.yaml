@@ -3,6 +3,7 @@ services:
   - type: web
     name: chatnalyxer-backend
     runtime: docker
+    startCommand: ./start_render.sh
     plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .

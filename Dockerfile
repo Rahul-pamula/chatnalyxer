@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libxi6 \
     libgconf-2-4 \
     default-jdk \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 18
