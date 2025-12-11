@@ -81,7 +81,13 @@ async function connectToWhatsApp() {
             // Clear session on 401 to get fresh start
             if (lastDisconnect?.error?.output?.statusCode === 401) {
                 console.log('❌ 401 error - clearing session for fresh start');
-                try { fs.rmSync(authPath, { recursive: true, force: true }); } catch (e) { }
+                try {
+                    fs.rmSync(authPath, { recursive: true, force: true });
+                    // Recreate the folder immediately to avoid crash
+                    fs.mkdirSync(authPath, { recursive: true });
+                } catch (e) {
+                    console.log('Error managing auth folder:', e.message);
+                }
             }
 
             if (shouldReconnect) {
@@ -93,8 +99,8 @@ async function connectToWhatsApp() {
         } else if (connection === 'connecting') {
             console.log('🔄 Connecting to WhatsApp...');
 
-            // Request pairing code when connecting (if phone number provided and not already requested)
-            if (phoneNumber && !pairingCodeRequested && !sock.authState.creds.registered) {
+            // Request pairing code ONLY if phone number is provided AND valid
+            if (phoneNumber && phoneNumber.length >= 10 && !pairingCodeRequested && !sock.authState.creds.registered) {
                 pairingCodeRequested = true;
                 console.log(`⏰ Phone number provided: ${phoneNumber}`);
 
