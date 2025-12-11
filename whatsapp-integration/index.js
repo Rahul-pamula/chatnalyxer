@@ -35,7 +35,6 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: true,
         syncFullHistory: false,
         logger: P({ level: 'silent' }),
         browser: ["Chatnalyxer", "Chrome", "1.0.0"],
@@ -44,8 +43,11 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Track if pairing code was requested
+    let pairingCodeRequested = false;
+
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect, qr, isNewLogin } = update;
 
         // Handle QR Code
         if (qr) {
@@ -76,11 +78,56 @@ async function connectToWhatsApp() {
                 });
             } catch (e) { }
 
+            // Clear session on 401 to get fresh start
+            if (lastDisconnect?.error?.output?.statusCode === 401) {
+                console.log('❌ 401 error - clearing session for fresh start');
+                try { fs.rmSync(authPath, { recursive: true, force: true }); } catch (e) { }
+            }
+
             if (shouldReconnect) {
                 setTimeout(connectToWhatsApp, 3000);
             } else {
                 console.log('❌ Logged out. Delete auth folder to restart.');
                 try { fs.rmSync(authPath, { recursive: true, force: true }); } catch (e) { }
+            }
+        } else if (connection === 'connecting') {
+            console.log('🔄 Connecting to WhatsApp...');
+
+            // Request pairing code when connecting (if phone number provided and not already requested)
+            if (phoneNumber && !pairingCodeRequested && !sock.authState.creds.registered) {
+                pairingCodeRequested = true;
+                console.log(`⏰ Phone number provided: ${phoneNumber}`);
+
+                // Wait a moment for connection to stabilize
+                setTimeout(async () => {
+                    try {
+                        console.log(`📡 Requesting Pairing Code for ${phoneNumber}...`);
+                        const code = await sock.requestPairingCode(phoneNumber);
+                        console.log(`✅ Pairing Code received: ${code}`);
+                        console.log(`⏰ Code valid for ~60 seconds. Please enter it in WhatsApp NOW!`);
+
+                        // Send to backend
+                        await axios.post(`${BASE_URL}/whatsapp/status`, {
+                            message: 'Enter Pairing Code in WhatsApp',
+                            ready: false,
+                            user_id,
+                            qr_code: null,
+                            pairing_code: code
+                        });
+                        console.log(`✅ Backend notified of code: ${code}`);
+                        console.log(`⏳ Waiting for you to enter the code in WhatsApp...`);
+                    } catch (err) {
+                        console.log('❌ Failed to request pairing code:', err.message);
+                        pairingCodeRequested = false; // Allow retry
+                        try {
+                            await axios.post(`${BASE_URL}/whatsapp/status`, {
+                                message: 'Pairing Failed: ' + err.message,
+                                ready: false,
+                                user_id
+                            });
+                        } catch (e) { }
+                    }
+                }, 5000);
             }
         } else if (connection === 'open') {
             console.log('✅ WhatsApp bot is ready! Connection opened.');
@@ -97,40 +144,6 @@ async function connectToWhatsApp() {
             console.log('\n⏳ Waiting for new messages from selected groups...');
         }
     });
-
-    // Handle Pairing Code
-    if (phoneNumber && !sock.authState.creds.registered) {
-        console.log(`⏰ Phone number provided: ${phoneNumber}, registered: ${sock.authState.creds.registered}`);
-        // Wait a small moment for socket to init
-        setTimeout(async () => {
-            try {
-                console.log(`📡 Requesting Pairing Code for ${phoneNumber}...`);
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log(`✅ Pairing Code received: ${code}`);
-                console.log(`⏰ Code valid for ~60 seconds. Please enter it in WhatsApp NOW!`);
-
-                // Send to backend
-                await axios.post(`${BASE_URL}/whatsapp/status`, {
-                    message: 'Enter Pairing Code in WhatsApp',
-                    ready: false,
-                    user_id,
-                    qr_code: null,
-                    pairing_code: code
-                });
-                console.log(`✅ Backend notified of code: ${code}`);
-                console.log(`⏳ Waiting for you to enter the code in WhatsApp...`);
-            } catch (err) {
-                console.log('❌ Failed to request pairing code:', err);
-                try {
-                    await axios.post(`${BASE_URL}/whatsapp/status`, {
-                        message: 'Pairing Failed: ' + err.message,
-                        ready: false,
-                        user_id
-                    });
-                } catch (e) { }
-            }
-        }, 3000);
-    }
 
     // Handle Messages
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
