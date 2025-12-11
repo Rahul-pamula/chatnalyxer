@@ -63,15 +63,37 @@ async function connectToWhatsApp(autoRetry = false) {
 
                 const error = lastDisconnect?.error;
                 const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
 
                 console.log(`❌ Connection closed. Status: ${statusCode}.`);
+
+                // Handle 401 Unauthorized - session expired or logged out
+                if (statusCode === 401) {
+                    console.log("🔐 Session unauthorized (401). Clearing auth and generating new QR...");
+                    try {
+                        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+                        console.log("✅ Auth folder cleared. Reconnecting...");
+                    } catch (e) {
+                        console.error("Error clearing auth folder:", e);
+                    }
+                    // Reconnect to generate new QR
+                    setTimeout(() => connectToWhatsApp(true), 2000);
+                    return;
+                }
+
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 405;
 
                 // Only auto-reconnect if it was a network glitch, NOT a logout/timeout
                 if (shouldReconnect && autoRetry) {
                     setTimeout(() => connectToWhatsApp(true), 3000);
                 } else if (statusCode === 408) {
                     console.log("⚠️ QR Timeout. Waiting for user to press 'Connect'.");
+                } else if (statusCode === DisconnectReason.loggedOut) {
+                    console.log("🚪 Logged out. Clearing session...");
+                    try {
+                        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+                    } catch (e) {
+                        console.error("Error clearing auth folder:", e);
+                    }
                 }
             } else if (connection === 'open') {
                 console.log('✅ WhatsApp Connected!');

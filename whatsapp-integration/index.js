@@ -1,425 +1,330 @@
-
-import pkg from "whatsapp-web.js";
-const { Client, LocalAuth } = pkg;
-import qrcode from "qrcode-terminal";
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import { Boom } from "@hapi/boom";
+import P from "pino";
 import axios from "axios";
-import os from "node:os";
-import path from "node:path";
-import { BASE_URL, API_KEY } from "./config.js";
-import {
-  loadSelectedGroups,
-  saveSelectedGroups,
-  selectGroupsInteractively,
-  shouldAnalyzeGroup,
-  getSelectedGroupNames
-} from "./services/groupSelector.js";
-
-// Handle unhandled rejections to catch ProtocolErrors
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-
-  // Ignore "Evaluation failed" errors - these happen during pairing code generation
-  // but the code is actually generated successfully before the error occurs
-  if (reason && reason.message && reason.message.includes("Evaluation failed")) {
-    console.log("⚠️ Ignoring 'Evaluation failed' error - pairing code was already generated");
-    return;
-  }
-
-  if (reason && reason.message && reason.message.includes("Execution context was destroyed")) {
-    console.log("🔄 Unhandled ProtocolError — restarting client...");
-    client.destroy();
-    setTimeout(() => client.initialize(), 5000);
-  }
-});
+import fs from "fs";
+import path from "path";
+import { BASE_URL, API_KEY } from "./config-esm.js";
 
 // Get user_id and phone_number from command line argument
 const user_id = process.argv[2] || "default";
 const phoneNumber = process.argv[3]; // Phone number passed from backend
 
-// Global variable to store selected groups
-let selectedGroups = {};
-let allGroups = [];
-// ---- WhatsApp client ----
-// Tweak for Mac: Use system Chrome (ARM64 Native)
-const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const fs = await import('fs');
+let sock;
+let qrGeneratedAt = null; // Track when QR/pairing code was generated
+let qrExpirationTimeout = null; // Store timeout reference to cancel if needed
+let pairingExpirationTimeout = null; // Store pairing code timeout reference
 
-const clientOptions = {
-  authStrategy: new LocalAuth({
-    clientId: `chatnalyxer-bot-${user_id}`,
-    dataPath: path.join(os.homedir(), `.wwebjs-sessions-${user_id}`),
-  }),
-  puppeteer: {
-    executablePath: fs.existsSync(chromePath) ? chromePath : undefined,
-    headless: true, // Run INVISIBLE (Headless)
-    ignoreHTTPSErrors: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-features=site-per-process",
-      "--disable-web-security",
-      "--no-first-run",
-      "--no-default-browser-check"
-    ],
-  },
-};
+async function connectToWhatsApp() {
+    const authPath = `auth_info_baileys_${user_id}`;
+    const { state, saveCreds } = await useMultiFileAuthState(authPath);
+    const { version } = await fetchLatestBaileysVersion();
 
-// If phone number is provided, enable native Pairing Code support
-if (phoneNumber) {
-  console.log(`📱 Configuring for Phone Number Pairing: ${phoneNumber}`);
-  clientOptions.pairWithPhoneNumber = {
-    phoneNumber: phoneNumber,
-    showNotification: true,
-  };
-}
+    console.log(`🚀 Starting WhatsApp Client (Baileys v${version.join('.')}) for User ${user_id}`);
 
-const client = new Client(clientOptions);
-
-// ---- QR Code / Pairing Code ----
-let qrReceivedCallback = null;
-
-// Listen for Pairing Code event (Native Support)
-client.on("code", async (code) => {
-  console.log(`✅ Pairing Code received via native event: ${code}`);
-  try {
-    const response = await axios.post(`${BASE_URL}/whatsapp/status`, {
-      message: 'Enter Pairing Code in WhatsApp',
-      ready: false,
-      user_id,
-      qr_code: null,
-      pairing_code: code
-    });
-    console.log(`Backend notified of code: ${code}`);
-  } catch (error) {
-    console.error('❌ Failed to send pairing code to backend:', error.message);
-  }
-});
-
-client.on("qr", async (qr) => {
-  // If native pairing is enabled, we shouldn't really see QR codes, but safe to handle.
-  // Unless phoneNumber was NOT provided.
-
-  if (phoneNumber) {
-    console.log("⚠️ QR Code received despite Pairing Mode being active. This might be a fallback or glitch.");
-    // We do NOT want to show QR if we expect Pairing Code.
-    return;
-  }
-
-  console.log("QR Code received", qr.substring(0, 20) + "...");
-  try {
-    await axios.post(`${BASE_URL}/whatsapp/status`, {
-      message: 'Scan QR Code in App',
-      ready: false,
-      user_id,
-      qr_code: qr,
-      pairing_code: null
-    });
-  } catch (error) {
-    console.log('Error sending QR to backend:', error.message);
-  }
-
-  if (qrReceivedCallback) {
-    qrReceivedCallback(qr);
-  }
-});
-
-export function startClient(qrCallback) {
-  qrReceivedCallback = qrCallback;
-  client.initialize();
-}
-
-export function stopClient() {
-  client.destroy();
-}
-
-
-async function safeGetChats(maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Initial Status
     try {
-      const chats = await client.getChats();
-      return chats;
-    } catch (error) {
-      console.log(`Attempt ${attempt} failed to get chats: ${error.message}`);
-      if (error.message && error.message.includes("Execution context was destroyed")) {
-        console.log("🔄 ProtocolError in getChats — restarting client...");
-        client.destroy();
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        client.initialize();
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait for reinitialization
-      } else if (attempt === maxRetries) {
-        throw error;
-      }
-      await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
-    }
-  }
-}
-
-// ---- When WhatsApp is ready ----
-client.on("ready", async () => {
-  console.log("✅ WhatsApp bot is ready!");
-
-  // Send status to backend
-  try {
-    await axios.post(`${BASE_URL}/whatsapp/status`, { message: '✅ WhatsApp bot is ready!', ready: true, user_id });
-  } catch (error) {
-    console.log('Error sending status to backend:', error.message);
-  }
-
-  client.on('group_join', async (notification) => {
-    console.log('Bot added to group:', notification.chat.name);
-    // Sync groups immediately
-    try {
-      const chats = await safeGetChats();
-      const currentGroups = chats.filter((chat) => chat.isGroup);
-      await syncGroupsWithBackend(currentGroups);
-      allGroups = currentGroups;
-    } catch (err) {
-      console.log('Error syncing groups on group join:', err.message);
-    }
-  });
-
-
-  // Wait a bit for the page to fully load (reduced from 10s to 3s for better UX)
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  try {
-    const chats = await safeGetChats();
-    allGroups = chats.filter((chat) => chat.isGroup);
-
-    if (allGroups.length === 0) {
-      console.log('❌ No groups found.');
-      return;
-    }
-
-    console.log(`📌 Found ${allGroups.length} WhatsApp groups`);
-
-    // Sync all groups with backend first
-    await syncGroupsWithBackend(allGroups);
-    // Periodic sync of groups every 5 minutes
-    setInterval(async () => {
-      try {
-        const chats = await safeGetChats();
-        const currentGroups = chats.filter((chat) => chat.isGroup);
-        await syncGroupsWithBackend(currentGroups);
-        allGroups = currentGroups;
-      } catch (err) {
-        console.log('Error syncing groups periodically:', err.message);
-      }
-    }, 5 * 60 * 1000); // 5 minutes
-    // Load previously selected groups
-    selectedGroups = loadSelectedGroups();
-
-    // Check if any groups are already selected
-    const selectedCount = Object.values(selectedGroups).filter(g => g.selected).length;
-
-    if (selectedCount === 0) {
-      // First time or no groups selected - select all groups by default
-      console.log('\n🎯 No groups currently selected for analysis - selecting all groups by default');
-      allGroups.forEach(group => {
-        selectedGroups[group.id._serialized] = {
-          name: group.name,
-          selected: true,
-          addedAt: new Date().toISOString()
-        };
-      });
-      saveSelectedGroups(selectedGroups);
-      console.log(`✅ Selected all ${allGroups.length} groups for analysis`);
-    } else {
-      // Show currently selected groups
-      console.log(`\n✅ Currently analyzing ${selectedCount} selected groups:`);
-      getSelectedGroupNames(selectedGroups).forEach(name => {
-        console.log(`   - ${name}`);
-      });
-      console.log('\n💡 Group selection will auto-update when changed via web interface\n');
-    }
-
-    // Start monitoring for group selection changes
-    startGroupSelectionMonitoring();
-
-    console.log('\n⏳ Waiting for new messages from selected groups...');
-
-  } catch (err) {
-    console.error("❌ Error during initial sync:", err.message);
-  }
-});
-
-// ---- Sync groups with backend ----
-async function syncGroupsWithBackend(groups) {
-  try {
-    const groupsData = groups.map(group => ({
-      whatsapp_id: group.id._serialized,
-      name: group.name
-    }));
-
-    await axios.post(
-      `${BASE_URL}/groups/sync-from-whatsapp`,
-      {
-        user_id: parseInt(user_id),  // Include user_id to associate groups with this user
-        groups: groupsData
-      },
-      {
-        headers: {
-          "x-api-key": API_KEY,
-          "Content-Type": "application/json"
-        },
-      }
-    );
-
-    console.log(`✅ Groups synced with backend for user ${user_id}`);
-  } catch (error) {
-    console.error('❌ Error syncing groups with backend:', error.response?.data || error.message);
-  }
-}
-
-// ---- Forward new group messages ----
-client.on("message_create", async (msg) => {
-  // Skip if client not authenticated
-  if (!client.info || !client.info.wid) {
-    return;
-  }
-
-  try {
-    const chat = await msg.getChat();
-    console.log(`DEBUG: Raw message received from ${chat.name || 'Unknown Chat'}: ${msg.body}`);
-
-    if (!chat.isGroup) {
-      console.log(`DEBUG: Ignoring non-group message from ${chat.name}`);
-      return;
-    }
-
-    // Check if this group is selected for analysis
-    if (!shouldAnalyzeGroup(chat.id._serialized, selectedGroups)) {
-      return; // Skip messages from unselected groups
-    }
-
-    // Skip empty messages
-    if (!msg.body || msg.body.trim() === '') {
-      return;
-    }
-
-    let sender_name = 'Unknown';
-    try {
-      const contact = await msg.getContact();
-      sender_name = contact.pushname || contact.name || contact.number || 'Unknown';
-    } catch (error) {
-      console.log('Could not get contact:', error.message);
-    }
-
-    const messageData = {
-      content: msg.body,
-      sender_name: sender_name,
-      group_id: chat.id._serialized,
-      timestamp: new Date(msg.timestamp * 1000).toISOString(),
-    };
-
-    // Send the message to backend
-    await axios.post(
-      `${BASE_URL}/messages/from-whatsapp`,
-      messageData,
-      {
-        headers: {
-          "x-api-key": API_KEY,
-        },
-      }
-    );
-
-    console.log(`📨 [${chat.name}] ${messageData.sender_name}: ${msg.body.substring(0, 50)}${msg.body.length > 50 ? '...' : ''}`);
-  } catch (error) {
-    console.error("❌ Error forwarding:", error.response?.data || error.message);
-    if (error.message && error.message.includes("Execution context was destroyed")) {
-      console.log("🔄 ProtocolError in message processing — restarting client...");
-      setTimeout(() => {
-        client.destroy();
-        setTimeout(() => client.initialize(), 1000);
-      }, 5000);
-    }
-  }
-});
-
-// ---- Auto-reconnect if disconnected ----
-client.on("disconnected", () => {
-  console.error("🔌 Disconnected — restarting…");
-  setTimeout(() => client.initialize(), 3000);
-});
-
-// ---- Handle client errors ----
-client.on("error", (error) => {
-  console.error("❌ WhatsApp client error:", error.message);
-  if (error.message.includes("Execution context was destroyed")) {
-    console.log("🔄 Execution context destroyed — restarting client...");
-    setTimeout(() => client.initialize(), 5000);
-  }
-});
-
-// ---- Auto group selection monitoring ----
-function startGroupSelectionMonitoring() {
-  console.log('🔄 Starting automatic group selection monitoring...');
-
-  setInterval(async () => {
-    try {
-      // Fetch selected groups from database
-      const response = await axios.get(`${BASE_URL}/groups/selected/${user_id}`, {
-        headers: {
-          "x-api-key": API_KEY,
-        },
-      });
-      const backendGroups = response.data;
-
-      // Convert backend groups to the local format
-      const newSelectedGroups = {};
-      for (const group of backendGroups) {
-        // Find matching WhatsApp group by name
-        const whatsappGroup = allGroups.find(g => g.name === group.name);
-        if (whatsappGroup) {
-          newSelectedGroups[whatsappGroup.id._serialized] = {
-            name: group.name,
-            selected: true,
-            addedAt: new Date().toISOString()
-          };
-        }
-      }
-
-      // Compare with current selection
-      const currentSelected = Object.keys(selectedGroups).filter(id => selectedGroups[id]?.selected);
-      const newSelected = Object.keys(newSelectedGroups);
-
-      // Check if there are changes
-      const hasChanges = currentSelected.length !== newSelected.length ||
-        !currentSelected.every(id => newSelected.includes(id));
-
-      if (hasChanges) {
-        console.log('\n🔄 Group selection changed via web interface!');
-        console.log(`📊 Now monitoring ${newSelected.length} groups:`);
-
-        selectedGroups = newSelectedGroups;
-        saveSelectedGroups(selectedGroups);
-
-        getSelectedGroupNames(selectedGroups).forEach(name => {
-          console.log(`   - ${name}`);
+        await axios.post(`${BASE_URL}/whatsapp/status`, {
+            message: 'Initializing Baileys Client...',
+            ready: false,
+            user_id,
+            qr_code: null,
+            pairing_code: null
         });
-        console.log('✅ WhatsApp integration updated automatically\n');
-      }
-
     } catch (error) {
-      // Silently ignore errors to avoid spam - database might be temporarily unavailable
+        console.log('⚠️ Failed to send initial status. Details:', {
+            message: error.message,
+            code: error.code,
+            url: `${BASE_URL}/whatsapp/status`
+        });
     }
-  }, 5000); // Check every 5 seconds
+
+    sock = makeWASocket({
+        version,
+        auth: state,
+        syncFullHistory: false,
+        logger: P({ level: 'silent' }),
+        browser: ["Chrome (Linux)", "", ""], // More realistic browser identifier
+        markOnlineOnConnect: false, // Don't mark online immediately
+        printQRInTerminal: false, // Disable terminal QR to avoid confusion
+        defaultQueryTimeoutMs: 60000, // Increase timeout
+        connectTimeoutMs: 60000, // Increase connection timeout
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    // Track if pairing code was requested
+    let pairingCodeRequested = false;
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr, isNewLogin } = update;
+
+        // Handle QR Code
+        if (qr) {
+            console.log('📱 QR Code received! Scan it in WhatsApp to link.');
+            qrGeneratedAt = Date.now(); // Track generation time
+
+            try {
+                await axios.post(`${BASE_URL}/whatsapp/status`, {
+                    message: 'Scan QR Code in WhatsApp',
+                    ready: false,
+                    user_id,
+                    qr_code: qr,
+                    pairing_code: null,
+                    expired: false
+                });
+            } catch (e) {
+                console.log('⚠️ Failed to send QR to backend. Details:', {
+                    message: e.message,
+                    code: e.code,
+                    url: `${BASE_URL}/whatsapp/status`,
+                    responseData: e.response?.data
+                });
+            }
+
+            // Clear any existing timeout
+            if (qrExpirationTimeout) {
+                clearTimeout(qrExpirationTimeout);
+            }
+
+            // Set expiration timeout (60 seconds)
+            qrExpirationTimeout = setTimeout(async () => {
+                if (!sock?.user) { // Not connected yet
+                    console.log('⏰ QR Code expired after 60 seconds');
+                    try {
+                        await axios.post(`${BASE_URL}/whatsapp/status`, {
+                            message: 'QR Expired - Click Generate QR',
+                            ready: false,
+                            user_id,
+                            qr_code: null,
+                            pairing_code: null,
+                            expired: true
+                        });
+                    } catch (e) {
+                        console.log('⚠️ Failed to send expiration status:', e.message);
+                    }
+
+                    // Close connection and exit cleanly
+                    console.log('🛑 Stopping process - waiting for user to generate new QR');
+                    sock?.end();
+                    process.exit(0);
+                } else {
+                    console.log('✅ User connected - QR timeout canceled');
+                }
+            }, 60000); // 60 seconds
+        }
+
+        if (connection === 'close') {
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+
+            console.log(`🔌 Connection closed - Status: ${statusCode}, Error:`, lastDisconnect?.error?.message);
+
+            // Notify backend of disconnect
+            try {
+                // If we are auto-reconnecting (not logged out), do NOT mark as expired.
+                // This keeps the frontend polling so it can pick up the reconnection.
+                await axios.post(`${BASE_URL}/whatsapp/status`, {
+                    message: isLoggedOut ? 'Logged Out' : 'Reconnecting...',
+                    ready: false,
+                    user_id,
+                    expired: isLoggedOut // Only expire if this is a permanent logout
+                });
+            } catch (e) {
+                console.log('⚠️ Failed to send disconnect status:', e.message);
+            }
+
+            // Only clear session on explicit logout
+            if (isLoggedOut) {
+                console.log('🧹 User logged out - clearing session');
+                try {
+                    fs.rmSync(authPath, { recursive: true, force: true });
+                } catch (e) {
+                    console.log('Error clearing auth folder:', e.message);
+                }
+                console.log('🛑 Process stopped. User must click "Generate QR" to try again.');
+                process.exit(0);
+            } else {
+                console.log('🔄 Connection lost temporarily. Reconnecting...');
+                connectToWhatsApp();
+            }
+        } else if (connection === 'connecting') {
+            console.log('🔄 Connecting to WhatsApp...');
+
+            // PAIRING CODE DISABLED - ONLY QR CODE MODE
+            /* 
+            // Request pairing code ONLY if phone number is provided AND valid
+            if (phoneNumber && phoneNumber.length >= 10 && !pairingCodeRequested && !sock.authState.creds.registered) {
+                pairingCodeRequested = true;
+                console.log(`⏰ Phone number provided: ${phoneNumber}`);
+
+                // Wait a moment for connection to stabilize
+                setTimeout(async () => {
+                    try {
+                        console.log(`📡 Requesting Pairing Code for ${phoneNumber}...`);
+                        const code = await sock.requestPairingCode(phoneNumber);
+                        console.log(`✅ Pairing Code received: ${code}`);
+                        console.log(`⏰ Code valid for ~60 seconds. Please enter it in WhatsApp NOW!`);
+                        
+                        qrGeneratedAt = Date.now(); // Track generation time
+
+                        // Send to backend
+                        await axios.post(`${BASE_URL}/whatsapp/status`, {
+                            message: 'Enter Pairing Code in WhatsApp',
+                            ready: false,
+                            user_id,
+                            qr_code: null,
+                            pairing_code: code,
+                            expired: false
+                        });
+                        console.log(`✅ Backend notified of code: ${code}`);
+                        console.log(`⏳ Waiting for you to enter the code in WhatsApp...`);
+                        
+                        // Clear any existing timeout
+                        if (pairingExpirationTimeout) {
+                            clearTimeout(pairingExpirationTimeout);
+                        }
+                        
+                        // Set expiration timeout (60 seconds)
+                        pairingExpirationTimeout = setTimeout(async () => {
+                            if (!sock?.user) { // Not connected yet
+                                console.log('⏰ Pairing Code expired after 60 seconds');
+                                try {
+                                    await axios.post(`${BASE_URL}/whatsapp/status`, {
+                                        message: 'Pairing Code Expired - Click Generate QR',
+                                        ready: false,
+                                        user_id,
+                                        qr_code: null,
+                                        pairing_code: null,
+                                        expired: true
+                                    });
+                                } catch (e) {
+                                    console.log('⚠️ Failed to send expiration status:', e.message);
+                                }
+                                
+                                // Close connection and exit cleanly
+                                console.log('🛑 Stopping process - waiting for user to generate new code');
+                                sock?.end();
+                                process.exit(0);
+                            } else {
+                                console.log('✅ User connected - Pairing code timeout canceled');
+                            }
+                        }, 60000); // 60 seconds
+                    } catch (err) {
+                        console.log('❌ Failed to request pairing code:', err.message);
+                        try {
+                            await axios.post(`${BASE_URL}/whatsapp/status`, {
+                                message: 'Pairing Failed: ' + err.message,
+                                ready: false,
+                                user_id,
+                                expired: true
+                            });
+                        } catch (e) { }
+                        
+                        // Exit on failure - user must click Generate QR again
+                        console.log('🛑 Process stopped due to pairing code error');
+                        process.exit(1);
+                    }
+                }, 5000);
+            }
+            */
+            console.log('📱 QR Code mode enabled - pairing code disabled');
+        } else if (connection === 'open') {
+            console.log('✅ WhatsApp bot is ready! Connection opened.');
+
+            // Cancel any pending expiration timeouts since connection succeeded
+            if (qrExpirationTimeout) {
+                clearTimeout(qrExpirationTimeout);
+                qrExpirationTimeout = null;
+                console.log('✅ QR expiration timeout canceled - connection successful');
+            }
+            if (pairingExpirationTimeout) {
+                clearTimeout(pairingExpirationTimeout);
+                pairingExpirationTimeout = null;
+                console.log('✅ Pairing code expiration timeout canceled - connection successful');
+            }
+
+            // Send status to backend
+            try {
+                await axios.post(`${BASE_URL}/whatsapp/status`, { message: '✅ WhatsApp bot is ready!', ready: true, user_id });
+            } catch (error) {
+                console.log('Error sending status to backend:', error.message);
+            }
+
+            // Sync Groups
+            await syncGroups();
+            console.log('\n⏳ Waiting for new messages from selected groups...');
+        }
+    });
+
+    // Handle Messages
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+
+        for (const msg of messages) {
+            if (!msg.message) continue;
+
+            const msgBody = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+            if (!msgBody) continue;
+
+            const remoteJid = msg.key.remoteJid;
+            const isGroup = remoteJid.endsWith('@g.us');
+
+            if (!isGroup) continue;
+
+            const senderName = msg.pushName || 'Unknown';
+
+            const messageData = {
+                content: msgBody,
+                sender_name: senderName,
+                group_id: remoteJid,
+                timestamp: new Date((msg.messageTimestamp || Date.now() / 1000) * 1000).toISOString(),
+            };
+
+            // Send to backend
+            try {
+                await axios.post(
+                    `${BASE_URL}/messages/from-whatsapp`,
+                    messageData,
+                    { headers: { "x-api-key": API_KEY } }
+                );
+            } catch (err) {
+                console.error("❌ Error forwarding:", err.message);
+            }
+        }
+    });
 }
 
-// ---- Start client ----
-console.log('🚀 Starting WhatsApp Client Initialization...');
-try {
-  await axios.post(`${BASE_URL}/whatsapp/status`, {
-    message: 'Initializing WhatsApp Client...',
-    ready: false,
-    user_id,
-    qr_code: null,
-    pairing_code: null
-  });
-} catch (error) {
-  console.log('⚠️ Failed to send initial status:', error.message);
+// Logic to Sync Groups
+async function syncGroups() {
+    console.log('🔄 Syncing groups...');
+    try {
+        const groupsDict = await sock.groupFetchAllParticipating();
+        const allGroups = Object.values(groupsDict).map(g => ({
+            id: { _serialized: g.id },
+            name: g.subject
+        }));
+
+        console.log(`📌 Found ${allGroups.length} WhatsApp groups`);
+
+        const groupsData = allGroups.map(group => ({
+            whatsapp_id: group.id._serialized,
+            name: group.name
+        }));
+
+        await axios.post(
+            `${BASE_URL}/groups/sync-from-whatsapp`,
+            {
+                user_id: parseInt(user_id),
+                groups: groupsData
+            },
+            { headers: { "x-api-key": API_KEY } }
+        );
+        console.log(`✅ Groups synced with backend`);
+    } catch (err) {
+        console.log('❌ Error fetching groups:', err);
+    }
 }
 
-client.initialize();
+// Start
+connectToWhatsApp();

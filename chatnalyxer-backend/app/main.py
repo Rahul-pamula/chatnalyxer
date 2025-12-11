@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app import models
 from app.database import engine
-from app.routers import auth, groups, dashboard, messages, whatsapp
+from app.routers import auth, groups, dashboard, messages, whatsapp, ai
 from fastapi.middleware.cors import CORSMiddleware
 
 # Auto-create tables (for dev only)
@@ -42,3 +42,4 @@ app.include_router(groups.router)
 app.include_router(dashboard.router)
 app.include_router(messages.router)
 app.include_router(whatsapp.router)
+app.include_router(ai.router)

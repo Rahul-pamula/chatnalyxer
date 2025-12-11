@@ -3,7 +3,10 @@ import { BASE_URL } from "../config";
 
 const client = axios.create({
   baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true"
+  },
 });
 
 export function setAuthToken(token?: string | null) {

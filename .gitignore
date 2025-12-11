@@ -39,6 +39,7 @@ sql_app.db
 .wwebjs_cache/
 *.session
 session*/
+auth_info_baileys_*/
 
 # Logs
 *.log
@@ -63,3 +64,4 @@ web-build/
 # Render
 .render/
 render-env-variables.txt
+.env

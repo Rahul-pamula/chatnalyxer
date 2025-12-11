@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, Button, ActivityIndicator, Alert, Linking, Plat
 import { useRouter } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../src/context/AuthContext';
-import { BASE_URL, QR_URL } from '../src/config';
+import { BASE_URL } from '../src/config';
 
 export default function SetupScreen() {
     const router = useRouter();
@@ -15,6 +15,9 @@ export default function SetupScreen() {
     const [whatsappStatusMessage, setWhatsappStatusMessage] = useState('');
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [pairingCode, setPairingCode] = useState<string | null>(null);
+    const [lastError, setLastError] = useState<string | null>(null);
+    const [isExpired, setIsExpired] = useState(false);
+    const [isPolling, setIsPolling] = useState(true);
 
     useEffect(() => {
         if (!token) {
@@ -40,35 +43,56 @@ export default function SetupScreen() {
     }, [isWhatsAppConnected]);
 
     useEffect(() => {
+        if (!isPolling) return; // Don't poll when stopped
+
         const interval = setInterval(async () => {
             try {
                 const response = await fetch(`${BASE_URL}/whatsapp/status`, {
                     headers: {
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': `Bearer ${token?.trim()}`,
+                        'ngrok-skip-browser-warning': 'true',
                     },
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('WhatsApp Status Poll:', JSON.stringify(data));
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
                     setQrCode(data.qr_code || null);
-                    setPairingCode(data.pairing_code || null); // Add this line
+
+                    // Only update pairing code if it's present, don't overwrite with null during active setup
+                    if (data.pairing_code) {
+                        setPairingCode(data.pairing_code);
+                    }
+
+                    // Check for expiration
+                    if (data.expired === true) {
+                        setIsExpired(true);
+                        setQrCode(null);
+                        setPairingCode(null);
+                        setIsPolling(false); // Stop polling when expired
+                        console.log('QR/Pairing code expired - stopped polling');
+                    }
+
+                    setLastError(null); // Clear error on success
+                } else {
+                    setLastError(`Status: ${response.status}`);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.log('Failed to fetch WhatsApp status:', error);
+                setLastError(error.message || 'Fetch failed');
             }
-        }, 1000); // Poll every 1 second (was 3s)
+        }, 5000); // Poll every 5 seconds (Avoid Ngrok Rate Limit)
 
         return () => clearInterval(interval);
-    }, [token]);
+    }, [token, isPolling]);
 
     const checkWhatsAppConnection = async () => {
         setIsCheckingConnection(true);
         try {
             const response = await fetch(`${BASE_URL}/whatsapp/status`, {
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${token?.trim()}`,
+                    'ngrok-skip-browser-warning': 'true',
                 },
             });
             if (response.ok) {
@@ -99,69 +123,32 @@ export default function SetupScreen() {
 
     const handleGenerateQR = async () => {
         try {
-            // Start WhatsApp integration
+            // Reset states for new attempt
+            setIsExpired(false);
+            setQrCode(null);
+            setPairingCode(null);
+            setIsPolling(true); // Resume polling
+            setWhatsappStatusMessage('Initializing...');
+
             const response = await fetch(`${BASE_URL}/whatsapp/start`, {
                 method: 'POST',
                 headers: {
+                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
+                body: JSON.stringify({
+                    // Don't send phone number - let it generate QR code
+                }),
             });
 
-            if (response.ok) {
-                Alert.alert(
-                    'Generating Pairing Code',
-                    'Please wait 5-10 seconds while we generate your pairing code...'
-                );
-
-                // Wait 5 seconds before starting to poll
-                // This gives the WhatsApp integration time to generate the code
-                await new Promise(resolve => setTimeout(resolve, 5000));
-
-                // Now start polling for the pairing code
-                let attempts = 0;
-                const maxAttempts = 15; // Poll for up to 15 seconds
-                const checkInterval = setInterval(async () => {
-                    attempts++;
-                    try {
-                        const statusResponse = await fetch(`${BASE_URL}/whatsapp/status`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                            },
-                        });
-                        if (statusResponse.ok) {
-                            const data = await statusResponse.json();
-                            console.log('Status check:', data);
-                            if (data.pairing_code) {
-                                setPairingCode(data.pairing_code);
-                                setWhatsappStatusMessage(data.message || 'Pairing code received');
-                                clearInterval(checkInterval);
-                                Alert.alert(
-                                    'Pairing Code Ready!',
-                                    `Your code is: ${data.pairing_code}\n\nEnter this in WhatsApp → Settings → Linked Devices → Link with phone number`
-                                );
-                            } else if (data.qr_code) {
-                                setQrCode(data.qr_code);
-                                clearInterval(checkInterval);
-                            }
-                        }
-                    } catch (err) {
-                        console.log('Status check error:', err);
-                    }
-
-                    if (attempts >= maxAttempts) {
-                        clearInterval(checkInterval);
-                        Alert.alert(
-                            'Timeout',
-                            'Pairing code generation is taking longer than expected. Please check the backend logs or try again.'
-                        );
-                    }
-                }, 1000); // Check every second
-            } else {
-                Alert.alert('Error', 'Failed to start WhatsApp integration');
+            if (!response.ok) {
+                throw new Error('Failed to start WhatsApp');
             }
+
+            Alert.alert('Generating QR/Pairing Code', 'Please wait for QR code or pairing code to appear...');
         } catch (error) {
-            console.log('handleGenerateQR error:', error);
-            Alert.alert('Error', 'Failed to start WhatsApp integration');
+            console.error('Error starting WhatsApp:', error);
+            Alert.alert('Error', 'Failed to generate QR code');
         }
     };
 
@@ -209,48 +196,49 @@ export default function SetupScreen() {
                     </View>
                 ) : (
                     <View style={styles.setupContainer}>
-                        {pairingCode ? (
-                            <View style={styles.qrContainer}>
-                                <Text style={styles.instructionTitle}>Enter this Code in WhatsApp:</Text>
-                                <View style={styles.codeWrapper}>
-                                    <Text style={styles.pairingCodeText}>
-                                        {pairingCode.split('').join(' ')}
-                                    </Text>
-                                </View>
-                                <Text style={styles.instructionText}>
-                                    1. Open WhatsApp on your phone{'\n'}
-                                    2. Go to Linked Devices → Link a Device{'\n'}
-                                    3. Select "Link with phone number instead"{'\n'}
-                                    4. Enter the code above
-                                </Text>
+                        <Text style={styles.instructionTitle}>Connect your WhatsApp</Text>
+                        <Text style={styles.instructionText}>
+                            Click the button below to generate a QR code, then scan it with WhatsApp.
+                        </Text>
+
+                        {/* Button to Generate QR */}
+                        <View style={styles.buttonContainer}>
+                            <Button
+                                title={isExpired ? "QR Expired - Generate New QR" : qrCode || pairingCode ? "Generate New QR Code" : "Get QR Code"}
+                                onPress={handleGenerateQR}
+                                color={isExpired ? "#FF6B6B" : "#0066cc"}
+                            />
+                        </View>
+
+                        {/* Show Expiration Message */}
+                        {isExpired && (
+                            <View style={styles.expiredContainer}>
+                                <Text style={styles.expiredText}>⏰ QR/Pairing Code Expired</Text>
+                                <Text style={styles.expiredSubtext}>Click "Generate New QR" to try again</Text>
                             </View>
-                        ) : qrCode ? (
+                        )}
+
+                        {/* Show Pairing Code (Priority over QR) */}
+                        {pairingCode && !isExpired && (
+                            <View style={styles.codeWrapper}>
+                                <Text style={styles.instructionTitle}>Enter this code in WhatsApp:</Text>
+                                <Text style={styles.pairingCodeText}>{pairingCode}</Text>
+                                <Text style={styles.instructionText}>
+                                    Open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number
+                                </Text>
+                                <Text style={styles.expiryWarning}>⏰ Code expires in 60 seconds</Text>
+                            </View>
+                        )}
+
+                        {/* Fallback for QR (Less likely now) */}
+                        {qrCode && !pairingCode && !isExpired && (
                             <View style={styles.qrContainer}>
                                 <Text style={styles.instructionTitle}>Scan this QR Code:</Text>
                                 <View style={styles.qrWrapper}>
-                                    <QRCode
-                                        value={qrCode}
-                                        size={250}
-                                    />
+                                    <QRCode value={qrCode} size={250} />
                                 </View>
-                                <Text style={styles.instructionText}>
-                                    Open WhatsApp → Linked Devices → Link a Device
-                                </Text>
+                                <Text style={styles.expiryWarning}>⏰ QR expires in 60 seconds</Text>
                             </View>
-                        ) : (
-                            <>
-                                <Text style={styles.instructionTitle}>Connect your WhatsApp</Text>
-                                <Text style={styles.instructionText}>
-                                    We will link the phone number you logged in with using a Pairing Code.
-                                </Text>
-                                <View style={styles.buttonContainer}>
-                                    <Button
-                                        title="Get Pairing Code"
-                                        onPress={handleGenerateQR}
-                                        color="#0066cc"
-                                    />
-                                </View>
-                            </>
                         )}
                     </View>
                 )}
@@ -258,6 +246,19 @@ export default function SetupScreen() {
 
             <View style={styles.footer}>
                 <Text style={styles.statusMessage}>{whatsappStatusMessage}</Text>
+
+                {/* Debug Info Section */}
+                <View style={{ padding: 10, backgroundColor: '#eee', borderRadius: 8, marginTop: 10, width: '100%' }}>
+                    <Text style={{ fontSize: 10, color: '#555', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                        Debug Info:
+                    </Text>
+                    <Text style={{ fontSize: 10, color: '#333' }}>URL: {BASE_URL}</Text>
+                    <Text style={{ fontSize: 10, color: '#333' }}>Last Poll: {new Date().toLocaleTimeString()}</Text>
+                    {lastError && (
+                        <Text style={{ fontSize: 10, color: 'red', fontWeight: 'bold' }}>Error: {lastError}</Text>
+                    )}
+                </View>
+
                 <View style={styles.buttonContainer}>
                     <Button
                         title="Check Connection"
@@ -271,7 +272,7 @@ export default function SetupScreen() {
                     />
                 </View>
             </View>
-        </View>
+        </View >
     );
 }
 
@@ -349,7 +350,27 @@ const styles = StyleSheet.create({
     },
     qrContainer: {
         alignItems: 'center',
-        padding: 10,
+        marginTop: 20,
+        padding: 20,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    qrImageContainer: {
+        marginTop: 15,
+        padding: 15,
+        backgroundColor: '#ffffff',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    qrImage: {
+        width: 250,
+        height: 250,
     },
     qrWrapper: {
         padding: 10,
@@ -401,5 +422,32 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
         letterSpacing: 4,
+    },
+    expiredContainer: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: '#fff0f0',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#FF6B6B',
+        alignItems: 'center',
+    },
+    expiredText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#d32f2f',
+        marginBottom: 5,
+    },
+    expiredSubtext: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+    },
+    expiryWarning: {
+        marginTop: 10,
+        fontSize: 12,
+        color: '#FF6B6B',
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

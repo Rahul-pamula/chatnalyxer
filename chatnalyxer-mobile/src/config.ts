@@ -1,5 +1,4 @@
-import { Platform } from 'react-native';
-
+// Backend URL Configuration
 // Backend deployed on Render
 const RENDER_BACKEND_URL = "https://chatnalyxer-backend.onrender.com";
 

@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.env
+.DS_Store
+*.log
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+.wwebjs_auth
+.wwebjs_cache
+auth_info_baileys_*
+*.session
+.pids
+logs

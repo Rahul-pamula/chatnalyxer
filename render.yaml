@@ -1,16 +1,17 @@
 services:
-  # Backend API Service
+  # Main Application Service (using Dockerfile with both Python and Node.js)
   - type: web
     name: chatnalyxer-backend
-    runtime: python
+    runtime: docker
+    startCommand: ./start_render.sh
     plan: free
-    buildCommand: pip install -r chatnalyxer-backend/requirements.txt
-    startCommand: cd chatnalyxer-backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: OTP_SERVICE_URL
-        value: http://localhost:3001
+      - key: GEMINI_API_KEY
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: ALGORITHM
@@ -20,21 +21,9 @@ services:
       - key: OTP_EXPIRY_MINUTES
         value: 5
       - key: OTP_MAX_ATTEMPTS
-        value: 30
+        value: 40
       - key: RATE_LIMIT_REQUESTS
         value: 60
       - key: RATE_LIMIT_WINDOW_MINUTES
         value: 60
     healthCheckPath: /
-
-  # WhatsApp OTP Service (Running as Web Service for Free Tier)
-  - type: web
-    name: chatnalyxer-whatsapp
-    runtime: node
-    plan: free
-    envVars:
-      - key: PORT
-        value: 3001
-    healthCheckPath: /health
-    buildCommand: cd whatsapp-integration && npm install
-    startCommand: cd whatsapp-integration && node otp-service.js

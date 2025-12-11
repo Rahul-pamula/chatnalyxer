@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "chatnalyxer-mobile",
+    "name": "Chatnalyxer",
     "slug": "chatnalyxer-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,15 +8,33 @@
     "scheme": "chatnalyxermobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/chatnalyxer-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatnalyxer.mobile",
+      "buildNumber": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/chatnalyxer-logo.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.chatnalyxer.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
       "edgeToEdgeEnabled": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -39,4 +57,4 @@
       "typedRoutes": true
     }
   }
-} 
+}
