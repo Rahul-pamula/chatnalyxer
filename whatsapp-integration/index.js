@@ -259,6 +259,18 @@ async function connectToWhatsApp() {
             await syncGroups();
             // Load selected groups for filtering
             await loadSelectedGroupsFromBackend();
+
+            // 🔄 Smart Auto-Sync: Periodic group sync to catch new groups
+            // Initial sync happens above, then periodic sync every 60 seconds
+            setInterval(async () => {
+                console.log('🔄 Auto-syncing groups to catch any new groups...');
+                try {
+                    await syncGroups();
+                } catch (err) {
+                    console.log('⚠️ Auto-sync failed:', err.message);
+                }
+            }, 60000); // 60 seconds - balanced frequency
+
             // Periodically refresh selected groups (every 5 seconds)
             setInterval(async () => {
                 await loadSelectedGroupsFromBackend();
