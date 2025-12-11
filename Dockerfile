@@ -43,9 +43,15 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 
 WORKDIR /app
 
-# 4. Copy Code
+# 4. Copy Code (Backend first)
 COPY chatnalyxer-backend ./backend
-COPY whatsapp-integration ./whatsapp-integration
+
+# Copy whatsapp-integration source files (without node_modules - already installed)
+# Copy only necessary source files to avoid overwriting node_modules
+COPY whatsapp-integration/*.js ./whatsapp-integration/
+COPY whatsapp-integration/*.cjs ./whatsapp-integration/
+COPY whatsapp-integration/*.json ./whatsapp-integration/
+COPY whatsapp-integration/services ./whatsapp-integration/services
 
 # 5. Environment Variables
 ENV PYTHONPATH=/app/backend
