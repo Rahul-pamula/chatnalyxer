@@ -109,27 +109,25 @@ export default function SetupScreen() {
 
     const handleGenerateQR = async () => {
         try {
-            // Start WhatsApp integration
             const response = await fetch(`${BASE_URL}/whatsapp/start`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token?.trim()}`,
-                    'ngrok-skip-browser-warning': 'true',
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                 },
+                body: JSON.stringify({
+                    // Don't send phone number - let it generate QR code
+                }),
             });
 
-            if (response.ok) {
-                Alert.alert(
-                    'Generating Code',
-                    'Please wait while we generate your pairing code. It will appear here shortly.'
-                );
-                // The main useEffect loop will pick up the code when ready
-            } else {
-                Alert.alert('Error', 'Failed to start WhatsApp integration');
+            if (!response.ok) {
+                throw new Error('Failed to start WhatsApp');
             }
+
+            Alert.alert('Generating QR Code', 'Please wait for QR code to appear...');
         } catch (error) {
-            console.log('handleGenerateQR error:', error);
-            Alert.alert('Error', 'Failed to start WhatsApp integration');
+            console.error('Error starting WhatsApp:', error);
+            Alert.alert('Error', 'Failed to generate QR code');
         }
     };
 
@@ -179,36 +177,17 @@ export default function SetupScreen() {
                     <View style={styles.setupContainer}>
                         <Text style={styles.instructionTitle}>Connect your WhatsApp</Text>
                         <Text style={styles.instructionText}>
-                            We will link the phone number you logged in with using a Pairing Code.
+                            Click the button below to generate a QR code, then scan it with WhatsApp.
                         </Text>
 
-                        {/* Always show Button */}
+                        {/* Button to Generate QR */}
                         <View style={styles.buttonContainer}>
                             <Button
-                                title={pairingCode ? "Generate New Pairing Code" : "Get Pairing Code"}
+                                title={qrCode ? "Generate New QR Code" : "Get QR Code"}
                                 onPress={handleGenerateQR}
                                 color="#0066cc"
                             />
                         </View>
-
-                        {/* Show Pairing Code if available */}
-                        {pairingCode && (
-                            <View style={styles.qrContainer}>
-                                <Text style={[styles.instructionText, { marginTop: 20, fontWeight: 'bold' }]}>
-                                    Tap the notification from WhatsApp to enter this code:
-                                </Text>
-                                <View style={styles.codeWrapper}>
-                                    <Text style={styles.pairingCodeText}>
-                                        {pairingCode.split('').join(' ')}
-                                    </Text>
-                                </View>
-                                <Text style={styles.instructionText}>
-                                    1. Click the notification "Enter code to link device"{'\n'}
-                                    2. Or go to WhatsApp → Linked Devices → Link with phone number{'\n'}
-                                    3. Enter the code above
-                                </Text>
-                            </View>
-                        )}
 
                         {/* Fallback for QR (Less likely now) */}
                         {qrCode && !pairingCode && (
@@ -329,7 +308,27 @@ const styles = StyleSheet.create({
     },
     qrContainer: {
         alignItems: 'center',
-        padding: 10,
+        marginTop: 20,
+        padding: 20,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    qrImageContainer: {
+        marginTop: 15,
+        padding: 15,
+        backgroundColor: '#ffffff',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    qrImage: {
+        width: 250,
+        height: 250,
     },
     qrWrapper: {
         padding: 10,
