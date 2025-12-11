@@ -17,8 +17,8 @@ except ImportError as e:
     ml_analyzer = None
     print(f"WARNING: ML analyzer import failed: {e} - using fallback values")
 
-# Import AI Analyzer
-from ..services.ai_analyzer import ai_analyzer
+# Import AI Analyzer - DISABLED (not using Gemini)
+# from ..services.ai_analyzer import ai_analyzer
 
 # Dependency to check API Key for unauthenticated routes
 
@@ -59,7 +59,23 @@ def create_whatsapp_message(
         db.commit()
         db.refresh(default_user)
 
-    # Analyze message with ML for priority detection (with fallback)
+    # 🔍 Check if message is casual/unimportant - SKIP if true
+    if ml_analyzer and ml_analyzer.is_casual_message(payload.content):
+        print(f"⏭️  Skipping casual message: {payload.content[:50]}...")
+        # Don't save to database, but return success response
+        return schemas.MessageOut(
+            id=0,  # Dummy ID  
+            content=payload.content,
+            group_id=group.id,
+            sender_id=default_user.id,
+            created_at=payload.timestamp,
+            priority_level='LOW',
+            urgency_score=0.0,
+            is_priority=0,
+            deleted_at=None
+        )
+
+    # ✅ Message is important - analyze with ML (keyword-based)
     ml_results = {
         'priority_level': 'MEDIUM',
         'urgency_score': 0.5,
@@ -100,20 +116,10 @@ def create_whatsapp_message(
     if ml_results['is_priority']:
         print(
             f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
+    else:
+        print(f"💾 Saved important message: {payload.content[:50]}...")
 
-    # 🤖 Trigger Gemini AI Analysis in Background
-    message_data_ai = {
-        'content': payload.content,
-        'sender': payload.sender_name,
-        'group': group.name,
-        'type': 'text' 
-    }
-    background_tasks.add_task(
-        ai_analyzer.analyze_message, 
-        user_id=default_user.id, 
-        message_data=message_data_ai,
-        db=None  # Service will create its own session
-    )
+    # Gemini AI background task REMOVED - not using Gemini anymore
 
     return msg
 

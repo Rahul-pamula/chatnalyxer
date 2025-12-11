@@ -5,29 +5,38 @@ from typing import Dict, List, Optional, Tuple
 from dateutil import parser
 from zoneinfo import ZoneInfo
 import logging
-import google.generativeai as genai
+# Gemini API removed - using keyword-based filtering only
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API
-genai.configure(api_key=settings.GEMINI_API_KEY)
-
 
 class MLMessageAnalyzer:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
-        self.api_cooldown_until = None  # Circuit breaker for rate limits
-
-        # Keyword patterns for fallback analysis
+        # Keyword-based filtering only (no Gemini API)
+        
+        # High priority keywords - academic/urgent
         self.high_priority_keywords = [
             'urgent', 'asap', 'deadline', 'submission', 'due today', 'emergency',
-            'critical', 'immediate', 'now', 'today', 'tonight', 'last chance'
+            'critical', 'immediate', 'now', 'today', 'tonight', 'last chance',
+            'exam', 'test', 'quiz', 'viva', 'final', 'midterm', 'examination'
         ]
 
+        # Medium priority keywords - academic/important
         self.medium_priority_keywords = [
-            'assignment', 'exam', 'test', 'project', 'meeting', 'reminder',
-            'important', 'attention', 'notice', 'required', 'mandatory'
+            'assignment', 'project', 'meeting', 'reminder', 'class', 'lecture',
+            'important', 'attention', 'notice', 'required', 'mandatory',
+            'submit', 'presentation', 'lab', 'workshop', 'seminar',
+            'attendance', 'report', 'room', 'block', 'venue', 'schedule',
+            'reschedule', 'cancel', 'postpone', 'tomorrow'
+        ]
+        
+        # Casual keywords - messages to SKIP
+        self.casual_keywords = [
+            'hi', 'hello', 'hey', 'hlo', 'gm', 'good morning', 'good night', 'gn',
+            'ok', 'okay', 'k', 'kk', 'lol', 'haha', 'lmao', 'omg', 'wow',
+            'thanks', 'thank you', 'welcome', 'congratulations', 'congrats',
+            'birthday', 'bday', 'happy', ':)', ':(', '😀', '😂', '👍'
         ]
 
         # Date/time patterns for deadline extraction
@@ -51,93 +60,54 @@ class MLMessageAnalyzer:
 
     def analyze_message(self, content: str, created_at: datetime) -> Dict:
         """
-        Main method to analyze a message using Gemini API and fallback logic
+        Analyze message using keyword-based pattern matching ONLY
+        No Gemini API - faster and more reliable
         """
         try:
-            # Check circuit breaker
-            if self.api_cooldown_until and datetime.now() < self.api_cooldown_until:
-                # Silently skip API and go to fallback
-                return self._fallback_analysis(content, created_at)
-
-            # Use Gemini API for intelligent analysis
-            gemini_result = self._analyze_with_gemini(content)
-
-            if gemini_result is None:
-                return self._fallback_analysis(content, created_at)
-
-            # Extract additional information using pattern matching
-            keywords = self._extract_keywords(content)
-            deadline = self._extract_deadline(content, created_at)
-
-            # Combine Gemini results with pattern-based analysis
-            analysis = {
-                'priority_level': gemini_result.get('priority_level', 'MEDIUM'),
-                'urgency_score': gemini_result.get('urgency_score', 0.5),
-                'deadline_extracted': deadline,
-                'extracted_keywords': keywords,
-                'is_priority': 1 if gemini_result.get('priority_level') == 'HIGH' else 0,
-                'gemini_analysis': gemini_result,
-                'analysis_method': 'gemini'
-            }
-
-            logger.info(
-                f"🚨 PRIORITY MESSAGE detected: {content[:50]}... (Priority: {analysis['priority_level']}, Score: {analysis['urgency_score']})")
-
-            return analysis
-
-        except Exception as e:
-            logger.error(f"Gemini API analysis failed: {e}")
-            # Fallback to pattern-based analysis
+            # Use keyword-based analysis directly (no Gemini)
             return self._fallback_analysis(content, created_at)
-
-    def _analyze_with_gemini(self, content: str) -> Dict:
-        """
-        Use Gemini API to analyze message priority and urgency
-        """
-        prompt = f"""
-        Analyze this WhatsApp message from an educational group and determine its priority level.
-        
-        Message: "{content}"
-        
-        Instructions:
-        1. Determine if this is HIGH, MEDIUM, or LOW priority for students
-        2. Assign an urgency score from 0.0 (not urgent) to 1.0 (extremely urgent)
-        3. Consider educational context: assignments, exams, deadlines, submissions, meetings
-        4. Look for time-sensitive information and urgent language
-        
-        Return ONLY a JSON object with this exact format:
-        {{
-            "priority_level": "HIGH|MEDIUM|LOW",
-            "urgency_score": 0.0-1.0,
-            "reasoning": "brief explanation"
-        }}
-        """
-
-        try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
-
-            # Clean up response (remove markdown code blocks if present)
-            if response_text.startswith('```json'):
-                response_text = response_text[7:]
-            if response_text.endswith('```'):
-                response_text = response_text[:-3]
-            response_text = response_text.strip()
-
-            result = json.loads(response_text)
-            return result
-
         except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "quota" in error_msg.lower():
-                logger.warning(
-                    f"⚠️ Gemini API rate limit hit. Switching to offline analysis for 60s.")
-                self.api_cooldown_until = datetime.now() + timedelta(seconds=60)
-                return None
-            else:
-                logger.error(f"Gemini API error: {e}")
-                raise e
+            logger.error(f"Message analysis failed: {e}")
+            # Return default LOW priority if analysis fails
+            return {
+                'priority_level': 'LOW',
+                'urgency_score': 0.0,
+                'deadline_extracted': None,
+                'extracted_keywords': [],
+                'is_priority': 0,
+                'gemini_analysis': None,
+                'analysis_method': 'keyword'
+            }
+    
+    def is_casual_message(self, content: str) -> bool:
+        """
+        Detect if message is casual/unimportant and should be skipped
+        Returns True if message should NOT be saved to database
+        """
+        content_lower = content.lower().strip()
+        
+        # Very short messages (less than 10 chars) are likely casual
+        if len(content_lower) < 10:
+            return True
+        
+        # Check for casual vs important keywords
+        has_casual = any(keyword in content_lower for keyword in self.casual_keywords)
+        has_important = any(keyword in content_lower for keyword in 
+                          self.high_priority_keywords + self.medium_priority_keywords)
+        
+        # If has casual keywords and NO important keywords → skip
+        if has_casual and not has_important:
+            return True
+        
+        # Messages with ONLY emojis, punctuation, or whitespace
+        if re.match(r'^[\W\s]+$', content):
+            return True
+            
+        return False
 
+    
+    # _analyze_with_gemini method removed - not using Gemini API anymore
+    
     def _extract_keywords(self, content: str) -> List[str]:
         """
         Extract priority-related keywords from message content
