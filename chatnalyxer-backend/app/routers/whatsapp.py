@@ -53,11 +53,10 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         import time
         time.sleep(1)
         
-        # Path to whatsapp-integration directory
         whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
-        # Start node index.js with user_id AND phone_number
-        cmd = ["node", "index.js", user_id]
+        # Start node index.cjs with user_id AND phone_number
+        cmd = ["node", "index.cjs", user_id]
         if phone_number:
             cmd.append(phone_number)
             
