@@ -15,28 +15,72 @@ class MLMessageAnalyzer:
     def __init__(self):
         # Keyword-based filtering only (no Gemini API)
         
-        # High priority keywords - academic/urgent
+        # High priority keywords - urgent/critical academic
         self.high_priority_keywords = [
-            'urgent', 'asap', 'deadline', 'submission', 'due today', 'emergency',
-            'critical', 'immediate', 'now', 'today', 'tonight', 'last chance',
-            'exam', 'test', 'quiz', 'viva', 'final', 'midterm', 'examination'
+            # Urgency
+            'urgent', 'asap', 'immediate', 'emergency', 'critical', 'important',
+            'last chance', 'final call', 'last day', 'deadline', 'due today', 'due tonight',
+            # Exams
+            'exam', 'test', 'quiz', 'viva', 'examination', 'midterm', 'final exam',
+            'internal exam', 'external exam', 'practical exam', 'oral exam', 'surprise test',
+            # Submissions
+            'submission', 'submit', 'due', 'turn in', 'hand in',
         ]
 
-        # Medium priority keywords - academic/important
+        # Medium priority keywords - academic events and activities
         self.medium_priority_keywords = [
-            'assignment', 'project', 'meeting', 'reminder', 'class', 'lecture',
-            'important', 'attention', 'notice', 'required', 'mandatory',
-            'submit', 'presentation', 'lab', 'workshop', 'seminar',
-            'attendance', 'report', 'room', 'block', 'venue', 'schedule',
-            'reschedule', 'cancel', 'postpone', 'tomorrow'
+            # Classes & Lectures
+            'class', 'lecture', 'session', 'period', 'tutorial', 'seminar',
+            # Assignments & Projects
+            'assignment', 'homework', 'project', 'task', 'work', 'coursework',
+            'report', 'essay', 'paper', 'thesis', 'synopsis', 'document',
+            # Presentations & Reviews
+            'presentation', 'ppt', 'demo', 'demonstration', 'review', 'evaluation',
+            # Labs & Practicals
+            'lab', 'laboratory', 'practical', 'experiment', 'workshop',
+            # Meetings & Events
+            'meeting', 'orientation', 'briefing', 'discussion', 'conference',
+            'event', 'program', 'ceremony', 'function',
+            # Administrative
+            'attendance', 'registration', 'enrollment', 'admission', 'form',
+            'certificate', 'permission', 'approval', 'verification',
+            # Time indicators
+            'today', 'tonight', 'tomorrow', 'this week', 'next week',
+            'this month', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+            # Locations
+            'room', 'block', 'hall', 'auditorium', 'classroom', 'lab', 'library',
+            'venue', 'ground', 'campus', 'building', 'floor',
+            # Actions
+            'attend', 'come', 'reach', 'arrive', 'bring', 'carry', 'prepare',
+            'complete', 'finish', 'required', 'mandatory', 'compulsory',
+            # Schedule changes
+            'reschedule', 'postpone', 'prepone', 'cancel', 'shift', 'change',
+            'extended', '延期', 'advanced', 'moved',
+            # Materials
+            'notes', 'material', 'book', 'pdf', 'file', 'soft copy', 'hard copy',
+            'printout', 'xerox', 'copy'
+        ]
+        
+        # Question/Dilemma patterns - SKIP these even with important keywords
+        self.question_patterns = [
+            # Question words
+            '?', 'what', 'when', 'where', 'who', 'why', 'how', 'which',
+            # Uncertainty
+            'do i', 'do we', 'should i', 'should we', 'can i', 'can we',
+            'will there', 'is there', 'are there',
+            'do you know', 'does anyone', 'anyone know',
+            # Dilemma
+            'confused', 'not sure', 'doubt', 'clarify', 'confirm',
+            'wondering', 'asking', 'question'
         ]
         
         # Casual keywords - messages to SKIP
         self.casual_keywords = [
             'hi', 'hello', 'hey', 'hlo', 'gm', 'good morning', 'good night', 'gn',
             'ok', 'okay', 'k', 'kk', 'lol', 'haha', 'lmao', 'omg', 'wow',
-            'thanks', 'thank you', 'welcome', 'congratulations', 'congrats',
-            'birthday', 'bday', 'happy', ':)', ':(', '😀', '😂', '👍'
+            'thanks', 'thank you', 'thnx', 'thx', 'welcome', 'congratulations', 'congrats',
+            'birthday', 'bday', 'happy', 'nice', 'cool', 'great', 'awesome',
+            ':)', ':(', '😀', '😂', '👍', '🎉', '❤️'
         ]
 
         # Date/time patterns for deadline extraction
@@ -79,12 +123,43 @@ class MLMessageAnalyzer:
                 'analysis_method': 'keyword'
             }
     
+    
+    def is_question_or_dilemma(self, content: str) -> bool:
+        """
+        Detect if message is a question or expressing uncertainty/dilemma
+        Returns True if message should be skipped (even with important keywords)
+        
+        Examples that should return True:
+        - "do I need to come for tomorrow exam?"
+        - "Is there a meeting today?"
+        - "When is the submission deadline?"
+        - "Anyone know if we have class?"
+        """
+        content_lower = content.lower().strip()
+        
+        # Check for question patterns
+        for pattern in self.question_patterns:
+            if pattern in content_lower:
+                return True
+        
+        return False
+    
     def is_casual_message(self, content: str) -> bool:
         """
         Detect if message is casual/unimportant and should be skipped
         Returns True if message should NOT be saved to database
+        
+        Priority order:
+        1. Check if it's a question/dilemma (skip even with important keywords)
+        2. Check if it's too short
+        3. Check if it has only casual keywords
+        4. Check if it's only emojis/punctuation
         """
         content_lower = content.lower().strip()
+        
+        # 🔍 PRIORITY CHECK: Questions/Dilemmas (skip even with academic keywords)
+        if self.is_question_or_dilemma(content):
+            return True
         
         # Very short messages (less than 10 chars) are likely casual
         if len(content_lower) < 10:
