@@ -55,8 +55,8 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         
         whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
-        # Start node index.cjs with user_id AND phone_number
-        cmd = ["node", "index.cjs", user_id]
+        # Start node index.js with user_id AND phone_number
+        cmd = ["node", "index.js", user_id]
         if phone_number:
             cmd.append(phone_number)
             
@@ -64,11 +64,11 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         
         # SELF-HEALING: Install dependencies if missing OR if specific package is missing
         node_modules_path = os.path.join(whatsapp_dir, "node_modules")
-        webjs_path = os.path.join(node_modules_path, "whatsapp-web.js")
+        baileys_path = os.path.join(node_modules_path, "@whiskeysockets", "baileys")
         
         # Check if the folder is missing OR if the critical dependency is missing
-        if not os.path.exists(node_modules_path) or not os.path.exists(webjs_path):
-            print(f"⚠️ Dependencies missing (Checked: {webjs_path}). Running 'npm install'...")
+        if not os.path.exists(node_modules_path) or not os.path.exists(baileys_path):
+            print(f"⚠️ Dependencies missing (Checked: {baileys_path}). Running 'npm install'...")
             try:
                 # Run npm install with inherited environment and WAIT for completion
                 install_cmd = ["npm", "install"]
@@ -84,11 +84,11 @@ def start_whatsapp(current_user=Depends(get_current_user)):
                 if install_result.stdout:
                     print(f"STDOUT: {install_result.stdout[:500]}")  # Truncate long output
                     
-                # Verify whatsapp-web.js was actually installed
-                if not os.path.exists(webjs_path):
-                    raise Exception(f"whatsapp-web.js package still not found after npm install at: {webjs_path}")
+                # Verify Baileys was actually installed
+                if not os.path.exists(baileys_path):
+                    raise Exception(f"Baileys package still not found after npm install at: {baileys_path}")
                     
-                print(f"✅ whatsapp-web.js package verified at: {webjs_path}")
+                print(f"✅ Baileys package verified at: {baileys_path}")
                     
             except subprocess.TimeoutExpired:
                 raise HTTPException(
