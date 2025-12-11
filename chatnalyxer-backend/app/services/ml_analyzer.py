@@ -17,6 +17,7 @@ genai.configure(api_key=settings.GEMINI_API_KEY)
 class MLMessageAnalyzer:
     def __init__(self):
         self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.api_cooldown_until = None  # Circuit breaker for rate limits
 
         # Keyword patterns for fallback analysis
         self.high_priority_keywords = [
@@ -53,8 +54,16 @@ class MLMessageAnalyzer:
         Main method to analyze a message using Gemini API and fallback logic
         """
         try:
+            # Check circuit breaker
+            if self.api_cooldown_until and datetime.now() < self.api_cooldown_until:
+                # Silently skip API and go to fallback
+                return self._fallback_analysis(content, created_at)
+
             # Use Gemini API for intelligent analysis
             gemini_result = self._analyze_with_gemini(content)
+
+            if gemini_result is None:
+                return self._fallback_analysis(content, created_at)
 
             # Extract additional information using pattern matching
             keywords = self._extract_keywords(content)
@@ -119,8 +128,15 @@ class MLMessageAnalyzer:
             return result
 
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
-            raise e
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                logger.warning(
+                    f"⚠️ Gemini API rate limit hit. Switching to offline analysis for 60s.")
+                self.api_cooldown_until = datetime.now() + timedelta(seconds=60)
+                return None
+            else:
+                logger.error(f"Gemini API error: {e}")
+                raise e
 
     def _extract_keywords(self, content: str) -> List[str]:
         """

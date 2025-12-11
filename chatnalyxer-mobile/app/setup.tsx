@@ -16,6 +16,8 @@ export default function SetupScreen() {
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
+    const [isExpired, setIsExpired] = useState(false);
+    const [isPolling, setIsPolling] = useState(true);
 
     useEffect(() => {
         if (!token) {
@@ -41,6 +43,8 @@ export default function SetupScreen() {
     }, [isWhatsAppConnected]);
 
     useEffect(() => {
+        if (!isPolling) return; // Don't poll when stopped
+
         const interval = setInterval(async () => {
             try {
                 const response = await fetch(`${BASE_URL}/whatsapp/status`, {
@@ -59,6 +63,16 @@ export default function SetupScreen() {
                     if (data.pairing_code) {
                         setPairingCode(data.pairing_code);
                     }
+
+                    // Check for expiration
+                    if (data.expired === true) {
+                        setIsExpired(true);
+                        setQrCode(null);
+                        setPairingCode(null);
+                        setIsPolling(false); // Stop polling when expired
+                        console.log('QR/Pairing code expired - stopped polling');
+                    }
+
                     setLastError(null); // Clear error on success
                 } else {
                     setLastError(`Status: ${response.status}`);
@@ -70,7 +84,7 @@ export default function SetupScreen() {
         }, 5000); // Poll every 5 seconds (Avoid Ngrok Rate Limit)
 
         return () => clearInterval(interval);
-    }, [token]);
+    }, [token, isPolling]);
 
     const checkWhatsAppConnection = async () => {
         setIsCheckingConnection(true);
@@ -109,6 +123,13 @@ export default function SetupScreen() {
 
     const handleGenerateQR = async () => {
         try {
+            // Reset states for new attempt
+            setIsExpired(false);
+            setQrCode(null);
+            setPairingCode(null);
+            setIsPolling(true); // Resume polling
+            setWhatsappStatusMessage('Initializing...');
+
             const response = await fetch(`${BASE_URL}/whatsapp/start`, {
                 method: 'POST',
                 headers: {
@@ -124,7 +145,7 @@ export default function SetupScreen() {
                 throw new Error('Failed to start WhatsApp');
             }
 
-            Alert.alert('Generating QR Code', 'Please wait for QR code to appear...');
+            Alert.alert('Generating QR/Pairing Code', 'Please wait for QR code or pairing code to appear...');
         } catch (error) {
             console.error('Error starting WhatsApp:', error);
             Alert.alert('Error', 'Failed to generate QR code');
@@ -183,19 +204,40 @@ export default function SetupScreen() {
                         {/* Button to Generate QR */}
                         <View style={styles.buttonContainer}>
                             <Button
-                                title={qrCode ? "Generate New QR Code" : "Get QR Code"}
+                                title={isExpired ? "QR Expired - Generate New QR" : qrCode || pairingCode ? "Generate New QR Code" : "Get QR Code"}
                                 onPress={handleGenerateQR}
-                                color="#0066cc"
+                                color={isExpired ? "#FF6B6B" : "#0066cc"}
                             />
                         </View>
 
+                        {/* Show Expiration Message */}
+                        {isExpired && (
+                            <View style={styles.expiredContainer}>
+                                <Text style={styles.expiredText}>⏰ QR/Pairing Code Expired</Text>
+                                <Text style={styles.expiredSubtext}>Click "Generate New QR" to try again</Text>
+                            </View>
+                        )}
+
+                        {/* Show Pairing Code (Priority over QR) */}
+                        {pairingCode && !isExpired && (
+                            <View style={styles.codeWrapper}>
+                                <Text style={styles.instructionTitle}>Enter this code in WhatsApp:</Text>
+                                <Text style={styles.pairingCodeText}>{pairingCode}</Text>
+                                <Text style={styles.instructionText}>
+                                    Open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number
+                                </Text>
+                                <Text style={styles.expiryWarning}>⏰ Code expires in 60 seconds</Text>
+                            </View>
+                        )}
+
                         {/* Fallback for QR (Less likely now) */}
-                        {qrCode && !pairingCode && (
+                        {qrCode && !pairingCode && !isExpired && (
                             <View style={styles.qrContainer}>
                                 <Text style={styles.instructionTitle}>Scan this QR Code:</Text>
                                 <View style={styles.qrWrapper}>
                                     <QRCode value={qrCode} size={250} />
                                 </View>
+                                <Text style={styles.expiryWarning}>⏰ QR expires in 60 seconds</Text>
                             </View>
                         )}
                     </View>
@@ -380,5 +422,32 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
         letterSpacing: 4,
+    },
+    expiredContainer: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: '#fff0f0',
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#FF6B6B',
+        alignItems: 'center',
+    },
+    expiredText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#d32f2f',
+        marginBottom: 5,
+    },
+    expiredSubtext: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+    },
+    expiryWarning: {
+        marginTop: 10,
+        fontSize: 12,
+        color: '#FF6B6B',
+        fontWeight: '600',
+        textAlign: 'center',
     },
 });

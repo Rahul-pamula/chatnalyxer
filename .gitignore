@@ -39,6 +39,7 @@ sql_app.db
 .wwebjs_cache/
 *.session
 session*/
+auth_info_baileys_*/
 
 # Logs
 *.log

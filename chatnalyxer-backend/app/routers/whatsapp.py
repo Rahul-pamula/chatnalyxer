@@ -5,7 +5,7 @@ from ..deps import get_current_user
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
-whatsapp_statuses = {}  # user_id: {"message": "", "ready": False, "qr_code": None, "pairing_code": None}
+whatsapp_statuses = {}  # user_id: {"message": "", "ready": False, "qr_code": None, "pairing_code": None, "expired": False}
 
 
 @router.post("/status")
@@ -24,7 +24,40 @@ def set_whatsapp_status(status: dict):
 @router.get("/status")
 def get_whatsapp_status(current_user=Depends(get_current_user)):
     user_id = str(current_user.id)
-    return whatsapp_statuses.get(user_id, {"message": "WhatsApp not linked", "ready": False, "qr_code": None, "pairing_code": None})
+    return whatsapp_statuses.get(user_id, {"message": "WhatsApp not linked", "ready": False, "qr_code": None, "pairing_code": None, "expired": False})
+
+
+@router.post("/stop")
+def stop_whatsapp(current_user=Depends(get_current_user)):
+    """Kill the WhatsApp process and clear session for this user"""
+    user_id = str(current_user.id)
+    
+    try:
+        # Kill existing node processes
+        subprocess.run(["pkill", "-f", f"node index.js {user_id}"], check=False)
+        print(f"🛑 Stopped WhatsApp process for user {user_id}")
+        
+        # Clear auth session folder for fresh start
+        whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
+        auth_path = os.path.join(whatsapp_dir, f"auth_info_baileys_{user_id}")
+        
+        if os.path.exists(auth_path):
+            import shutil
+            shutil.rmtree(auth_path, ignore_errors=True)
+            print(f"🧹 Cleared auth session for user {user_id}")
+        
+        # Clear status
+        whatsapp_statuses[user_id] = {
+            "message": "Stopped",
+            "ready": False,
+            "qr_code": None,
+            "pairing_code": None,
+            "expired": False
+        }
+        return {"message": "WhatsApp process stopped and session cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop WhatsApp: {str(e)}")
 
 
 @router.post("/start")
@@ -41,7 +74,17 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         except:
             pass
         
-        # Clean up any existing SingletonLock for this user
+        whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
+        
+        # Clear old session folder for fresh start (prevents 401 loops)
+        auth_path = os.path.join(whatsapp_dir, f"auth_info_baileys_{user_id}")
+        if os.path.exists(auth_path):
+            import shutil
+            shutil.rmtree(auth_path, ignore_errors=True)
+            print(f"🧹 Cleared old auth session for fresh start - user {user_id}")
+        
+        # Clean up any existing SingletonLock for this user (legacy cleanup)
         session_dir = os.path.join(os.path.expanduser("~"), f".wwebjs-sessions-{user_id}")
         singleton_lock = os.path.join(session_dir, f"session-chatnalyxer-bot-{user_id}", "SingletonLock")
         
@@ -53,8 +96,15 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         import time
         time.sleep(1)
         
-        whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
+        # Reset status for fresh start
+        whatsapp_statuses[user_id] = {
+            "message": "Initializing...",
+            "ready": False,
+            "qr_code": None,
+            "pairing_code": None,
+            "expired": False
+        }
+        
         # Start node index.js with user_id AND phone_number
         cmd = ["node", "index.js", user_id]
         if phone_number:

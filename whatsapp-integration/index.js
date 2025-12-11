@@ -11,6 +11,9 @@ const user_id = process.argv[2] || "default";
 const phoneNumber = process.argv[3]; // Phone number passed from backend
 
 let sock;
+let qrGeneratedAt = null; // Track when QR/pairing code was generated
+let qrExpirationTimeout = null; // Store timeout reference to cancel if needed
+let pairingExpirationTimeout = null; // Store pairing code timeout reference
 
 async function connectToWhatsApp() {
     const authPath = `auth_info_baileys_${user_id}`;
@@ -37,8 +40,11 @@ async function connectToWhatsApp() {
         auth: state,
         syncFullHistory: false,
         logger: P({ level: 'silent' }),
-        browser: ["Chatnalyxer", "Chrome", "1.0.0"],
-        markOnlineOnConnect: true,
+        browser: ["Chrome (Linux)", "", ""], // More realistic browser identifier
+        markOnlineOnConnect: false, // Don't mark online immediately
+        printQRInTerminal: false, // Disable terminal QR to avoid confusion
+        defaultQueryTimeoutMs: 60000, // Increase timeout
+        connectTimeoutMs: 60000, // Increase connection timeout
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -52,53 +58,92 @@ async function connectToWhatsApp() {
         // Handle QR Code
         if (qr) {
             console.log('📱 QR Code received! Scan it in WhatsApp to link.');
+            qrGeneratedAt = Date.now(); // Track generation time
+
             try {
                 await axios.post(`${BASE_URL}/whatsapp/status`, {
                     message: 'Scan QR Code in WhatsApp',
                     ready: false,
                     user_id,
                     qr_code: qr,
-                    pairing_code: null
+                    pairing_code: null,
+                    expired: false
                 });
             } catch (e) {
                 console.log('⚠️ Failed to send QR to backend:', e.message);
             }
+
+            // Clear any existing timeout
+            if (qrExpirationTimeout) {
+                clearTimeout(qrExpirationTimeout);
+            }
+
+            // Set expiration timeout (60 seconds)
+            qrExpirationTimeout = setTimeout(async () => {
+                if (!sock?.user) { // Not connected yet
+                    console.log('⏰ QR Code expired after 60 seconds');
+                    try {
+                        await axios.post(`${BASE_URL}/whatsapp/status`, {
+                            message: 'QR Expired - Click Generate QR',
+                            ready: false,
+                            user_id,
+                            qr_code: null,
+                            pairing_code: null,
+                            expired: true
+                        });
+                    } catch (e) {
+                        console.log('⚠️ Failed to send expiration status:', e.message);
+                    }
+
+                    // Close connection and exit cleanly
+                    console.log('🛑 Stopping process - waiting for user to generate new QR');
+                    sock?.end();
+                    process.exit(0);
+                } else {
+                    console.log('✅ User connected - QR timeout canceled');
+                }
+            }, 60000); // 60 seconds
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('🔌 Connection closed due to ', lastDisconnect?.error, ', reconnecting ', shouldReconnect);
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+
+            console.log(`🔌 Connection closed - Status: ${statusCode}, Error:`, lastDisconnect?.error?.message);
 
             // Notify backend of disconnect
             try {
+                // If we are auto-reconnecting (not logged out), do NOT mark as expired.
+                // This keeps the frontend polling so it can pick up the reconnection.
                 await axios.post(`${BASE_URL}/whatsapp/status`, {
-                    message: 'Disconnected',
+                    message: isLoggedOut ? 'Logged Out' : 'Reconnecting...',
                     ready: false,
-                    user_id
+                    user_id,
+                    expired: isLoggedOut // Only expire if this is a permanent logout
                 });
-            } catch (e) { }
-
-            // Clear session on 401 to get fresh start
-            if (lastDisconnect?.error?.output?.statusCode === 401) {
-                console.log('❌ 401 error - clearing session for fresh start');
-                try {
-                    fs.rmSync(authPath, { recursive: true, force: true });
-                    // Recreate the folder immediately to avoid crash
-                    fs.mkdirSync(authPath, { recursive: true });
-                } catch (e) {
-                    console.log('Error managing auth folder:', e.message);
-                }
+            } catch (e) {
+                console.log('⚠️ Failed to send disconnect status:', e.message);
             }
 
-            if (shouldReconnect) {
-                setTimeout(connectToWhatsApp, 3000);
+            // Only clear session on explicit logout
+            if (isLoggedOut) {
+                console.log('🧹 User logged out - clearing session');
+                try {
+                    fs.rmSync(authPath, { recursive: true, force: true });
+                } catch (e) {
+                    console.log('Error clearing auth folder:', e.message);
+                }
+                console.log('🛑 Process stopped. User must click "Generate QR" to try again.');
+                process.exit(0);
             } else {
-                console.log('❌ Logged out. Delete auth folder to restart.');
-                try { fs.rmSync(authPath, { recursive: true, force: true }); } catch (e) { }
+                console.log('🔄 Connection lost temporarily. Reconnecting...');
+                connectToWhatsApp();
             }
         } else if (connection === 'connecting') {
             console.log('🔄 Connecting to WhatsApp...');
 
+            // PAIRING CODE DISABLED - ONLY QR CODE MODE
+            /* 
             // Request pairing code ONLY if phone number is provided AND valid
             if (phoneNumber && phoneNumber.length >= 10 && !pairingCodeRequested && !sock.authState.creds.registered) {
                 pairingCodeRequested = true;
@@ -111,6 +156,8 @@ async function connectToWhatsApp() {
                         const code = await sock.requestPairingCode(phoneNumber);
                         console.log(`✅ Pairing Code received: ${code}`);
                         console.log(`⏰ Code valid for ~60 seconds. Please enter it in WhatsApp NOW!`);
+                        
+                        qrGeneratedAt = Date.now(); // Track generation time
 
                         // Send to backend
                         await axios.post(`${BASE_URL}/whatsapp/status`, {
@@ -118,25 +165,75 @@ async function connectToWhatsApp() {
                             ready: false,
                             user_id,
                             qr_code: null,
-                            pairing_code: code
+                            pairing_code: code,
+                            expired: false
                         });
                         console.log(`✅ Backend notified of code: ${code}`);
                         console.log(`⏳ Waiting for you to enter the code in WhatsApp...`);
+                        
+                        // Clear any existing timeout
+                        if (pairingExpirationTimeout) {
+                            clearTimeout(pairingExpirationTimeout);
+                        }
+                        
+                        // Set expiration timeout (60 seconds)
+                        pairingExpirationTimeout = setTimeout(async () => {
+                            if (!sock?.user) { // Not connected yet
+                                console.log('⏰ Pairing Code expired after 60 seconds');
+                                try {
+                                    await axios.post(`${BASE_URL}/whatsapp/status`, {
+                                        message: 'Pairing Code Expired - Click Generate QR',
+                                        ready: false,
+                                        user_id,
+                                        qr_code: null,
+                                        pairing_code: null,
+                                        expired: true
+                                    });
+                                } catch (e) {
+                                    console.log('⚠️ Failed to send expiration status:', e.message);
+                                }
+                                
+                                // Close connection and exit cleanly
+                                console.log('🛑 Stopping process - waiting for user to generate new code');
+                                sock?.end();
+                                process.exit(0);
+                            } else {
+                                console.log('✅ User connected - Pairing code timeout canceled');
+                            }
+                        }, 60000); // 60 seconds
                     } catch (err) {
                         console.log('❌ Failed to request pairing code:', err.message);
-                        pairingCodeRequested = false; // Allow retry
                         try {
                             await axios.post(`${BASE_URL}/whatsapp/status`, {
                                 message: 'Pairing Failed: ' + err.message,
                                 ready: false,
-                                user_id
+                                user_id,
+                                expired: true
                             });
                         } catch (e) { }
+                        
+                        // Exit on failure - user must click Generate QR again
+                        console.log('🛑 Process stopped due to pairing code error');
+                        process.exit(1);
                     }
                 }, 5000);
             }
+            */
+            console.log('📱 QR Code mode enabled - pairing code disabled');
         } else if (connection === 'open') {
             console.log('✅ WhatsApp bot is ready! Connection opened.');
+
+            // Cancel any pending expiration timeouts since connection succeeded
+            if (qrExpirationTimeout) {
+                clearTimeout(qrExpirationTimeout);
+                qrExpirationTimeout = null;
+                console.log('✅ QR expiration timeout canceled - connection successful');
+            }
+            if (pairingExpirationTimeout) {
+                clearTimeout(pairingExpirationTimeout);
+                pairingExpirationTimeout = null;
+                console.log('✅ Pairing code expiration timeout canceled - connection successful');
+            }
 
             // Send status to backend
             try {
