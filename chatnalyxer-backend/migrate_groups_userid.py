@@ -15,20 +15,32 @@ def migrate():
     
     engine = create_engine(DATABASE_URL)
     
+    # Create a raw connection for better transaction control or use engine.connect()
+    # For simplicity and robustness with the existing logic:
     with engine.connect() as conn:
-        try:
-            # 1. Add the column if it doesn't exist
-            print("Adding 'user_id' column to 'groups' table...")
-            try:
-                conn.execute(text("ALTER TABLE groups ADD COLUMN user_id INTEGER REFERENCES users(id)"))
-                print("✅ Column added successfully.")
-            except Exception as e:
-                print(f"⚠️  Column might already exist: {e}")
+        # Separate the Schema Change (DDL) and Data Update (DML) into distinct attempts
+        # to avoid "current transaction is aborted" errors in Postgres.
 
-            # 2. Populate the column based on GroupMember (assuming 1-to-1 or taking first member)
-            print("Populating 'user_id' from 'group_members'...")
-            # This query grabs the user_id from the first found member for each group
-            # If multiple members exist, this takes one. Given the app logic, groups are usually user-specific.
+        # ---------------------------------------------------------
+        # Step 1: Add Column
+        # ---------------------------------------------------------
+        print("Adding 'user_id' column to 'groups' table...")
+        trans = conn.begin() # Start transaction
+        try:
+            conn.execute(text("ALTER TABLE groups ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+            trans.commit()
+            print("✅ Column added successfully.")
+        except Exception as e:
+            trans.rollback() # Important: Rollback if it fails (e.g. column exists)
+            print(f"⚠️  Column adding skipped (might already exist): {e}")
+
+    with engine.connect() as conn:
+        # ---------------------------------------------------------
+        # Step 2: Populate Data
+        # ---------------------------------------------------------
+        print("Populating 'user_id' from 'group_members'...")
+        trans = conn.begin()
+        try:
             update_query = text("""
                 UPDATE groups
                 SET user_id = (
@@ -40,13 +52,14 @@ def migrate():
                 WHERE user_id IS NULL;
             """)
             result = conn.execute(update_query)
+            trans.commit()
             print(f"✅ Updated {result.rowcount} groups with user ownership.")
-            
-            conn.commit()
-            print("🎉 Migration completed successfully!")
-            
         except Exception as e:
-            print(f"❌ Migration failed: {e}")
+            trans.rollback()
+            print(f"❌ Data population failed: {e}")
+            # Don't raise, so main execution continues cleanly
+
+    print("🎉 Migration sequence finished.")
 
 if __name__ == "__main__":
     migrate()
