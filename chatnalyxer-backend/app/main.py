@@ -14,6 +14,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ---------------------------------------------------------
+# CRITICAL: Auto-run migration on startup
+# Because Render Start Command might override our shell script
+# ---------------------------------------------------------
+try:
+    print("🔄 Attempting auto-migration during startup...")
+    import sys
+    import os
+    if os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
+    from migrate_groups_userid import migrate
+    migrate()
+    print("✅ Auto-migration success!")
+except Exception as e:
+    print(f"⚠️ Auto-migration failed (might be already done): {e}")
+# ---------------------------------------------------------
+
 # Allow frontend to connect
 app.add_middleware(
     CORSMiddleware,
