@@ -53,7 +53,7 @@ def create_whatsapp_message(
             email="whatsapp@chatnalyxer.com",
             hashed_password="dummy_hash",
             phone_number="0000000000",
-            is_verified=True
+            is_verified=1
         )
         db.add(default_user)
         db.commit()
