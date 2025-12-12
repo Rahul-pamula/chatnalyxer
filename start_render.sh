@@ -17,6 +17,11 @@ SOCAT_PID=$!
 
 echo "✅ Socat proxy started with PID: $SOCAT_PID"
 
+# Run Database Migrations
+echo "📦 Running Database Migrations..."
+# Note: DATABASE_URL should be set in Render env
+cd chatnalyxer-backend && python3 migrate_groups_userid.py && cd ..
+
 # Start Uvicorn on the assigned PORT
 echo "🔥 Starting Uvicorn on 0.0.0.0:$PORT"
 cd chatnalyxer-backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
