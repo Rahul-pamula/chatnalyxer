@@ -65,7 +65,7 @@ export default function DashboardScreen({ navigation }) {
       const allMessages = await Promise.all(messagePromises);
       const flatMessages = allMessages.flat();
 
-      // Sort by deadline with proper time-based priority
+      // Sort by deadline with strict priority
       flatMessages.sort((a, b) => {
         // Messages with deadlines come first
         if (a.deadline_extracted && !b.deadline_extracted) return -1;
@@ -77,49 +77,33 @@ export default function DashboardScreen({ navigation }) {
           const dateB = new Date(b.deadline_extracted);
           const now = new Date();
 
-          // Get day-level dates
-          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const tomorrowStart = new Date(todayStart);
-          tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+          // Calculate days difference from now
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const startOfDateA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
+          const startOfDateB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
 
-          const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
-          const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
+          const daysDiffA = Math.floor((startOfDateA - startOfToday) / (1000 * 60 * 60 * 24));
+          const daysDiffB = Math.floor((startOfDateB - startOfToday) / (1000 * 60 * 60 * 24));
 
-          // Check if times are specified
+          // If different days, sort by days difference (0=today, 1=tomorrow, etc.)
+          if (daysDiffA !== daysDiffB) {
+            return daysDiffA - daysDiffB;
+          }
+
+          // Same day - check if times are specified
           const hasTimeA = dateA.getHours() !== 0 || dateA.getMinutes() !== 0;
           const hasTimeB = dateB.getHours() !== 0 || dateB.getMinutes() !== 0;
 
-          // Both are today
-          if (dayA.getTime() === todayStart.getTime() && dayB.getTime() === todayStart.getTime()) {
-            // With time comes before without time
-            if (hasTimeA && !hasTimeB) return -1;
-            if (!hasTimeA && hasTimeB) return 1;
-            // Both have time - sort by time
-            if (hasTimeA && hasTimeB) return dateA - dateB;
-            // Both no time - sort by created_at
-            return new Date(b.created_at) - new Date(a.created_at);
-          }
-
-          // Both are tomorrow
-          if (dayA.getTime() === tomorrowStart.getTime() && dayB.getTime() === tomorrowStart.getTime()) {
-            // With time comes before without time
-            if (hasTimeA && !hasTimeB) return -1;
-            if (!hasTimeA && hasTimeB) return 1;
-            // Both have time - sort by time
-            if (hasTimeA && hasTimeB) return dateA - dateB;
-            // Both no time - sort by created_at
-            return new Date(b.created_at) - new Date(a.created_at);
-          }
-
-          // Different days - sort by date first
-          if (dayA.getTime() !== dayB.getTime()) {
-            return dayA - dayB;
-          }
-
-          // Same day (not today/tomorrow) - time priority
+          // Messages with time come before messages without time
           if (hasTimeA && !hasTimeB) return -1;
           if (!hasTimeA && hasTimeB) return 1;
-          if (hasTimeA && hasTimeB) return dateA - dateB;
+
+          // Both have time - sort by actual datetime
+          if (hasTimeA && hasTimeB) {
+            return dateA.getTime() - dateB.getTime();
+          }
+
+          // Both don't have time - sort by created_at
           return new Date(b.created_at) - new Date(a.created_at);
         }
 

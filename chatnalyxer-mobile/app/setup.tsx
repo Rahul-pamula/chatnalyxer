@@ -171,40 +171,68 @@ export default function SetupScreen() {
     }
 
     const handleLogout = async () => {
+        console.log("DEBUG: handleLogout called");
+
+        // WEB SUPPORT: Alert.alert is often buggy on web. Use native confirm.
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm('Are you sure you want to disconnect? This will stop message analysis.');
+            if (!confirmed) {
+                console.log("DEBUG: Logout cancelled (Web)");
+                return;
+            }
+            // Proceed to disconnect
+            await performLogout();
+            return;
+        }
+
+        // NATIVE SUPPORT: Use React Native Alert
         Alert.alert(
             'Disconnect WhatsApp',
             'Are you sure you want to disconnect? This will stop message analysis.',
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel', onPress: () => console.log("DEBUG: Logout cancelled") },
                 {
                     text: 'Disconnect',
                     style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setWhatsappStatusMessage('Disconnecting...');
-                            const response = await fetch(`${BASE_URL}/whatsapp/stop`, {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${token?.trim()}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            });
-
-                            if (response.ok) {
-                                setIsWhatsAppConnected(false);
-                                setWhatsappStatusMessage('Disconnected');
-                                setPreviousConnectionStatus(false);
-                            } else {
-                                Alert.alert('Error', 'Failed to disconnect properly');
-                            }
-                        } catch (error) {
-                            console.error("Logout failed:", error);
-                            Alert.alert('Error', 'Network error during logout');
-                        }
-                    }
+                    onPress: performLogout
                 }
             ]
         );
+    };
+
+    const performLogout = async () => {
+        console.log("DEBUG: Disconnect confirmed, sending request...");
+        try {
+            setWhatsappStatusMessage('Disconnecting...');
+            console.log(`DEBUG: Sending POST to ${BASE_URL}/whatsapp/stop`);
+
+            const response = await fetch(`${BASE_URL}/whatsapp/stop`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token?.trim()}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            console.log("DEBUG: Logout response status:", response.status);
+
+            if (response.ok) {
+                console.log("DEBUG: Logout successful, clearing state");
+                setIsWhatsAppConnected(false);
+                setWhatsappStatusMessage('Disconnected');
+                setPreviousConnectionStatus(false);
+                setQrCode(null);
+                setPairingCode(null);
+                if (Platform.OS === 'web') {
+                    window.alert('Disconnected successfully');
+                }
+            } else {
+                console.log("DEBUG: Logout failed with status:", response.status);
+                Alert.alert('Error', 'Failed to disconnect properly');
+            }
+        } catch (error) {
+            console.error("DEBUG: Logout network error:", error);
+            Alert.alert('Error', 'Network error during logout');
+        }
     };
 
     return (
@@ -297,6 +325,8 @@ export default function SetupScreen() {
                     </Text>
                     <Text style={{ fontSize: 10, color: '#333' }}>URL: {BASE_URL}</Text>
                     <Text style={{ fontSize: 10, color: '#333' }}>Last Poll: {new Date().toLocaleTimeString()}</Text>
+                    <Text style={{ fontSize: 10, color: '#333' }}>QR Length: {qrCode ? qrCode.length : 'null'}</Text>
+                    <Text style={{ fontSize: 10, color: '#333' }}>Pairing Code: {pairingCode || 'null'}</Text>
                     {lastError && (
                         <Text style={{ fontSize: 10, color: 'red', fontWeight: 'bold' }}>Error: {lastError}</Text>
                     )}

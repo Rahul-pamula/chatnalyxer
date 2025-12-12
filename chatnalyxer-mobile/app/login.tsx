@@ -231,6 +231,19 @@ export default function Login() {
             >
               <Text style={styles.linkBtnText}>Change Phone Number</Text>
             </Pressable>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={() => router.push('/admin/login')}
+            >
+              <Text style={styles.secondaryBtnText}>Login as Admin</Text>
+            </Pressable>
           </>
         )}
       </View>
@@ -325,4 +338,17 @@ const styles = StyleSheet.create({
   linkBtn: { paddingVertical: 12, alignItems: "center" },
   linkBtnText: { color: "#2563EB", fontWeight: "600", fontSize: 14 },
   textDisabled: { color: "#94A3B8" },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  dividerText: { marginHorizontal: 10, color: '#94A3B8', fontSize: 12 },
+  secondaryBtn: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 0,
+  },
+  secondaryBtnText: { color: '#475569', fontWeight: '500', fontSize: 13 },
 });

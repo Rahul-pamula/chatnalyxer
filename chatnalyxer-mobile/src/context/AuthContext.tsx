@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiLogin, apiRegister, setAuthToken } from "../services/api";
-import { BASE_URL } from "../config";
+import { BASE_URL, OTP_URL } from "../config";
 
 type User = { id?: number; phone_number?: string, username?: string, is_verified?: boolean } | null;
 type AuthContextType = {
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithOTP = async (phone_number: string, otp_code: string) => {
-    const response = await fetch(`${BASE_URL}/auth/verify-otp`, {
+    const response = await fetch(`${OTP_URL}/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone_number, otp_code })

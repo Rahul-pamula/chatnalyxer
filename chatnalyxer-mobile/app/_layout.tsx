@@ -13,6 +13,8 @@ export default function RootLayout() {
           <Stack.Screen name="setup" options={{ title: "WhatsApp Setup" }} />
           <Stack.Screen name="groups" options={{ title: "Select Groups" }} />
           <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
+          <Stack.Screen name="admin/login" options={{ title: "Admin Login" }} />
+          <Stack.Screen name="admin/dashboard" options={{ title: "Admin Dashboard", headerLeft: () => null }} />
         </Stack>
       </View>
     </AuthProvider>

@@ -14,6 +14,10 @@ def set_whatsapp_status(status: dict):
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id required")
     
+    # Debug log
+    qr_len = len(status.get('qr_code', '') or '')
+    print(f"DEBUG: Received status for user_id={user_id}. QR Length: {qr_len}. Keys: {status.keys()}")
+
     # Merge with existing status to preserve fields if not provided in update
     current = whatsapp_statuses.get(user_id, {})
     whatsapp_statuses[user_id] = {**current, **status}
@@ -21,20 +25,47 @@ def set_whatsapp_status(status: dict):
     return {"message": "Status updated"}
 
 
-@router.get("/status")
-def get_whatsapp_status(current_user=Depends(get_current_user)):
-    user_id = str(current_user.id)
-    return whatsapp_statuses.get(user_id, {"message": "WhatsApp not linked", "ready": False, "qr_code": None, "pairing_code": None, "expired": False})
-
-
-@router.post("/stop")
-def stop_whatsapp(current_user=Depends(get_current_user)):
-    """Kill the WhatsApp process and clear session for this user"""
-    user_id = str(current_user.id)
+def kill_session(user_id: str) -> bool:
+    """
+    Helper function to kill the WhatsApp process and clear session for a given user.
+    Returns True if successful (or already stopped), False if error.
+    """
+    import signal
+    import time
+    import shutil
+    
+    print(f"DEBUG: kill_session requested for user {user_id}")
     
     try:
-        # Kill existing node processes
-        subprocess.run(["pkill", "-f", f"node index.js {user_id}"], check=False)
+        # Check for stored PID
+        status = whatsapp_statuses.get(user_id, {})
+        pid = status.get('pid')
+        
+        print(f"DEBUG: Current status for {user_id}: {status}")
+        
+        if pid:
+            try:
+                print(f"🛑 Killing process with PID: {pid}")
+                os.kill(pid, signal.SIGTERM)
+                # Wait a split second to ensure it's gone
+                time.sleep(0.5)
+                print(f"✅ Process {pid} killed successfully via os.kill")
+            except ProcessLookupError:
+                print(f"⚠️ Process {pid} not found (already dead?)")
+            except Exception as e:
+                print(f"⚠️ Failed to kill process {pid}: {e}")
+        else:
+            # Fallback to pkill if no PID found (legacy support)
+            print(f"⚠️ No PID found for user {user_id}, falling back to pkill")
+            # Log what we are trying to kill
+            target = f"node index.js {user_id}"
+            print(f"DEBUG: Running pkill -f '{target}'")
+            try:
+                result = subprocess.run(["pkill", "-f", target], check=False, capture_output=True, text=True)
+                print(f"DEBUG: pkill result: returncode={result.returncode}, stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'")
+            except Exception as pk_err:
+                 print(f"⚠️ pkill failed: {pk_err}")
+        
         print(f"🛑 Stopped WhatsApp process for user {user_id}")
         
         # Clear auth session folder for fresh start
@@ -43,9 +74,11 @@ def stop_whatsapp(current_user=Depends(get_current_user)):
         auth_path = os.path.join(whatsapp_dir, f"auth_info_baileys_{user_id}")
         
         if os.path.exists(auth_path):
-            import shutil
-            shutil.rmtree(auth_path, ignore_errors=True)
-            print(f"🧹 Cleared auth session for user {user_id}")
+            try:
+                shutil.rmtree(auth_path, ignore_errors=True)
+                print(f"🧹 Cleared auth session for user {user_id}")
+            except Exception as e:
+                print(f"⚠️ Failed to clear auth session: {e}")
         
         # Clear status
         whatsapp_statuses[user_id] = {
@@ -53,11 +86,37 @@ def stop_whatsapp(current_user=Depends(get_current_user)):
             "ready": False,
             "qr_code": None,
             "pairing_code": None,
-            "expired": False
+            "expired": False,
+            "pid": None
         }
-        return {"message": "WhatsApp process stopped and session cleared"}
+        return True
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop WhatsApp: {str(e)}")
+        print(f"❌ Critical error in kill_session: {e}")
+        return False
+
+
+@router.get("/status")
+def get_whatsapp_status(current_user=Depends(get_current_user)):
+    user_id = str(current_user.id)
+    status = whatsapp_statuses.get(user_id, {"message": "WhatsApp not linked", "ready": False, "qr_code": None, "pairing_code": None, "expired": False})
+    
+    # Debug log (only if QR is present to avoid spam, or just periodically?)
+    # Printing every time might spam, but we need to see it.
+    qr_present = "YES" if status.get("qr_code") else "NO"
+    print(f"DEBUG: Serving status for user_id={user_id}. QR Present: {qr_present}")
+    
+    return status
+
+
+@router.post("/stop")
+def stop_whatsapp(current_user=Depends(get_current_user)):
+    """Kill the WhatsApp process and clear session for this user"""
+    user_id = str(current_user.id)
+    success = kill_session(user_id)
+    if success:
+        return {"message": "WhatsApp process stopped and session cleared"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to stop WhatsApp process")
 
 
 @router.post("/start")
@@ -159,8 +218,19 @@ def start_whatsapp(current_user=Depends(get_current_user)):
                     detail=f"Failed to prepare WhatsApp integration: {str(e)}"
                 )
         
-        process = subprocess.Popen(cmd, cwd=whatsapp_dir)
+        # Prepare environment variables
+        env = os.environ.copy()
+        # FORCE localhost for the node process since we are running locally
+        # This addresses the issue where Node sends data to Render instead of local backend
+        env["API_BASE_URL"] = "http://127.0.0.1:8000"
+        
+        process = subprocess.Popen(cmd, cwd=whatsapp_dir, env=env)
         print(f"✅ Subprocess started with PID: {process.pid}")
+        
+        # Update status with PID
+        current = whatsapp_statuses.get(user_id, {})
+        new_status = {**current, "pid": process.pid}
+        whatsapp_statuses[user_id] = new_status
         
         return {"message": "WhatsApp integration started", "pid": process.pid}
     except Exception as e:
