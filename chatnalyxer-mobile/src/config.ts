@@ -1,9 +1,12 @@
 // Backend URL Configuration
-// Production (Render):
-// Production (Render):
-export const BASE_URL = "https://chatnalyxer-backend.onrender.com";
+// Backend deployed on Render
+const RENDER_BACKEND_URL = "https://chatnalyxer-backend.onrender.com";
 
-// Local Testing:
-// export const BASE_URL = "http://localhost:8000";
-// Previous IP: "http://10.84.12.112:8000"
-// const LOCAL_IP = "http://10.71.39.32:8000";
+// For local development (uncomment when testing locally)
+// const LOCALHOST_URL = "http://localhost:8000";
+// export const BASE_URL = LOCALHOST_URL;
+
+// Use Render backend for production
+export const BASE_URL = RENDER_BACKEND_URL;
+
+export const QR_URL = `${RENDER_BACKEND_URL}/qr`;

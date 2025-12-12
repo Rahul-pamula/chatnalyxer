@@ -5,10 +5,14 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { BASE_URL, API_KEY } from "./config-esm.js";
+import { shouldAnalyzeGroup } from "./services/groupSelector.js";
 
 // Get user_id and phone_number from command line argument
 const user_id = process.argv[2] || "default";
 const phoneNumber = process.argv[3]; // Phone number passed from backend
+
+// Global variable to store selected groups for this user
+let selectedGroups = {}; // Track selected groups for filtering
 
 let sock;
 let qrGeneratedAt = null; // Track when QR/pairing code was generated
@@ -253,6 +257,24 @@ async function connectToWhatsApp() {
 
             // Sync Groups
             await syncGroups();
+            // Load selected groups for filtering
+            await loadSelectedGroupsFromBackend();
+
+            // 🔄 Smart Auto-Sync: Periodic group sync to catch new groups
+            // Initial sync happens above, then periodic sync every 60 seconds
+            setInterval(async () => {
+                console.log('🔄 Auto-syncing groups to catch any new groups...');
+                try {
+                    await syncGroups();
+                } catch (err) {
+                    console.log('⚠️ Auto-sync failed:', err.message);
+                }
+            }, 60000); // 60 seconds - balanced frequency
+
+            // Periodically refresh selected groups (every 5 seconds)
+            setInterval(async () => {
+                await loadSelectedGroupsFromBackend();
+            }, 5000);
             console.log('\n⏳ Waiting for new messages from selected groups...');
         }
     });
@@ -272,6 +294,12 @@ async function connectToWhatsApp() {
 
             if (!isGroup) continue;
 
+            // ✨ Check if this group is selected for analysis
+            if (!shouldAnalyzeGroup(remoteJid, selectedGroups)) {
+                // Silently skip messages from unselected groups
+                continue;
+            }
+
             const senderName = msg.pushName || 'Unknown';
 
             const messageData = {
@@ -288,6 +316,10 @@ async function connectToWhatsApp() {
                     messageData,
                     { headers: { "x-api-key": API_KEY } }
                 );
+
+                // Log successful forwarding
+                const groupName = selectedGroups[remoteJid]?.name || remoteJid;
+                console.log(`📨 [${groupName}] ${senderName}: ${msgBody.substring(0, 50)}${msgBody.length > 50 ? '...' : ''}`);
             } catch (err) {
                 console.error("❌ Error forwarding:", err.message);
             }
@@ -323,6 +355,38 @@ async function syncGroups() {
         console.log(`✅ Groups synced with backend`);
     } catch (err) {
         console.log('❌ Error fetching groups:', err);
+    }
+}
+
+// Load selected groups from backend database
+async function loadSelectedGroupsFromBackend() {
+    try {
+        const response = await axios.get(`${BASE_URL}/groups/selected/${user_id}`, {
+            headers: { "x-api-key": API_KEY }
+        });
+
+        const backendGroups = response.data;
+        const newSelectedGroups = {};
+
+        for (const group of backendGroups) {
+            newSelectedGroups[group.whatsapp_id] = {
+                name: group.name,
+                selected: true,
+                addedAt: new Date().toISOString()
+            };
+        }
+
+        selectedGroups = newSelectedGroups;
+        const count = backendGroups.length;
+        console.log(`✅ Loaded ${count} selected group${count !== 1 ? 's' : ''} for user ${user_id}`);
+        if (count > 0) {
+            console.log('   Selected groups:', backendGroups.map(g => g.name).join(', '));
+        }
+
+        return selectedGroups;
+    } catch (error) {
+        console.log('⚠️ Error loading selected groups from backend:', error.message);
+        return {};
     }
 }
 
