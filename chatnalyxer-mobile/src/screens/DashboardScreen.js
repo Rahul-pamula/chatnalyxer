@@ -65,8 +65,46 @@ export default function DashboardScreen({ navigation }) {
       const allMessages = await Promise.all(messagePromises);
       const flatMessages = allMessages.flat();
 
-      // Sort messages by timestamp (newest first)
-      flatMessages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Sort by deadline with time-based priority
+      flatMessages.sort((a, b) => {
+        // Messages with deadlines come first
+        if (a.deadline_extracted && !b.deadline_extracted) return -1;
+        if (!a.deadline_extracted && b.deadline_extracted) return 1;
+
+        // Both have deadlines
+        if (a.deadline_extracted && b.deadline_extracted) {
+          const dateA = new Date(a.deadline_extracted);
+          const dateB = new Date(b.deadline_extracted);
+
+          // Compare dates (day level)
+          const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
+          const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
+
+          if (dayA.getTime() !== dayB.getTime()) {
+            // Different days - sort by date
+            return dayA - dayB;
+          }
+
+          // Same day - check if times are specified
+          const hasTimeA = dateA.getHours() !== 0 || dateA.getMinutes() !== 0;
+          const hasTimeB = dateB.getHours() !== 0 || dateB.getMinutes() !== 0;
+
+          // Messages with specific times come before messages without times
+          if (hasTimeA && !hasTimeB) return -1;
+          if (!hasTimeA && hasTimeB) return 1;
+
+          // Both have times or both don't - sort by time
+          if (hasTimeA && hasTimeB) {
+            return dateA - dateB;
+          }
+
+          // Both don't have times - sort by created_at (newest first)
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+
+        // Neither has deadline - sort by created_at (newest first)
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
 
       setMessages(flatMessages);
     } catch (err) {
@@ -91,15 +129,41 @@ export default function DashboardScreen({ navigation }) {
     return new Date(timestamp).toLocaleString();
   };
 
-  const renderMessage = ({ item }) => (
-    <View style={styles.messageCard}>
-      <View style={styles.messageHeader}>
-        <Text style={styles.groupName}>{item.groupName}</Text>
-        <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+  const getDeadlineText = (deadline) => {
+    if (!deadline) return null;
+
+    const now = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffTime = deadlineDate - now;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Don't show overdue messages
+    if (diffDays < 0) return null;
+
+    // Check if time is specified (not midnight)
+    const hasTime = deadlineDate.getHours() !== 0 || deadlineDate.getMinutes() !== 0;
+    const timeStr = hasTime ? ` at ${deadlineDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '';
+
+    if (diffDays === 0) return `Today${timeStr}`;
+    if (diffDays === 1) return `Tomorrow${timeStr}`;
+    return `${diffDays} days away${timeStr}`;
+  };
+
+  const renderMessage = ({ item }) => {
+    const deadlineText = getDeadlineText(item.deadline_extracted);
+    return (
+      <View style={styles.messageCard}>
+        <View style={styles.messageHeader}>
+          <Text style={styles.groupName}>{item.groupName}</Text>
+          <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+        </View>
+        <Text style={styles.messageContent}>{item.content}</Text>
+        {deadlineText && (
+          <Text style={styles.timestamp}>📅 {deadlineText}</Text>
+        )}
       </View>
-      <Text style={styles.messageContent}>{item.content}</Text>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
