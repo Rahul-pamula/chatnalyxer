@@ -65,7 +65,7 @@ export default function DashboardScreen({ navigation }) {
       const allMessages = await Promise.all(messagePromises);
       const flatMessages = allMessages.flat();
 
-      // Sort by deadline with time-based priority
+      // Sort by deadline with proper time-based priority
       flatMessages.sort((a, b) => {
         // Messages with deadlines come first
         if (a.deadline_extracted && !b.deadline_extracted) return -1;
@@ -75,34 +75,55 @@ export default function DashboardScreen({ navigation }) {
         if (a.deadline_extracted && b.deadline_extracted) {
           const dateA = new Date(a.deadline_extracted);
           const dateB = new Date(b.deadline_extracted);
+          const now = new Date();
 
-          // Compare dates (day level)
+          // Get day-level dates
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const tomorrowStart = new Date(todayStart);
+          tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
           const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
           const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
 
-          if (dayA.getTime() !== dayB.getTime()) {
-            // Different days - sort by date
-            return dayA - dayB;
-          }
-
-          // Same day - check if times are specified
+          // Check if times are specified
           const hasTimeA = dateA.getHours() !== 0 || dateA.getMinutes() !== 0;
           const hasTimeB = dateB.getHours() !== 0 || dateB.getMinutes() !== 0;
 
-          // Messages with specific times come before messages without times
-          if (hasTimeA && !hasTimeB) return -1;
-          if (!hasTimeA && hasTimeB) return 1;
-
-          // Both have times or both don't - sort by time
-          if (hasTimeA && hasTimeB) {
-            return dateA - dateB;
+          // Both are today
+          if (dayA.getTime() === todayStart.getTime() && dayB.getTime() === todayStart.getTime()) {
+            // With time comes before without time
+            if (hasTimeA && !hasTimeB) return -1;
+            if (!hasTimeA && hasTimeB) return 1;
+            // Both have time - sort by time
+            if (hasTimeA && hasTimeB) return dateA - dateB;
+            // Both no time - sort by created_at
+            return new Date(b.created_at) - new Date(a.created_at);
           }
 
-          // Both don't have times - sort by created_at (newest first)
+          // Both are tomorrow
+          if (dayA.getTime() === tomorrowStart.getTime() && dayB.getTime() === tomorrowStart.getTime()) {
+            // With time comes before without time
+            if (hasTimeA && !hasTimeB) return -1;
+            if (!hasTimeA && hasTimeB) return 1;
+            // Both have time - sort by time
+            if (hasTimeA && hasTimeB) return dateA - dateB;
+            // Both no time - sort by created_at
+            return new Date(b.created_at) - new Date(a.created_at);
+          }
+
+          // Different days - sort by date first
+          if (dayA.getTime() !== dayB.getTime()) {
+            return dayA - dayB;
+          }
+
+          // Same day (not today/tomorrow) - time priority
+          if (hasTimeA && !hasTimeB) return -1;
+          if (!hasTimeA && hasTimeB) return 1;
+          if (hasTimeA && hasTimeB) return dateA - dateB;
           return new Date(b.created_at) - new Date(a.created_at);
         }
 
-        // Neither has deadline - sort by created_at (newest first)
+        // Neither has deadline - sort by created_at
         return new Date(b.created_at) - new Date(a.created_at);
       });
 
@@ -137,16 +158,32 @@ export default function DashboardScreen({ navigation }) {
     const diffTime = deadlineDate - now;
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // Don't show overdue messages
+    // Don't show overdue
     if (diffDays < 0) return null;
 
-    // Check if time is specified (not midnight)
+    // Check if time is specified
     const hasTime = deadlineDate.getHours() !== 0 || deadlineDate.getMinutes() !== 0;
     const timeStr = hasTime ? ` at ${deadlineDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '';
 
-    if (diffDays === 0) return `Today${timeStr}`;
-    if (diffDays === 1) return `Tomorrow${timeStr}`;
-    return `${diffDays} days away${timeStr}`;
+    // Today
+    if (diffDays === 0) {
+      return `Today${timeStr}`;
+    }
+
+    // Tomorrow
+    if (diffDays === 1) {
+      return `Tomorrow${timeStr}`;
+    }
+
+    // Future dates - show date with countdown
+    const dateStr = deadlineDate.toLocaleDateString('en-GB'); // DD-MM-YYYY format
+    const daysAwayStr = `(${diffDays} days away)`;
+
+    if (hasTime) {
+      return `${dateStr}${timeStr} ${daysAwayStr}`;
+    } else {
+      return `${dateStr} ${daysAwayStr}`;
+    }
   };
 
   const renderMessage = ({ item }) => {
