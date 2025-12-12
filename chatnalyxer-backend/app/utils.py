@@ -12,7 +12,7 @@ SECRET_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4"
 ALGORITHM = "HS256"
 
 
-def hash(password: str):
+def hash_password(password: str):
     """Hashes a password using bcrypt."""
     # Truncate password to 72 bytes as required by bcrypt
     password_bytes = password.encode('utf-8')
@@ -21,7 +21,7 @@ def hash(password: str):
     return pwd_context.hash(password)
 
 
-def verify(plain_password: str, hashed_password: str):
+def verify_password(plain_password: str, hashed_password: str):
     """Verifies a plain-text password against a hashed one."""
     # Truncate plain password to 72 bytes as required by bcrypt
     password_bytes = plain_password.encode('utf-8')

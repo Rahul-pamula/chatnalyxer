@@ -77,6 +77,7 @@ async function connectToWhatsApp() {
                     pairing_code: null,
                     expired: false
                 });
+                console.log(`✅ Sent QR code to backend (Length: ${qr.length}) for user ${user_id}`);
             } catch (e) {
                 console.log('⚠️ Failed to send QR to backend. Details:', {
                     message: e.message,
