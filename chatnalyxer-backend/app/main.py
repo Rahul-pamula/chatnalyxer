@@ -36,6 +36,23 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/fix-db")
+def fix_database_schema():
+    """Manually trigger migration to add user_id column if missing"""
+    import os
+    import sys
+    # Ensure current directory is in path
+    if os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
+        
+    try:
+        from migrate_groups_userid import migrate
+        migrate()
+        return {"message": "Migration run successfully. Check logs for details."}
+    except Exception as e:
+        return {"error": f"Migration failed: {str(e)}"}
+
+
 # Routers
 app.include_router(auth.router)
 app.include_router(groups.router)
