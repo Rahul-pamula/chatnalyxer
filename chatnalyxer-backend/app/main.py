@@ -14,6 +14,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ---------------------------------------------------------
+# CRITICAL: Auto-run migration on startup
+# Because Render Start Command might override our shell script
+# ---------------------------------------------------------
+try:
+    print("🔄 Attempting auto-migration during startup...")
+    import sys
+    import os
+    if os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
+    from migrate_groups_userid import migrate
+    migrate()
+    print("✅ Auto-migration success!")
+except Exception as e:
+    print(f"⚠️ Auto-migration failed (might be already done): {e}")
+# ---------------------------------------------------------
+
 # Allow frontend to connect
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +51,23 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/fix-db")
+def fix_database_schema():
+    """Manually trigger migration to add user_id column if missing"""
+    import os
+    import sys
+    # Ensure current directory is in path
+    if os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
+        
+    try:
+        from migrate_groups_userid import migrate
+        migrate()
+        return {"message": "Migration run successfully. Check logs for details."}
+    except Exception as e:
+        return {"error": f"Migration failed: {str(e)}"}
 
 
 # Routers

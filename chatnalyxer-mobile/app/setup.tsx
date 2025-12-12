@@ -170,6 +170,43 @@ export default function SetupScreen() {
         );
     }
 
+    const handleLogout = async () => {
+        Alert.alert(
+            'Disconnect WhatsApp',
+            'Are you sure you want to disconnect? This will stop message analysis.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Disconnect',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setWhatsappStatusMessage('Disconnecting...');
+                            const response = await fetch(`${BASE_URL}/whatsapp/stop`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token?.trim()}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+
+                            if (response.ok) {
+                                setIsWhatsAppConnected(false);
+                                setWhatsappStatusMessage('Disconnected');
+                                setPreviousConnectionStatus(false);
+                            } else {
+                                Alert.alert('Error', 'Failed to disconnect properly');
+                            }
+                        } catch (error) {
+                            console.error("Logout failed:", error);
+                            Alert.alert('Error', 'Network error during logout');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -191,6 +228,12 @@ export default function SetupScreen() {
                                 title="Select Groups"
                                 onPress={handleContinueToGroups}
                                 color="#4CAF50"
+                            />
+                            <View style={styles.buttonSpacing} />
+                            <Button
+                                title="Logout from WhatsApp"
+                                onPress={handleLogout}
+                                color="#FF3B30"
                             />
                         </View>
                     </View>

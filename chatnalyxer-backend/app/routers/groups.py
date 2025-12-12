@@ -99,7 +99,8 @@ def sync_groups_from_whatsapp(
             new_group = models.Group(
                 name=name,
                 whatsapp_id=whatsapp_id,
-                is_selected=0  # Default to not selected
+                is_selected=0,  # Default to not selected
+                user_id=payload.user_id # ✅ Link to user directly
             )
             db.add(new_group)
             db.commit()

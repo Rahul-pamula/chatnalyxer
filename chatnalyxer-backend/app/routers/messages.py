@@ -53,7 +53,7 @@ def create_whatsapp_message(
             email="whatsapp@chatnalyxer.com",
             hashed_password="dummy_hash",
             phone_number="0000000000",
-            is_verified=True
+            is_verified=1
         )
         db.add(default_user)
         db.commit()
@@ -69,6 +69,7 @@ def create_whatsapp_message(
             group_id=group.id,
             sender_id=default_user.id,
             created_at=payload.timestamp,
+            sender=default_user,
             priority_level='LOW',
             urgency_score=0.0,
             is_priority=0,
