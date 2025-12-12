@@ -238,7 +238,7 @@ class MLMessageAnalyzer:
             elif category in ['submission_deadline', 'class_related']:
                 priority = 'MEDIUM'
                 urgency = 0.6
-                is_priority = 0
+                is_priority = 1
             else:
                 priority = 'LOW'
                 urgency = 0.3
