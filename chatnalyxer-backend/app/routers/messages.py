@@ -69,6 +69,7 @@ def create_whatsapp_message(
             group_id=group.id,
             sender_id=default_user.id,
             created_at=payload.timestamp,
+            sender=default_user,
             priority_level='LOW',
             urgency_score=0.0,
             is_priority=0,
