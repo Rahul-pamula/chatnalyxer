@@ -8,7 +8,7 @@ sys.path.append(os.getcwd())
 # Database URL from your config (assuming standard local or from env)
 # You can check .env or hardcode the one you are using locally
 # It looks like: sqlite:///./chatnalyxer.db
-DATABASE_URL = "sqlite:///./chatnalyxer.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./chatnalyxer.db")
 
 def migrate():
     print("🚀 Starting migration: Adding user_id to groups table...")
