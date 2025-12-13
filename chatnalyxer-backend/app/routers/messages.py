@@ -59,22 +59,25 @@ def create_whatsapp_message(
         db.commit()
         db.refresh(default_user)
 
-    # 🔍 Check if message is casual/unimportant - BUT SAVE IT ANYWAY (Changed behavior)
+    # 🔍 Check if message is casual/unimportant - SKIP if true
     if ml_analyzer and ml_analyzer.is_casual_message(payload.content):
-        print(f"ℹ️  Classified as casual message: {payload.content[:50]}...")
-        # Fallback to LOW priority but CONTINUE to save
-        ml_results = {
-            'priority_level': 'LOW',
-            'urgency_score': 0.0,
-            'deadline_extracted': None,
-            'extracted_keywords': '[]',
-            'is_priority': 0,
-            'message_category': 'GENERAL',
-            'academic_context': '{}'
-        }
-    else:
-        # ✅ Message might be important - analyze with ML
-        ml_results = {
+        print(f"⏭️  Skipping casual message: {payload.content[:50]}...")
+        # Don't save to database, but return success response
+        return schemas.MessageOut(
+            id=0,  # Dummy ID  
+            content=payload.content,
+            group_id=group.id,
+            sender_id=default_user.id,
+            created_at=payload.timestamp,
+            sender=default_user,
+            priority_level='LOW',
+            urgency_score=0.0,
+            is_priority=0,
+            deleted_at=None
+        )
+
+    # ✅ Message is important - analyze with ML (keyword-based)
+    ml_results = {
             'priority_level': 'MEDIUM',
             'urgency_score': 0.5,
             'deadline_extracted': None,
