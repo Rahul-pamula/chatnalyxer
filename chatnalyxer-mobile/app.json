@@ -4,12 +4,12 @@
     "slug": "chatnalyxer-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/chatnalyxer-logo.png",
+    "icon": "./assets/images/Chatnalyzer Logo Design.png",
     "scheme": "chatnalyxermobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/chatnalyxer-logo.png",
+      "image": "./assets/images/Chatnalyzer Logo Design.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/chatnalyxer-logo.png",
+        "foregroundImage": "./assets/images/Chatnalyzer Logo Design.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.chatnalyxer.mobile",
@@ -39,14 +39,14 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/chatnalyxer-logo.png"
+      "favicon": "./assets/images/Chatnalyzer Logo Design.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/chatnalyxer-logo.png",
+          "image": "./assets/images/Chatnalyzer Logo Design.png",
           "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
