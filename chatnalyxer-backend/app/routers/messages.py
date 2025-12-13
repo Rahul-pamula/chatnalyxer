@@ -78,22 +78,22 @@ def create_whatsapp_message(
 
     # ✅ Message is important - analyze with ML (keyword-based)
     ml_results = {
-            'priority_level': 'MEDIUM',
-            'urgency_score': 0.5,
-            'deadline_extracted': None,
-            'extracted_keywords': '[]',
-            'is_priority': 0,
-            'message_category': 'GENERAL',
-            'academic_context': '{}'
-        }
-    
-        if ml_analyzer:
-            try:
-                ml_results = ml_analyzer.analyze_message(
-                    payload.content, payload.timestamp)
-            except Exception as e:
-                print(f"WARNING: ML Analysis failed: {e}")
-                pass
+        'priority_level': 'MEDIUM',
+        'urgency_score': 0.5,
+        'deadline_extracted': None,
+        'extracted_keywords': '[]',
+        'is_priority': 0,
+        'message_category': 'GENERAL',
+        'academic_context': '{}'
+    }
+
+    if ml_analyzer:
+        try:
+            ml_results = ml_analyzer.analyze_message(
+                payload.content, payload.timestamp)
+        except Exception as e:
+            print(f"WARNING: ML Analysis failed: {e}")
+            pass
 
     msg = models.Message(
         content=payload.content,
