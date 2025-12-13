@@ -242,12 +242,12 @@ class MLMessageAnalyzer:
     
     def is_casual_message(self, content: str) -> bool:
         """
-        NEW WEIGHTED SCORING APPROACH
+        Multi-layer filtering approach for robust message classification
+        
+        Layer 1: Protected keywords - Never filter important student messages
+        Layer 2: Adaptive scoring - Use ML scoring for other messages
         
         Returns True if message should be SKIPPED
-        Based on score threshold:
-        - Score >= 0.5 → SAVE (important)
-        - Score < 0.5 → SKIP (casual)
         """
         content_lower = content.lower().strip()
         
@@ -259,16 +259,45 @@ class MLMessageAnalyzer:
         if re.match(r'^[\W\s]+$', content):
             return True
         
-        # Calculate score
+        # Layer 1: PROTECTED KEYWORDS - Never filter these
+        # These are guaranteed important for students
+        protected_keywords = [
+            # Submission related
+            'submit', 'submission', 'assignment', 'homework', 'project',
+            'report', 'essay', 'paper', 'presentation', 'synopsis',
+            # Deadline related
+            'deadline', 'due', 'due date', 'last date',
+            # Exam related
+            'exam', 'test', 'quiz', 'viva', 'examination',
+            'marks', 'results', 'grade', 'hall ticket', 'admit card',
+            # Attendance related
+            'attend', 'attendance', 'present', 'absent',
+            # Class/Meeting related
+            'meeting', 'lecture', 'class', 'session', 'seminar',
+            'workshop', 'conference', 'orientation', 'briefing',
+            # Schedule changes
+            'cancelled', 'canceled', 'postponed', 'preponed',
+            'rescheduled', 'shifted', 'moved',
+            # Important events
+            'placement', 'interview', 'internship'
+        ]
+        
+        # If message contains ANY protected keyword, NEVER filter it
+        if any(keyword in content_lower for keyword in protected_keywords):
+            logger.debug(f"Protected keyword found - saving message: {content[:50]}")
+            return False  # Don't skip - always save
+        
+        # Layer 2: Adaptive scoring for other messages
+        # Calculate score using existing weighted system
         score, details = self.calculate_message_score(content)
         
         # Log for debugging
         logger.debug(f"Message score: {score:.2f} | Details: {details}")
         
-        # Threshold: 0.4 (LOWERED from 0.5 for better capture)
-        # Messages with score >= 0.4 are kept (return False)
-        # Messages with score < 0.4 are skipped (return True)
-        return score < 0.4
+        # Lower threshold to 0.0 for better capture
+        # Only messages with truly negative scores are filtered
+        # This allows more flexibility for real-world messages
+        return score < 0.0
     
     def analyze_message(self, content: str, created_at: datetime) -> Dict:
         """
