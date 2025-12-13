@@ -65,3 +65,10 @@ web-build/
 .render/
 render-env-variables.txt
 .env
+
+# Test files
+test_*.py
+test_*.txt
+*_test.py
+ML_LEARNING_PROPOSAL.md
+QR_FIX_SUMMARY.md

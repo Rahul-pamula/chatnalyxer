@@ -49,7 +49,7 @@ class MLMessageAnalyzer:
             'turn in', 'hand in'
         ]
         
-        # CONTEXT KEYWORDS (+0.3 each)
+        # CONTEXT KEYWORDS (+0.5 each) - INCREASED from +0.3
         # Academic/administrative context
         self.context_keywords = [
             # Class-related
@@ -107,6 +107,7 @@ class MLMessageAnalyzer:
         # ========== CRITICAL OVERRIDE RULES ==========
         # These combinations are SO important they override everything
         self.critical_overrides = {
+            # Exam/Test overrides
             ('deadline', 'extension'): 5.0,
             ('deadline', 'extended'): 5.0,
             ('exam', 'cancelled'): 5.0,
@@ -117,13 +118,26 @@ class MLMessageAnalyzer:
             ('class', 'canceled'): 5.0,
             ('test', 'cancelled'): 5.0,
             ('test', 'postponed'): 5.0,
+            # Urgent combinations
             ('urgent', 'exam'): 3.0,
             ('urgent', 'deadline'): 3.0,
             ('urgent', 'class'): 3.0,
             ('urgent', 'meeting'): 3.0,
+            # Meeting/Event combinations
             ('meeting', 'auditorium'): 2.5,
             ('meeting', 'mandatory'): 2.5,
             ('attendance', 'mandatory'): 2.5,
+            # NEW: Deadline/homework combinations
+            ('homework', 'due'): 2.5,
+            ('homework', 'tomorrow'): 2.5,
+            ('assignment', 'due'): 2.5,
+            # NEW: Event combinations
+            ('workshop', 'tomorrow'): 2.5,
+            ('workshop', 'mandatory'): 2.5,
+            ('seminar', 'tomorrow'): 2.5,
+            ('seminar', 'mandatory'): 2.5,
+            ('placement', 'mandatory'): 3.0,
+            ('briefing', 'mandatory'): 2.5,
         }
         
         # SHORT URGENT PATTERNS (auto high-score)
@@ -185,11 +199,11 @@ class MLMessageAnalyzer:
                 score += 0.5
                 details['action'].append(keyword)
         
-        # CONTEXT KEYWORDS (+0.3 each, max 3 to prevent spam)
+        # CONTEXT KEYWORDS (+0.5 each, max 3 to prevent spam) - INCREASED from +0.3
         context_count = 0
         for keyword in self.context_keywords:
             if keyword in content_lower and context_count < 3:
-                score += 0.3
+                score += 0.5
                 details['context'].append(keyword)
                 context_count += 1
         
@@ -251,10 +265,10 @@ class MLMessageAnalyzer:
         # Log for debugging
         logger.debug(f"Message score: {score:.2f} | Details: {details}")
         
-        # Threshold: 0.5
-        # Messages with score >= 0.5 are kept (return False)
-        # Messages with score < 0.5 are skipped (return True)
-        return score < 0.5
+        # Threshold: 0.4 (LOWERED from 0.5 for better capture)
+        # Messages with score >= 0.4 are kept (return False)
+        # Messages with score < 0.4 are skipped (return True)
+        return score < 0.4
     
     def analyze_message(self, content: str, created_at: datetime) -> Dict:
         """
@@ -272,24 +286,19 @@ class MLMessageAnalyzer:
             keywords = self._extract_keywords_from_content(content)
             deadline = self._extract_deadline(content, created_at)
             
-            # Determine priority based on SCORE THRESHOLDS
-            if score >= 2.0:
+            # Determine priority based on SCORE THRESHOLDS (ADJUSTED for better accuracy)
+            if score >= 1.8:  # Lowered from 2.0
                 priority = 'HIGH'
                 urgency = min(0.9, score / 5.0)  # Scale to 0-0.9
                 is_priority = 1
-            elif score >= 1.0:
+            elif score >= 0.9:  # Lowered from 1.0
                 priority = 'MEDIUM'
-<<<<<<< HEAD
                 urgency = min(0.7, score / 3.0)  # Scale to 0-0.7
                 is_priority = 0
-            elif score >= 0.5:
+            elif score >= 0.4:  # Lowered from 0.5
                 priority = 'LOW'
                 urgency = min(0.5, score / 2.0)  # Scale to 0-0.5
                 is_priority = 0
-=======
-                urgency = 0.6
-                is_priority = 1
->>>>>>> 4a0b968b744f2ce0d568fd7123bf7c28aa01eaf3
             else:
                 # This shouldn't happen for saved messages, but handle it
                 priority = 'LOW'
