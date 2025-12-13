@@ -220,9 +220,12 @@ def start_whatsapp(current_user=Depends(get_current_user)):
         
         # Prepare environment variables
         env = os.environ.copy()
+        env = os.environ.copy()
         # FORCE localhost for the node process since we are running locally
         # This addresses the issue where Node sends data to Render instead of local backend
-        env["API_BASE_URL"] = "http://127.0.0.1:8000"
+        # Use dynamic PORT (Render provides this env var)
+        port = os.getenv("PORT", "8000")
+        env["API_BASE_URL"] = f"http://127.0.0.1:{port}"
         
         process = subprocess.Popen(cmd, cwd=whatsapp_dir, env=env)
         print(f"✅ Subprocess started with PID: {process.pid}")
