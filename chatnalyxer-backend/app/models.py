@@ -50,6 +50,9 @@ class Group(Base):
     is_selected = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True),
                         server_default=func.now(), nullable=False)
+    
+    # Direct ownership link (Added per feature request)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # relationship
     messages = relationship("Message", back_populates="group")

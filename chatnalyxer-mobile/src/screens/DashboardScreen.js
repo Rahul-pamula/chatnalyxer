@@ -65,8 +65,51 @@ export default function DashboardScreen({ navigation }) {
       const allMessages = await Promise.all(messagePromises);
       const flatMessages = allMessages.flat();
 
-      // Sort messages by timestamp (newest first)
-      flatMessages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Sort by deadline with strict priority
+      flatMessages.sort((a, b) => {
+        // Messages with deadlines come first
+        if (a.deadline_extracted && !b.deadline_extracted) return -1;
+        if (!a.deadline_extracted && b.deadline_extracted) return 1;
+
+        // Both have deadlines
+        if (a.deadline_extracted && b.deadline_extracted) {
+          const dateA = new Date(a.deadline_extracted);
+          const dateB = new Date(b.deadline_extracted);
+          const now = new Date();
+
+          // Calculate days difference from now
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const startOfDateA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
+          const startOfDateB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
+
+          const daysDiffA = Math.floor((startOfDateA - startOfToday) / (1000 * 60 * 60 * 24));
+          const daysDiffB = Math.floor((startOfDateB - startOfToday) / (1000 * 60 * 60 * 24));
+
+          // If different days, sort by days difference (0=today, 1=tomorrow, etc.)
+          if (daysDiffA !== daysDiffB) {
+            return daysDiffA - daysDiffB;
+          }
+
+          // Same day - check if times are specified
+          const hasTimeA = dateA.getHours() !== 0 || dateA.getMinutes() !== 0;
+          const hasTimeB = dateB.getHours() !== 0 || dateB.getMinutes() !== 0;
+
+          // Messages with time come before messages without time
+          if (hasTimeA && !hasTimeB) return -1;
+          if (!hasTimeA && hasTimeB) return 1;
+
+          // Both have time - sort by actual datetime
+          if (hasTimeA && hasTimeB) {
+            return dateA.getTime() - dateB.getTime();
+          }
+
+          // Both don't have time - sort by created_at
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+
+        // Neither has deadline - sort by created_at
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
 
       setMessages(flatMessages);
     } catch (err) {
@@ -91,15 +134,57 @@ export default function DashboardScreen({ navigation }) {
     return new Date(timestamp).toLocaleString();
   };
 
-  const renderMessage = ({ item }) => (
-    <View style={styles.messageCard}>
-      <View style={styles.messageHeader}>
-        <Text style={styles.groupName}>{item.groupName}</Text>
-        <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+  const getDeadlineText = (deadline) => {
+    if (!deadline) return null;
+
+    const now = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffTime = deadlineDate - now;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Don't show overdue
+    if (diffDays < 0) return null;
+
+    // Check if time is specified
+    const hasTime = deadlineDate.getHours() !== 0 || deadlineDate.getMinutes() !== 0;
+    const timeStr = hasTime ? ` at ${deadlineDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '';
+
+    // Today
+    if (diffDays === 0) {
+      return `Today${timeStr}`;
+    }
+
+    // Tomorrow
+    if (diffDays === 1) {
+      return `Tomorrow${timeStr}`;
+    }
+
+    // Future dates - show date with countdown
+    const dateStr = deadlineDate.toLocaleDateString('en-GB'); // DD-MM-YYYY format
+    const daysAwayStr = `(${diffDays} days away)`;
+
+    if (hasTime) {
+      return `${dateStr}${timeStr} ${daysAwayStr}`;
+    } else {
+      return `${dateStr} ${daysAwayStr}`;
+    }
+  };
+
+  const renderMessage = ({ item }) => {
+    const deadlineText = getDeadlineText(item.deadline_extracted);
+    return (
+      <View style={styles.messageCard}>
+        <View style={styles.messageHeader}>
+          <Text style={styles.groupName}>{item.groupName}</Text>
+          <Text style={styles.timestamp}>{formatTime(item.created_at)}</Text>
+        </View>
+        <Text style={styles.messageContent}>{item.content}</Text>
+        {deadlineText && (
+          <Text style={styles.timestamp}>📅 {deadlineText}</Text>
+        )}
       </View>
-      <Text style={styles.messageContent}>{item.content}</Text>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (

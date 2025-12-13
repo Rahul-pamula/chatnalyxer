@@ -279,12 +279,17 @@ class MLMessageAnalyzer:
                 is_priority = 1
             elif score >= 1.0:
                 priority = 'MEDIUM'
+<<<<<<< HEAD
                 urgency = min(0.7, score / 3.0)  # Scale to 0-0.7
                 is_priority = 0
             elif score >= 0.5:
                 priority = 'LOW'
                 urgency = min(0.5, score / 2.0)  # Scale to 0-0.5
                 is_priority = 0
+=======
+                urgency = 0.6
+                is_priority = 1
+>>>>>>> 4a0b968b744f2ce0d568fd7123bf7c28aa01eaf3
             else:
                 # This shouldn't happen for saved messages, but handle it
                 priority = 'LOW'

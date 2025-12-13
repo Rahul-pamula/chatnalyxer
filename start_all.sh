@@ -17,7 +17,7 @@ BACKEND_PID=$!
 
 # Start the frontend
 echo "Starting mobile app..."
-cd ../chatnalyxer-mobile
+cd chatnalyxer-mobile
 npm install
 npm start &
 FRONTEND_PID=$!
