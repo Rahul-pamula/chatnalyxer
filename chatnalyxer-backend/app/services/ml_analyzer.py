@@ -14,183 +14,226 @@ logger = logging.getLogger(__name__)
 class MLMessageAnalyzer:
     def __init__(self):
         """
-        Advanced ML Analyzer with 4-Layer Decision Logic
-        Based on comprehensive student message training data
+        Advanced ML Analyzer with Weighted Scoring System
+        Handles ambiguities better than binary filtering
         """
         
-        # ========== LAYER 1: KEYWORD CATEGORIES ==========
+        # ========== WEIGHTED SCORING CATEGORIES ==========
         
-        # A. CLASS-RELATED
-        self.class_keywords = [
-            'class', 'lecture', 'session', 'period', 'tutorial',
-            'cancelled', 'canceled', 'cancel', 'cancelation',
+        # HIGH-VALUE KEYWORDS (+1.5 each)
+        # Core action items and high-stakes events
+        self.high_value_keywords = [
+            'exam', 'test', 'quiz', 'examination', 'viva',
+            'deadline', 'submit', 'submission', 'due date', 'last date',
+            'cancelled', 'canceled', 'cancel', 'postponed', 'preponed',
             'rescheduled', 'reschedule', 'shifted', 'moved',
-            'room changed', 'venue changed', 'online', 'offline',
-            'faculty on leave', 'sir on leave', 'mam on leave',
-            'special class', 'timetable', 'schedule updated'
+            'marks', 'results', 'grade', 'hall ticket', 'admit card'
         ]
         
-        # B. EXAM-RELATED
-        self.exam_keywords = [
-            'exam', 'test', 'quiz', 'viva', 'examination',
-            'internal', 'external', 'midterm', 'final exam',
-            'practical exam', 'oral exam', 'surprise test',
-            'postponed', 'preponed', 'postpone', 'prepone',
-            'exam cancelled', 'exam rescheduled',
-            'hall ticket', 'admit card', 'marks', 'results',
-            'internal marks', 'grade', 'syllabus updated',
-            'exam venue', 'exam room', 'exam hall'
-        ]
-        
-        # C. SUBMISSION/DEADLINE
-        self.submission_keywords = [
-            'deadline', 'submit', 'submission', 'due',
-            'assignment', 'homework', 'project', 'lab',
-            'report', 'synopsis', 'essay', 'paper',
-            'extended', 'extension', 'last date',
-            'soft copy', 'hard copy', 'moodle', 'portal',
-            'upload', 'download', 'turn in', 'hand in'
-        ]
-        
-        # D. COLLEGE ADMIN
-        self.admin_keywords = [
-            'holiday', 'leave', 'off', 'working day',
-            'event', 'function', 'ceremony', 'program',
-            'meeting', 'workshop', 'seminar', 'conference',
-            'orientation', 'briefing', 'placement',
-            'bus timing', 'transport', 'notice',
-            'hod', 'principal', 'dean', 'announcement'
-        ]
-        
-        # E. URGENT ALERTS
-        self.urgent_keywords = [
+        # URGENCY KEYWORDS (+1.0 each)
+        # Time-sensitive indicators
+        self.urgency_keywords = [
             'now', 'urgent', 'asap', 'immediate', 'emergency',
+            'today', 'tonight', 'tomorrow',
             'starts at', 'starting', 'join now', 'come now',
-            'attendance', 'attendance being taken',
-            'quiz link', 'meeting link', 'hurry up',
-            'last chance', 'final call', 'today', 'tonight'
+            'last chance', 'final call', 'hurry up',
+            'attendance', 'attendance being taken'
         ]
         
-        # F. LOCATION INDICATORS (important context)
-        self.location_keywords = [
-            'room', 'block', 'hall', 'auditorium', 'seminar hall',
-            'classroom', 'lab', 'library', 'ground', 'floor',
-            'venue', 'campus', 'building'
-        ]
-        
-        # G. ACTION WORDS (commands/instructions)
+        # ACTION KEYWORDS (+0.5 each)
+        # Direct instructions and commands
         self.action_keywords = [
             'bring', 'carry', 'required', 'mandatory', 'compulsory',
             'attend', 'come', 'reach', 'arrive', 'prepare',
-            'complete', 'finish', 'check', 'download', 'upload'
+            'complete', 'finish', 'check', 'download', 'upload',
+            'turn in', 'hand in'
         ]
         
-        # ========== LAYER 2: NEGATIVE FILTER (Casual Chatter) ==========
+        # CONTEXT KEYWORDS (+0.3 each)
+        # Academic/administrative context
+        self.context_keywords = [
+            # Class-related
+            'class', 'lecture', 'session', 'period', 'tutorial',
+            'online', 'offline', 'special class', 'timetable',
+            # Locations
+            'room', 'block', 'hall', 'auditorium', 'seminar hall',
+            'classroom', 'lab', 'library', 'ground', 'floor',
+            'venue', 'campus', 'building', 'meeting room',
+            # Events
+            'meeting', 'workshop', 'seminar', 'conference',
+            'event', 'function', 'ceremony', 'program',
+            'orientation', 'briefing', 'placement',
+            # Assignments
+            'assignment', 'homework', 'project', 'report',
+            'synopsis', 'essay', 'paper', 'presentation',
+            # Admin
+            'holiday', 'leave', 'off', 'working day',
+            'notice', 'announcement', 'hod', 'principal', 'dean',
+            'faculty', 'sir', 'mam', 'professor'
+        ]
         
+        # CASUAL CHATTER PENALTIES (-1.0 each)
+        # Reduces importance score
         self.casual_chatter_patterns = [
             # Informal address
-            'bro', 'dude', 'guys', 'yaar', 'man',
-            # Asking patterns
-            'anyone', 'someone', 'anybody', 'who has',
-            'can someone send', 'pls send', 'plz send',
-            'what\'s', 'whats', 'send me', 'give me',
-            # Help/questions
-            'pls', 'plz', 'please help', 'help me',
-            # Casual responses
-            'ok', 'okay', 'k', 'kk', 'thanks', 'thnx',
-            'lol', 'haha', 'lmao', 'omg', 'wow',
+            'bro', 'dude', 'guys', 'yaar', 'man', 'buddy',
+            # Casual language
+            'lol', 'haha', 'lmao', 'omg', 'wow', 'cool',
+            # Requests
+            'pls send', 'plz send', 'send me', 'give me',
+            'can someone send', 'anyone have',
             # Greetings
             'hi', 'hello', 'hey', 'gm', 'good morning', 'good night',
             # Social
             'happy birthday', 'congrats', 'congratulations',
-            'canteen', 'mess', 'food'
+            'canteen', 'mess', 'food', 'lunch', 'dinner',
+            # Casual responses
+            'ok', 'okay', 'kk', 'thnx', 'thx', 'thanks man'
         ]
         
-        # ========== LAYER 3: QUESTION PATTERNS ==========
-        
+        # QUESTION INDICATORS (-0.5 penalty)
+        # Questions get slight penalty but don't override important keywords
         self.question_indicators = [
             '?',  # Question mark
-            # Question words
+            # Question words (only count at start of message)
             'what', 'when', 'where', 'who', 'why', 'how', 'which',
-            # Uncertainty
+            # Uncertainty phrases
             'do i', 'do we', 'should i', 'should we',
             'can i', 'can we', 'will there', 'is there', 'are there',
             'does anyone', 'do you know', 'anyone know',
-            # Doubt expressions
-            'confused', 'doubt', 'not sure', 'clarify', 'confirm',
-            'is it', 'will it', 'are we'
+            'confused', 'doubt', 'not sure', 'is it', 'will it'
         ]
         
-        # ========== LAYER 4: SHORT URGENT PATTERNS ==========
+        # ========== CRITICAL OVERRIDE RULES ==========
+        # These combinations are SO important they override everything
+        self.critical_overrides = {
+            ('deadline', 'extension'): 5.0,
+            ('deadline', 'extended'): 5.0,
+            ('exam', 'cancelled'): 5.0,
+            ('exam', 'canceled'): 5.0,
+            ('exam', 'postponed'): 5.0,
+            ('exam', 'preponed'): 5.0,
+            ('class', 'cancelled'): 5.0,
+            ('class', 'canceled'): 5.0,
+            ('test', 'cancelled'): 5.0,
+            ('test', 'postponed'): 5.0,
+            ('urgent', 'exam'): 3.0,
+            ('urgent', 'deadline'): 3.0,
+            ('urgent', 'class'): 3.0,
+            ('urgent', 'meeting'): 3.0,
+            ('meeting', 'auditorium'): 2.5,
+            ('meeting', 'mandatory'): 2.5,
+            ('attendance', 'mandatory'): 2.5,
+        }
         
+        # SHORT URGENT PATTERNS (auto high-score)
         self.short_urgent_patterns = [
             r'^(class|attendance|meeting|quiz).{0,20}(now|mins?|minutes?).*$',
             r'^join.{0,10}(link|now|meeting).*$',
             r'^(room|venue).{0,10}changed.*$',
-            r'^come.{0,15}(lab|class|room|hall).*$'
+            r'^come.{0,15}(lab|class|room|hall|auditorium).*$',
+            r'^(meeting|exam|class).{0,15}(auditorium|hall|room).*$'
         ]
 
+    def calculate_message_score(self, content: str) -> Tuple[float, Dict]:
+        """
+        Calculate weighted score for a message
+        
+        Returns:
+            score (float): The calculated score
+            details (dict): Breakdown of scoring for debugging
+        """
+        content_lower = content.lower().strip()
+        score = 0.0
+        details = {
+            'high_value': [],
+            'urgency': [],
+            'action': [],
+            'context': [],
+            'casual_penalty': [],
+            'question_penalty': 0,
+            'override': None
+        }
+        
+        # Check for critical overrides first
+        for (word1, word2), override_score in self.critical_overrides.items():
+            if word1 in content_lower and word2 in content_lower:
+                details['override'] = f"{word1}+{word2}"
+                return override_score, details
+        
+        # Check short urgent patterns (auto high score)
+        for pattern in self.short_urgent_patterns:
+            if re.match(pattern, content_lower, re.IGNORECASE):
+                details['override'] = 'short_urgent_pattern'
+                return 3.0, details
+        
+        # HIGH-VALUE KEYWORDS (+1.5 each)
+        for keyword in self.high_value_keywords:
+            if keyword in content_lower:
+                score += 1.5
+                details['high_value'].append(keyword)
+        
+        # URGENCY KEYWORDS (+1.0 each)
+        for keyword in self.urgency_keywords:
+            if keyword in content_lower:
+                score += 1.0
+                details['urgency'].append(keyword)
+        
+        # ACTION KEYWORDS (+0.5 each)
+        for keyword in self.action_keywords:
+            if keyword in content_lower:
+                score += 0.5
+                details['action'].append(keyword)
+        
+        # CONTEXT KEYWORDS (+0.3 each, max 3 to prevent spam)
+        context_count = 0
+        for keyword in self.context_keywords:
+            if keyword in content_lower and context_count < 3:
+                score += 0.3
+                details['context'].append(keyword)
+                context_count += 1
+        
+        # CASUAL CHATTER PENALTY (-1.0 each)
+        for pattern in self.casual_chatter_patterns:
+            if pattern in content_lower:
+                score -= 1.0
+                details['casual_penalty'].append(pattern)
+        
+        # QUESTION PENALTY (-0.5)
+        for indicator in self.question_indicators:
+            if indicator in content_lower:
+                score -= 0.5
+                details['question_penalty'] = -0.5
+                break  # Only apply once
+        
+        return score, details
+    
     def detect_category(self, content: str) -> str:
         """Detect message category based on keywords"""
         content_lower = content.lower()
         
-        # Check each category
-        if any(kw in content_lower for kw in self.class_keywords):
-            return 'class_related'
-        elif any(kw in content_lower for kw in self.exam_keywords):
+        # Check based on high-value and context keywords
+        if any(kw in content_lower for kw in ['exam', 'test', 'quiz', 'viva', 'marks', 'results']):
             return 'exam_related'
-        elif any(kw in content_lower for kw in self.submission_keywords):
+        elif any(kw in content_lower for kw in ['deadline', 'submit', 'assignment', 'project']):
             return 'submission_deadline'
-        elif any(kw in content_lower for kw in self.admin_keywords):
+        elif any(kw in content_lower for kw in ['class', 'lecture', 'cancelled', 'rescheduled']):
+            return 'class_related'
+        elif any(kw in content_lower for kw in ['meeting', 'workshop', 'seminar', 'event']):
             return 'college_admin'
-        elif any(kw in content_lower for kw in self.urgent_keywords):
+        elif any(kw in content_lower for kw in ['now', 'urgent', 'asap', 'immediate']):
             return 'urgent_alert'
         else:
             return 'general'
     
-    def is_short_urgent(self, content: str) -> bool:
-        """Layer 4: Detect short urgent messages"""
-        if len(content) > 100:
-            return False
-            
-        for pattern in self.short_urgent_patterns:
-            if re.match(pattern, content.lower(), re.IGNORECASE):
-                return True
-        return False
-    
-    def has_casual_chatter(self, content: str) -> bool:
-        """Layer 2: Check for casual chatter patterns"""
-        content_lower = content.lower()
-        return any(pattern in content_lower for pattern in self.casual_chatter_patterns)
-    
-    def is_question(self, content: str) -> bool:
-        """Layer 3: Check if message is a question"""
-        content_lower = content.lower()
-        return any(indicator in content_lower for indicator in self.question_indicators)
-    
-    def has_important_keywords(self, content: str) -> bool:
-        """Layer 1: Check for any important keywords"""
-        content_lower = content.lower()
-        
-        all_important = (
-            self.class_keywords + self.exam_keywords + 
-            self.submission_keywords + self.admin_keywords + 
-            self.urgent_keywords + self.location_keywords + 
-            self.action_keywords
-        )
-        
-        return any(kw in content_lower for kw in all_important)
-    
     def is_casual_message(self, content: str) -> bool:
         """
-        4-LAYER DECISION LOGIC
-        
-        Layer 1: Keyword Match
-        Layer 2: Exclude Questions  
-        Layer 3: Short Urgent Messages
-        Layer 4: Negative Filter (Casual Chatter)
+        NEW WEIGHTED SCORING APPROACH
         
         Returns True if message should be SKIPPED
+        Based on score threshold:
+        - Score >= 0.5 → SAVE (important)
+        - Score < 0.5 → SKIP (casual)
         """
         content_lower = content.lower().strip()
         
@@ -202,46 +245,50 @@ class MLMessageAnalyzer:
         if re.match(r'^[\W\s]+$', content):
             return True
         
-        # ⚡ LAYER 4: Short Urgent → ALWAYS SAVE
-        if self.is_short_urgent(content):
-            return False  # Don't skip, it's important!
+        # Calculate score
+        score, details = self.calculate_message_score(content)
         
-        # 🚫 LAYER 2: Casual Chatter → SKIP (even with keywords)
-        if self.has_casual_chatter(content):
-            return True
+        # Log for debugging
+        logger.debug(f"Message score: {score:.2f} | Details: {details}")
         
-        # ❓ LAYER 3: Question → SKIP (even with keywords)
-        if self.is_question(content):
-            return True
-        
-        # 🔍 LAYER 1: Has Important Keywords?
-        if self.has_important_keywords(content):
-            return False  # Don't skip, it's important!
-        
-        # No important keywords → skip
-        return True
+        # Threshold: 0.5
+        # Messages with score >= 0.5 are kept (return False)
+        # Messages with score < 0.5 are skipped (return True)
+        return score < 0.5
     
     def analyze_message(self, content: str, created_at: datetime) -> Dict:
         """
         Analyze message and return priority, category, etc.
+        Uses weighted scoring system for priority assignment
         """
         try:
+            # Calculate score
+            score, score_details = self.calculate_message_score(content)
+            
+            # Detect category
             category = self.detect_category(content)
+            
+            # Extract keywords and deadline
             keywords = self._extract_keywords_from_content(content)
             deadline = self._extract_deadline(content, created_at)
             
-            # Determine priority based on category
-            if category in ['urgent_alert', 'exam_related']:
+            # Determine priority based on SCORE THRESHOLDS
+            if score >= 2.0:
                 priority = 'HIGH'
-                urgency = 0.9
+                urgency = min(0.9, score / 5.0)  # Scale to 0-0.9
                 is_priority = 1
-            elif category in ['submission_deadline', 'class_related']:
+            elif score >= 1.0:
                 priority = 'MEDIUM'
-                urgency = 0.6
+                urgency = min(0.7, score / 3.0)  # Scale to 0-0.7
+                is_priority = 0
+            elif score >= 0.5:
+                priority = 'LOW'
+                urgency = min(0.5, score / 2.0)  # Scale to 0-0.5
                 is_priority = 0
             else:
+                # This shouldn't happen for saved messages, but handle it
                 priority = 'LOW'
-                urgency = 0.3
+                urgency = 0.1
                 is_priority = 0
             
             return {
@@ -251,8 +298,12 @@ class MLMessageAnalyzer:
                 'extracted_keywords': json.dumps(keywords),
                 'is_priority': is_priority,
                 'message_category': category,
-                'academic_context': json.dumps({'category': category}),
-                'analysis_method': 'keyword_4layer'
+                'academic_context': json.dumps({
+                    'category': category,
+                    'score': round(score, 2),
+                    'score_details': score_details
+                }),
+                'analysis_method': 'weighted_scoring_v1'
             }
         except Exception as e:
             logger.error(f"Message analysis failed: {e}")
@@ -273,9 +324,10 @@ class MLMessageAnalyzer:
         keywords = []
         
         all_keyword_lists = [
-            self.class_keywords, self.exam_keywords,
-            self.submission_keywords, self.admin_keywords,
-            self.urgent_keywords
+            self.high_value_keywords,
+            self.urgency_keywords,
+            self.action_keywords,
+            self.context_keywords
         ]
         
         for keyword_list in all_keyword_lists:
