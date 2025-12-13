@@ -139,34 +139,45 @@ export default function DashboardScreen({ navigation }) {
 
     const now = new Date();
     const deadlineDate = new Date(deadline);
-    const diffTime = deadlineDate - now;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffMs = deadlineDate - now;
 
-    // Don't show overdue
-    if (diffDays < 0) return null;
+    // Don't show if expired
+    if (diffMs < 0) return null;
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     // Check if time is specified
     const hasTime = deadlineDate.getHours() !== 0 || deadlineDate.getMinutes() !== 0;
     const timeStr = hasTime ? ` at ${deadlineDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : '';
 
-    // Today
+    // Same day with specific time - show HOUR countdown
+    if (diffDays === 0 && hasTime) {
+      if (diffHours < 1) {
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        return `⏰ ${diffMins} minute${diffMins !== 1 ? 's' : ''} to expire`;
+      }
+      return `⏰ ${diffHours} hour${diffHours !== 1 ? 's' : ''} to expire`;
+    }
+
+    // Today without time
     if (diffDays === 0) {
-      return `Today${timeStr}`;
+      return `📅 Today`;
     }
 
     // Tomorrow
     if (diffDays === 1) {
-      return `Tomorrow${timeStr}`;
+      return `📅 Tomorrow${timeStr}`;
     }
 
-    // Future dates - show date with countdown
+    // Future dates - show date with "X days away"
     const dateStr = deadlineDate.toLocaleDateString('en-GB'); // DD-MM-YYYY format
-    const daysAwayStr = `(${diffDays} days away)`;
+    const daysAwayStr = `(${diffDays} day${diffDays !== 1 ? 's' : ''} away)`;
 
     if (hasTime) {
-      return `${dateStr}${timeStr} ${daysAwayStr}`;
+      return `📅 ${dateStr}${timeStr} ${daysAwayStr}`;
     } else {
-      return `${dateStr} ${daysAwayStr}`;
+      return `📅 ${dateStr} ${daysAwayStr}`;
     }
   };
 

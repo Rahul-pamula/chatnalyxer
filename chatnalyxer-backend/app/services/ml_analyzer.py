@@ -352,16 +352,79 @@ class MLMessageAnalyzer:
         return list(set(keywords))[:10]  # Max 10 keywords
     
     def _extract_deadline(self, content: str, created_at: datetime) -> Optional[datetime]:
-        """Extract deadline from content"""
-        content_lower = content.lower()
+        """Enhanced deadline extraction with time support"""
+        content_lower = content.lower().strip()
         
-        # Simple patterns
+        # Ensure created_at has timezone info (IST)
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
+        
+        # Extract time first (if present)
+        time_info = self._extract_time(content_lower)
+        
+        # Pattern 1: "today" + optional time
         if 'today' in content_lower or 'tonight' in content_lower:
-            return created_at
-        elif 'tomorrow' in content_lower:
-            return created_at + timedelta(days=1)
-        elif 'next week' in content_lower:
+            deadline = created_at.replace(hour=0, minute=0, second=0, microsecond=0)
+            if time_info:
+                deadline = deadline.replace(hour=time_info['hour'], minute=time_info['minute'])
+            return deadline
+        
+        # Pattern 2: "tomorrow" + optional time
+        if 'tomorrow' in content_lower:
+            deadline = (created_at + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            if time_info:
+                deadline = deadline.replace(hour=time_info['hour'], minute=time_info['minute'])
+            return deadline
+        
+        # Pattern 3: Specific date (DD-MM-YYYY, DD/MM/YYYY)
+        date_match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{4})', content_lower)
+        if date_match:
+            try:
+                day, month, year = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+                deadline = datetime(year, month, day, tzinfo=ZoneInfo("Asia/Kolkata"))
+                if time_info:
+                    deadline = deadline.replace(hour=time_info['hour'], minute=time_info['minute'])
+                return deadline
+            except:
+                pass
+        
+        # Pattern 4: "next week"
+        if 'next week' in content_lower:
             return created_at + timedelta(days=7)
+        
+        return None
+    
+    def _extract_time(self, content: str) -> Optional[dict]:
+        """Extract time from content (e.g., '5pm', '3:30 PM', 'by 2 PM')"""
+        time_patterns = [
+            r'(\d{1,2}):(\d{2})\s*(am|pm)',  # 3:30 PM, 5:30pm
+            r'(\d{1,2})\s*(am|pm)',           # 5pm, 5 pm
+            r'at\s+(\d{1,2}):(\d{2})',       # at 10:00
+            r'by\s+(\d{1,2})\s*(am|pm)',     # by 5pm
+        ]
+        
+        for pattern in time_patterns:
+            match = re.search(pattern, content.lower())
+            if match:
+                groups = match.groups()
+                hour = int(groups[0])
+                minute = 0
+                meridiem = None
+                
+                # Determine minute and meridiem based on pattern
+                if len(groups) >= 2 and groups[1] and groups[1].isdigit():
+                    minute = int(groups[1])
+                    meridiem = groups[2] if len(groups) > 2 else None
+                elif len(groups) >= 2 and groups[1] in ['am', 'pm']:
+                    meridiem = groups[1]
+                
+                # Convert to 24-hour format
+                if meridiem == 'pm' and hour < 12:
+                    hour += 12
+                elif meridiem == 'am' and hour == 12:
+                    hour = 0
+                
+                return {'hour': hour, 'minute': minute}
         
         return None
 
