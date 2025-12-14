@@ -93,3 +93,34 @@ def admin_stop_user(user_id: int):
         # If it failed, it might be because it wasn't running, but kill_session handles that gracefully mostly.
         # If it returns False, it's a critical error.
         raise HTTPException(status_code=500, detail="Failed to stop user session")
+
+# --- OTP Service Management Endpoints ---
+# These endpoints allow the Admin Dashboard to manage the dedicated OTP Sender WhatsApp
+import requests
+from ..services.whatsapp_service import OTP_SERVICE_URL
+
+@router.get("/otp/status")
+def get_otp_service_status():
+    try:
+        resp = requests.get(f"{OTP_SERVICE_URL}/status-json", timeout=5)
+        if resp.status_code == 200:
+            return resp.json() # { ready: bool, qr: string|null }
+        return {"ready": False, "message": "OTP Service Unreachable"}
+    except:
+        return {"ready": False, "message": "OTP Service Offline"}
+
+@router.post("/otp/connect")
+def start_otp_service_connection():
+    try:
+        requests.post(f"{OTP_SERVICE_URL}/connect", timeout=5)
+        return {"message": "Connection initiated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/otp/disconnect")
+def stop_otp_service_connection():
+    try:
+        requests.post(f"{OTP_SERVICE_URL}/disconnect", timeout=5)
+        return {"message": "Disconnected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

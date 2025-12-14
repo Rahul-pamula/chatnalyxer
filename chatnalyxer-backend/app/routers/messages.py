@@ -2,11 +2,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status, Backgroun
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
-from datetime import datetime
-
-from .. import models, schemas
-from ..database import get_db
-from ..deps import get_current_user
+from app import models, schemas, utils
+from app.database import get_db
+from app.deps import get_current_user
+from app.utils import get_ist_now
 router = APIRouter(prefix="/messages", tags=["Messages"])
 
 # Enable ML analyzer for priority detection
@@ -68,7 +67,7 @@ def create_whatsapp_message(
             content=payload.content,
             group_id=group.id,
             sender_id=default_user.id,
-            created_at=payload.timestamp,
+            created_at=get_ist_now(), # Use server time
             sender=default_user,
             priority_level='LOW',
             urgency_score=0.0,
@@ -99,7 +98,7 @@ def create_whatsapp_message(
         content=payload.content,
         group_id=group.id,
         sender_id=default_user.id,
-        created_at=payload.timestamp,
+        created_at=get_ist_now(), # Use server time
         priority_level=ml_results['priority_level'],
         urgency_score=ml_results['urgency_score'],
         deadline_extracted=ml_results['deadline_extracted'],
@@ -180,11 +179,18 @@ def list_priority_messages(
 @router.get("/priority/public", response_model=list[schemas.MessageOut])
 def list_priority_messages_public(
     group_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
 ):
-    """Public endpoint for priority messages - for dashboard"""
+    """Get priority messages from user's groups only"""
+    # Get user's group IDs for isolation
+    user_group_ids = [g.group_id for g in user.groups]
+    
     q = db.query(models.Message).filter(
-        models.Message.is_priority == 1, models.Message.deleted_at.is_(None))
+        models.Message.is_priority == 1,
+        models.Message.deleted_at.is_(None),
+        models.Message.group_id.in_(user_group_ids)
+    )
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.created_at.desc()).limit(100).all()
@@ -230,32 +236,63 @@ def get_message_analytics(
     return analytics_data
 
 
+@router.delete("/trash")
+def empty_trash(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Permanently delete ALL messages in trash for user's groups"""
+    user_group_ids = [g.group_id for g in user.groups]
+    
+    deleted_count = db.query(models.Message).filter(
+        models.Message.group_id.in_(user_group_ids),
+        models.Message.deleted_at.is_not(None)
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"message": f"Trash emptied successfully ({deleted_count} messages deleted)"}
+
+
 @router.delete("/{message_id}")
 def delete_message(
     message_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
 ):
-    """Soft delete a message by ID"""
+    """Soft delete a message by ID (only from user's groups)"""
     message = db.query(models.Message).filter(
         models.Message.id == message_id).first()
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
+    
+    # Security: Verify message belongs to user's group
+    user_group_ids = [g.group_id for g in user.groups]
+    if message.group_id not in user_group_ids:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this message")
 
-    message.deleted_at = func.now()
+    message.deleted_at = get_ist_now()
     db.commit()
     return {"message": "Message moved to trash successfully"}
 
 
 @router.delete("")
 def delete_all_messages(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
 ):
-    """Soft delete all messages"""
-    print("Moving all messages to trash")
-    db.query(models.Message).update({models.Message.deleted_at: func.now()})
+    """Soft delete all messages from user's groups only"""
+    user_group_ids = [g.group_id for g in user.groups]
+    
+    print(f"Moving all messages to trash for user {user.id}")
+    db.query(models.Message).filter(
+        models.Message.group_id.in_(user_group_ids)
+    ).update({models.Message.deleted_at: get_ist_now()})
     db.commit()
-    print("All messages moved to trash")
+    print(f"All messages from user {user.id}'s groups moved to trash")
     return {"message": "All messages moved to trash successfully"}
+
+
+
 
 
 @router.get("/trash", response_model=list[schemas.MessageOut])
@@ -264,9 +301,15 @@ def list_trash_messages(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """List trashed messages for the user"""
-    q = db.query(models.Message).filter(models.Message.deleted_at.is_not(
-        None), models.Message.sender_id == user.id)
+    """List trashed messages for the user's groups"""
+    # Get user's group IDs
+    user_group_ids = [g.group_id for g in user.groups]
+    
+    # Filter deleted messages from user's groups
+    q = db.query(models.Message).filter(
+        models.Message.deleted_at.is_not(None),
+        models.Message.group_id.in_(user_group_ids)
+    )
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     return q.order_by(models.Message.deleted_at.desc()).limit(100).all()
@@ -278,10 +321,12 @@ def restore_message(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Restore a trashed message"""
+    """Restore a trashed message from user's groups"""
+    user_group_ids = [g.group_id for g in user.groups]
+    
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
-        models.Message.sender_id == user.id,
+        models.Message.group_id.in_(user_group_ids),
         models.Message.deleted_at.is_not(None)
     ).first()
     if not message:
@@ -300,10 +345,12 @@ def permanent_delete_message(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Permanently delete a trashed message"""
+    """Permanently delete a trashed message from user's groups"""
+    user_group_ids = [g.group_id for g in user.groups]
+    
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
-        models.Message.sender_id == user.id,
+        models.Message.group_id.in_(user_group_ids),
         models.Message.deleted_at.is_not(None)
     ).first()
     if not message:

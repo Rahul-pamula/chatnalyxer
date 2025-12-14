@@ -119,14 +119,49 @@ def verify_otp(
     return {"token": token, "user": user}
 
 
+@router.post("/login", response_model=schemas.AuthResponse)
+def login(
+    request: schemas.UserLoginRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Login with phone and password
+    """
+    user = db.query(models.User).filter(
+        models.User.phone_number == request.phone_number
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
+        )
+    
+    if not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password login not set up. Please use OTP."
+        )
+
+    if not utils.verify_password(request.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
+        )
+    
+    # Generate token
+    token = utils.create_access_token(data={"sub": user.username})
+    return {"token": token, "user": user}
+
+
 @router.post("/register-and-request-otp", status_code=status.HTTP_200_OK)
 def register_and_request_otp(
-    request: schemas.OTPRequest,
+    request: schemas.UserRegisterRequest,
     db: Session = Depends(get_db)
 ):
     """
     Combined endpoint: Register user and request OTP
-    - Creates user record immediately
+    - Creates user record immediately with password
     - Sends OTP for verification
     """
     # Check if phone number already exists
@@ -135,8 +170,23 @@ def register_and_request_otp(
     ).first()
     
     if existing_phone:
-        # User exists, just send OTP
-        return request_otp(request, db)
+        # User exists
+        if existing_phone.is_verified:
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already exists. Please login."
+            )
+        else:
+             # User exists but not verified, update details and resend OTP
+             existing_phone.hashed_password = utils.hash_password(request.password)
+             existing_phone.email = request.email
+             existing_phone.username = request.username # Allow updating username if unverified
+             db.commit()
+             # Fall through to send OTP logic below
+             # convert to OTPRequest for the helper function
+             otp_req = schemas.OTPRequest(username=request.username, phone_number=request.phone_number)
+             return request_otp(otp_req, db)
+
     
     # Check if username is taken
     existing_username = db.query(models.User).filter(
@@ -154,8 +204,8 @@ def register_and_request_otp(
         username=request.username,
         phone_number=request.phone_number,
         is_verified=0,
-        email=None,
-        hashed_password=None
+        email=request.email,
+        hashed_password=utils.hash_password(request.password)
     )
     
     db.add(new_user)
@@ -163,4 +213,40 @@ def register_and_request_otp(
     db.refresh(new_user)
     
     # Now request OTP
-    return request_otp(request, db)
+    otp_req = schemas.OTPRequest(username=request.username, phone_number=request.phone_number)
+    return request_otp(otp_req, db)
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(
+    request: schemas.PasswordReset,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset password using OTP
+    """
+    # Verify OTP first
+    is_valid, error_msg = otp_service.verify_otp(db, request.phone_number, request.otp_code)
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=error_msg
+        )
+    
+    # Get user
+    user = db.query(models.User).filter(
+        models.User.phone_number == request.phone_number
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update password
+    user.hashed_password = utils.hash_password(request.new_password)
+    db.commit()
+    
+    return {"message": "Password updated successfully"}

@@ -120,9 +120,14 @@ export default function AdminDashboardScreen() {
         <View style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Admin Dashboard</Text>
-                <TouchableOpacity onPress={() => router.replace('/admin/login')}>
-                    <Text style={{ color: '#0066cc' }}>Logout</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 15 }}>
+                    <TouchableOpacity onPress={() => router.push('/qr')}>
+                        <Text style={{ color: '#0066cc', fontWeight: 'bold' }}>Connect WA</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => router.replace('/admin/login')}>
+                        <Text style={{ color: '#ff4444' }}>Logout</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Stats Cards */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BASE_URL } from '../src/config';
+import { colors, shadows } from '../src/theme/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -149,7 +150,7 @@ export default function Analytics() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#2563EB" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading analytics...</Text>
       </View>
     );
@@ -203,7 +204,7 @@ export default function Analytics() {
         {renderMetricCard(
           'Priority Messages',
           (analyticsData.priority_distribution.HIGH +
-           (analyticsData.priority_distribution.MEDIUM * 0.5)).toFixed(0),
+            (analyticsData.priority_distribution.MEDIUM * 0.5)).toFixed(0),
           'Require attention',
           '🚨'
         )}
@@ -248,11 +249,11 @@ export default function Analytics() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F8FA' },
+  container: { flex: 1, backgroundColor: colors.background },
   centered: { justifyContent: 'center', alignItems: 'center' },
   header: { padding: 16, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#64748B' },
+  title: { fontSize: 24, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+  subtitle: { fontSize: 14, color: colors.textSecondary },
 
   metricsGrid: {
     flexDirection: 'row',
@@ -263,47 +264,39 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: (width - 44) / 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.sm,
   },
   metricIcon: { fontSize: 24, marginBottom: 8 },
-  metricValue: { fontSize: 20, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  metricTitle: { fontSize: 12, fontWeight: '600', color: '#64748B', textAlign: 'center' },
-  metricSubtitle: { fontSize: 10, color: '#94A3B8', textAlign: 'center', marginTop: 2 },
+  metricValue: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+  metricTitle: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
+  metricSubtitle: { fontSize: 10, color: colors.textTertiary, textAlign: 'center', marginTop: 2 },
 
   chartContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     margin: 16,
     marginTop: 8,
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.sm,
   },
-  chartTitle: { fontSize: 16, fontWeight: '600', color: '#0F172A', marginBottom: 16 },
+  chartTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 16 },
 
   barChart: { marginBottom: 12 },
   barRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  barLabel: { width: 60, fontSize: 12, fontWeight: '500', color: '#64748B' },
-  barContainer: { flex: 1, height: 20, backgroundColor: '#F1F5F9', borderRadius: 10, marginHorizontal: 8 },
+  barLabel: { width: 60, fontSize: 12, fontWeight: '500', color: colors.textSecondary },
+  barContainer: { flex: 1, height: 20, backgroundColor: colors.surfaceHighlight, borderRadius: 10, marginHorizontal: 8 },
   bar: { height: '100%', borderRadius: 10 },
-  highBar: { backgroundColor: '#EF4444' },
-  mediumBar: { backgroundColor: '#F59E0B' },
-  lowBar: { backgroundColor: '#10B981' },
-  barValue: { width: 30, fontSize: 12, fontWeight: '600', color: '#0F172A', textAlign: 'right' },
+  highBar: { backgroundColor: colors.error },
+  mediumBar: { backgroundColor: colors.warning },
+  lowBar: { backgroundColor: colors.success },
+  barValue: { width: 30, fontSize: 12, fontWeight: '600', color: colors.textPrimary, textAlign: 'right' },
 
-  percentageRow: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 12 },
-  percentageText: { fontSize: 12, color: '#64748B', textAlign: 'center' },
+  percentageRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  percentageText: { fontSize: 12, color: colors.textSecondary, textAlign: 'center' },
 
   keywordsList: { gap: 8 },
   keywordItem: {
@@ -311,56 +304,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.surfaceHighlight,
     borderRadius: 8,
   },
-  keywordRank: { fontSize: 12, fontWeight: '600', color: '#94A3B8', width: 24 },
-  keywordText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#0F172A', marginLeft: 8 },
-  keywordCount: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
+  keywordRank: { fontSize: 12, fontWeight: '600', color: colors.textTertiary, width: 24 },
+  keywordText: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textPrimary, marginLeft: 8 },
+  keywordCount: { fontSize: 12, fontWeight: '600', color: colors.primary },
 
   groupsSection: { margin: 16, marginTop: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#0F172A', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
   groupItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    ...shadows.sm,
   },
   groupAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  groupAvatarText: { color: '#1D4ED8', fontWeight: '600', fontSize: 14 },
-  groupName: { flex: 1, fontSize: 14, fontWeight: '500', color: '#0F172A' },
-  groupStatus: { fontSize: 12, color: '#10B981', fontWeight: '500' },
+  groupAvatarText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  groupName: { flex: 1, fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  groupStatus: { fontSize: 12, color: colors.success, fontWeight: '500' },
 
   infoSection: {
     margin: 16,
     marginTop: 8,
     padding: 16,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: colors.info + '10',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: colors.info + '40',
   },
-  infoTitle: { fontSize: 16, fontWeight: '600', color: '#1E40AF', marginBottom: 8 },
-  infoText: { fontSize: 14, color: '#1E40AF', marginBottom: 8, lineHeight: 20 },
-  infoItem: { fontSize: 13, color: '#3730A3', marginBottom: 4, lineHeight: 18 },
-  infoFooter: { fontSize: 13, color: '#3730A3', marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
+  infoTitle: { fontSize: 16, fontWeight: '600', color: colors.primaryDark, marginBottom: 8 },
+  infoText: { fontSize: 14, color: colors.primaryDark, marginBottom: 8, lineHeight: 20 },
+  infoItem: { fontSize: 13, color: colors.primary, marginBottom: 4, lineHeight: 18 },
+  infoFooter: { fontSize: 13, color: colors.primary, marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
 
-  loadingText: { marginTop: 16, fontSize: 16, color: '#64748B' },
-  errorText: { fontSize: 16, color: '#EF4444', textAlign: 'center' },
-  emptyText: { fontSize: 16, color: '#64748B', textAlign: 'center' },
+  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
+  errorText: { fontSize: 16, color: colors.error, textAlign: 'center' },
+  emptyText: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
 });

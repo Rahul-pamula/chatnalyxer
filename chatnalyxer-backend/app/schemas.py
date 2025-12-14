@@ -47,10 +47,22 @@ class OTPRequest(BaseModel):
     username: str
     phone_number: str
 
+class UserRegisterRequest(OTPRequest):
+    password: str
+    email: Optional[EmailStr] = None
+
+class UserLoginRequest(BaseModel):
+    phone_number: str
+    password: str
 
 class OTPVerify(BaseModel):
     phone_number: str
     otp_code: str
+
+class PasswordReset(BaseModel):
+    phone_number: str
+    otp_code: str
+    new_password: str
 
 # ----- Group -----
 

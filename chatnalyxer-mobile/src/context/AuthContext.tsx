@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiLogin, apiRegister, setAuthToken } from "../services/api";
-import { BASE_URL, OTP_URL } from "../config";
+import { setAuthToken } from "../services/api";
+import { BASE_URL } from "../config";
 
 type User = { id?: number; phone_number?: string, username?: string, is_verified?: boolean } | null;
 type AuthContextType = {
@@ -9,6 +9,7 @@ type AuthContextType = {
   user: User;
   loading: boolean;
   signInWithOTP: (phone_number: string, otp_code: string) => Promise<void>;
+  signInWithPassword: (phone: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -37,8 +38,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  const handleAuthSuccess = async (data: any) => {
+    const t = data.token;
+    const u = data.user ?? null;
+
+    setToken(t);
+    setUser(u);
+    setAuthToken(t);
+    await AsyncStorage.setItem("token", t);
+    if (u) await AsyncStorage.setItem("user", JSON.stringify(u));
+  };
+
   const signInWithOTP = async (phone_number: string, otp_code: string) => {
-    const response = await fetch(`${OTP_URL}/auth/verify-otp`, {
+    // We can use the api.ts function now, but keep using fetch for continuity if preferred.
+    // Let's switch to the fetch from api.ts wrapper inside the component or here. 
+    // Actually, let's keep the existing logic but route it correctly.
+    // The previous implementation used fetch directly to OTP_URL. 
+    // Now verify-otp is on BASE_URL same as others.
+
+    // NOTE: Previous implementation used OTP_URL to verify. backend auth router has verify-otp.
+    // If backend is single instance now, we should use BASE_URL.
+    // Assuming new backend router handles it.
+
+    // Using direct fetch to match existing pattern but fixing URL to BASE_URL if needed
+    // The auth router calls are all on BASE_URL in api.ts.
+    // Let's use the api functions for consistency if possible, but for minimal diff:
+
+    const response = await fetch(`${BASE_URL}/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone_number, otp_code })
@@ -50,14 +76,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const data = await response.json();
-    const t = data.token;
-    const u = data.user ?? null;
+    await handleAuthSuccess(data);
+  };
 
-    setToken(t);
-    setUser(u);
-    setAuthToken(t);
-    await AsyncStorage.setItem("token", t);
-    if (u) await AsyncStorage.setItem("user", JSON.stringify(u));
+  const signInWithPassword = async (phone: string, pass: string) => {
+    const response = await fetch(`${BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone_number: phone, password: pass })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Login failed");
+    }
+
+    const data = await response.json();
+    await handleAuthSuccess(data);
   };
 
   const signOut = async () => {
@@ -69,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, signInWithOTP, signOut }}>
+    <AuthContext.Provider value={{ token, user, loading, signInWithOTP, signInWithPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );

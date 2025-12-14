@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-import { getTrashMessages, restoreMessage, permanentDeleteMessage } from '../src/services/api';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, Alert, Pressable, RefreshControl, Platform } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { getTrashMessages, restoreMessage, permanentDeleteMessage, emptyTrash } from '../src/services/api';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, shadows } from '../src/theme/colors';
 
-type Message = {
+type TrashMessage = {
     id: number;
     content: string;
     group_id: number;
@@ -12,52 +13,84 @@ type Message = {
     created_at: string;
     deleted_at: string;
     groupName?: string;
+    priority_level?: string;
+    deadline_extracted?: string;
 };
 
 export default function Trash() {
     const router = useRouter();
-    const { token } = useAuth();
-    const [trashMessages, setTrashMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<TrashMessage[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
-        if (!token) {
-            setError('Authentication required. Please log in.');
-            setLoading(false);
-            return;
-        }
-        fetchTrashMessages();
-    }, [token]);
+    useFocusEffect(
+        React.useCallback(() => {
+            fetchTrashMessages();
+        }, [])
+    );
 
-    const fetchTrashMessages = async () => {
+    const fetchTrashMessages = async (silent = false) => {
         try {
-            setError(null);
-            setLoading(true);
+            if (!silent) setLoading(true);
             const data = await getTrashMessages();
-            setTrashMessages(data);
+            setMessages(data);
         } catch (err) {
-            console.error('Error fetching trash messages:', err);
-            setError('Failed to fetch trash messages');
+            console.error('Error fetching trash:', err);
+            Alert.alert('Error', 'Failed to load trash bin');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
-    const handleRestoreMessage = async (messageId: number) => {
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await fetchTrashMessages(true);
+        setRefreshing(false);
+    };
+
+    const handleRestore = async (messageId: number) => {
+        try {
+            await restoreMessage(messageId);
+            Alert.alert('Success', 'Message restored successfully');
+            await fetchTrashMessages(true);
+        } catch (err) {
+            console.error('Error restoring message:', err);
+            Alert.alert('Error', 'Failed to restore message');
+        }
+    };
+
+    const handlePermanentDelete = async (messageId: number) => {
+        // WEB SUPPORT: Use window.confirm for web
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm('This message will be deleted forever. Are you sure?');
+            if (!confirmed) return;
+
+            try {
+                await permanentDeleteMessage(messageId);
+                await fetchTrashMessages(true);
+            } catch (err) {
+                console.error('Error deleting message:', err);
+                window.alert('Error: Failed to delete message');
+            }
+            return;
+        }
+
+        // NATIVE SUPPORT: Use React Native Alert
         Alert.alert(
-            'Restore Message',
-            'Are you sure you want to restore this message?',
+            'Delete Permanently',
+            'This message will be deleted forever. Are you sure?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Restore',
+                    text: 'Delete',
+                    style: 'destructive',
                     onPress: async () => {
                         try {
-                            await restoreMessage(messageId);
-                            await fetchTrashMessages();
-                        } catch (err: any) {
-                            Alert.alert('Error', 'Failed to restore message');
+                            await permanentDeleteMessage(messageId);
+                            await fetchTrashMessages(true);
+                        } catch (err) {
+                            console.error('Error deleting message:', err);
+                            Alert.alert('Error', 'Failed to delete message');
                         }
                     },
                 },
@@ -65,21 +98,42 @@ export default function Trash() {
         );
     };
 
-    const handlePermanentDelete = async (messageId: number) => {
+    const handleEmptyTrash = () => {
+        // WEB SUPPORT: Use window.confirm for web
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm('All messages in trash will be permanently deleted. Are you sure?');
+            if (!confirmed) return;
+
+            (async () => {
+                try {
+                    await emptyTrash();
+                    await fetchTrashMessages(true);
+                    window.alert('Success: Trash emptied successfully');
+                } catch (err) {
+                    console.error('Error emptying trash:', err);
+                    window.alert('Error: Failed to empty trash');
+                }
+            })();
+            return;
+        }
+
+        // NATIVE SUPPORT: Use React Native Alert
         Alert.alert(
-            'Permanent Delete',
-            'This action cannot be undone. Are you sure?',
+            'Empty Trash',
+            'All messages in trash will be permanently deleted. Are you sure?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Delete Permanently',
+                    text: 'Empty Trash',
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            await permanentDeleteMessage(messageId);
-                            await fetchTrashMessages();
-                        } catch (err: any) {
-                            Alert.alert('Error', 'Failed to permanently delete message');
+                            await emptyTrash();
+                            await fetchTrashMessages(true);
+                            Alert.alert('Success', 'Trash emptied successfully');
+                        } catch (err) {
+                            console.error('Error emptying trash:', err);
+                            Alert.alert('Error', 'Failed to empty trash');
                         }
                     },
                 },
@@ -88,19 +142,40 @@ export default function Trash() {
     };
 
     const formatTime = (timestamp: string) => {
-        return new Date(timestamp).toLocaleString();
+        return new Date(timestamp).toLocaleDateString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    const renderMessage = ({ item }: { item: Message }) => (
+    const renderMessage = ({ item }: { item: TrashMessage }) => (
         <View style={styles.messageCard}>
-            <View style={styles.messageHeader}>
-                <Text style={styles.groupName}>Group ID: {item.group_id}</Text>
-                <Text style={styles.timestamp}>Deleted: {formatTime(item.deleted_at)}</Text>
-            </View>
-            <Text style={styles.messageContent}>{item.content}</Text>
-            <View style={styles.buttonRow}>
-                <Button title="Restore" onPress={() => handleRestoreMessage(item.id)} color="#4caf50" />
-                <Button title="Delete Permanently" onPress={() => handlePermanentDelete(item.id)} color="#d32f2f" />
+            <View style={[styles.cardIndicator, { backgroundColor: colors.textTertiary }]} />
+            <View style={styles.cardContent}>
+                <View style={styles.cardHeader}>
+                    <View style={styles.groupBadge}>
+                        <Ionicons name="people" size={12} color={colors.textTertiary} />
+                        <Text style={styles.groupName} numberOfLines={1}>Group {item.group_id}</Text>
+                    </View>
+                    <Text style={styles.timestamp}>Deleted: {formatTime(item.deleted_at)}</Text>
+                </View>
+
+                <Text style={styles.messageText} numberOfLines={3}>{item.content}</Text>
+
+                <View style={styles.cardActions}>
+                    <Pressable
+                        style={({ pressed }) => [styles.actionBtn, styles.restoreBtn, pressed && styles.pressed]}
+                        onPress={() => handleRestore(item.id)}
+                    >
+                        <Ionicons name="arrow-undo-outline" size={16} color={colors.success} />
+                        <Text style={[styles.actionText, { color: colors.success }]}>Restore</Text>
+                    </Pressable>
+
+                    <Pressable
+                        style={({ pressed }) => [styles.actionBtn, styles.deleteBtn, pressed && styles.pressed]}
+                        onPress={() => handlePermanentDelete(item.id)}
+                    >
+                        <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        <Text style={[styles.actionText, { color: colors.error }]}>Delete Forever</Text>
+                    </Pressable>
+                </View>
             </View>
         </View>
     );
@@ -108,43 +183,49 @@ export default function Trash() {
     if (loading) {
         return (
             <View style={[styles.container, styles.centered]}>
-                <ActivityIndicator size="large" color="#0066cc" />
+                <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.loadingText}>Loading trash...</Text>
-            </View>
-        );
-    }
-
-    if (error) {
-        return (
-            <View style={[styles.container, styles.centered]}>
-                <Text style={styles.errorText}>{error}</Text>
-                {error.includes('Authentication') && (
-                    <Button title="Go to Login" onPress={() => router.push('/login')} />
-                )}
-                <Button title="Back to Dashboard" onPress={() => router.push('/dashboard')} />
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
+            {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.title}>Trash Bin</Text>
-                <Text style={styles.subtitle}>Deleted messages ({trashMessages.length})</Text>
-                <Button title="Back to Dashboard" onPress={() => router.push('/dashboard')} />
-                <Button title="Refresh" onPress={fetchTrashMessages} />
+                <View style={styles.headerLeft}>
+                    <Pressable style={styles.backBtn} onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                    </Pressable>
+                    <View>
+                        <Text style={styles.title}>Trash Bin</Text>
+                        <Text style={styles.subtitle}>{messages.length} deleted messages</Text>
+                    </View>
+                </View>
+                {messages.length > 0 && (
+                    <Pressable style={styles.emptyTrashBtn} onPress={handleEmptyTrash}>
+                        <Ionicons name="trash" size={18} color={colors.error} />
+                        <Text style={styles.emptyTrashText}>Empty</Text>
+                    </Pressable>
+                )}
             </View>
-            {trashMessages.length === 0 ? (
-                <View style={styles.centered}>
-                    <Text style={styles.emptyText}>No messages in trash</Text>
-                    <Button title="Back to Dashboard" onPress={() => router.push('/dashboard')} />
+
+            {/* Content */}
+            {messages.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <Ionicons name="trash-bin-outline" size={64} color={colors.textTertiary} />
+                    <Text style={styles.emptyTitle}>Trash is Empty</Text>
+                    <Text style={styles.emptyDesc}>Deleted messages will appear here</Text>
                 </View>
             ) : (
                 <FlatList
-                    data={trashMessages}
-                    keyExtractor={(item) => item.id.toString()}
+                    data={messages}
                     renderItem={renderMessage}
-                    style={styles.messagesList}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.list}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+                    }
                 />
             )}
         </View>
@@ -152,30 +233,152 @@ export default function Trash() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 16 },
-    centered: { justifyContent: 'center', alignItems: 'center', flex: 1 },
-    header: { marginBottom: 16 },
-    title: { fontSize: 22, fontWeight: '600', marginBottom: 8 },
-    subtitle: { fontSize: 16, color: '#666', marginBottom: 8 },
-    buttonRow: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' },
-    messagesList: { flex: 1 },
-    messageCard: {
-        backgroundColor: '#fff',
-        padding: 12,
-        marginBottom: 8,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#ddd',
+    container: {
+        flex: 1,
+        backgroundColor: colors.background,
     },
-    messageHeader: {
+    centered: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: colors.surface,
+        ...shadows.sm,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    backBtn: {
+        padding: 8,
+    },
+    title: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: colors.textPrimary,
+    },
+    subtitle: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        marginTop: 2,
+    },
+    emptyTrashBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: '#FEE',
+    },
+    emptyTrashText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.error,
+    },
+    list: {
+        padding: 16,
+        gap: 12,
+    },
+    messageCard: {
+        flexDirection: 'row',
+        backgroundColor: colors.surface,
+        borderRadius: 12,
+        overflow: 'hidden',
+        ...shadows.md,
+    },
+    cardIndicator: {
+        width: 4,
+    },
+    cardContent: {
+        flex: 1,
+        padding: 14,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    groupBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: colors.surfaceHighlight,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        maxWidth: '60%',
+    },
+    groupName: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    timestamp: {
+        fontSize: 11,
+        color: colors.textTertiary,
+    },
+    messageText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        lineHeight: 20,
+        marginBottom: 12,
+    },
+    cardActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    restoreBtn: {
+        borderColor: colors.success,
+        backgroundColor: '#F0FDF4',
+    },
+    deleteBtn: {
+        borderColor: colors.error,
+        backgroundColor: '#FEF2F2',
+    },
+    actionText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    pressed: {
+        opacity: 0.7,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 14,
+        color: colors.textSecondary,
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 32,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginTop: 16,
         marginBottom: 8,
     },
-    groupName: { fontSize: 14, fontWeight: '500', color: '#0066cc' },
-    timestamp: { fontSize: 12, color: '#999' },
-    messageContent: { fontSize: 14, color: '#333', marginBottom: 8 },
-    loadingText: { marginTop: 16, fontSize: 16, color: '#666' },
-    errorText: { fontSize: 16, color: '#d32f2f', textAlign: 'center', marginBottom: 16 },
-    emptyText: { fontSize: 18, color: '#666', textAlign: 'center', marginBottom: 16 },
+    emptyDesc: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
 });

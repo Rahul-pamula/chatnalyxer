@@ -1,10 +1,18 @@
-from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt
+import pytz
+from passlib.context import CryptContext
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Timezone
+IST = pytz.timezone('Asia/Kolkata')
+
+def get_ist_now():
+    """Get current time in Indian Standard Time"""
+    return datetime.now(IST)
 
 # JWT secret key and algorithm
 # CHANGE THIS IN PRODUCTION
