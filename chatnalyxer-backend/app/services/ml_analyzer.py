@@ -76,13 +76,21 @@ class MLMessageAnalyzer:
             'pls send', 'plz send', 'send me', 'anyone have'
         ]
         
-        # QUESTION PENALTY (-0.3)
-        # Slight penalty for questions, but won't override important keywords
+        # QUESTION PENALTY (-2.5) - Strong penalty for questions
+        # Questions about important topics are NOT the same as announcements
         self.question_indicators = [
             '?',  # Question mark
-            'what', 'when', 'where', 'who', 'why', 'how',
-            'do i', 'do we', 'should i', 'can i',
-            'anyone know', 'does anyone'
+            'what', 'when', 'where', 'who', 'why', 'how', 'which',
+            'anyone know', 'does anyone', 'do you know'
+        ]
+        
+        # DILEMMA/CLARIFICATION PATTERNS (-3.0) - Even stronger penalty
+        # These are clearly questions seeking clarification, not announcements
+        self.dilemma_patterns = [
+            'do i need', 'do we need', 'should i', 'should we',
+            'can i', 'can we', 'may i', 'is it necessary',
+            'do i have to', 'do we have to', 'is it mandatory',
+            'am i supposed', 'are we supposed'
         ]
 
     def calculate_message_score(self, content: str) -> Tuple[float, Dict]:
@@ -127,12 +135,24 @@ class MLMessageAnalyzer:
                 score -= 2.0
                 details['casual_penalty'].append(pattern)
         
-        # QUESTION PENALTY (-0.3, applied once)
-        for indicator in self.question_indicators:
-            if indicator in content_lower:
-                score -= 0.3
-                details['question_penalty'] = -0.3
+        # DILEMMA PENALTY (-3.0, checked first, applied once)
+        # Strong penalty for clarification questions
+        dilemma_found = False
+        for pattern in self.dilemma_patterns:
+            if pattern in content_lower:
+                score -= 3.0
+                details['question_penalty'] = -3.0
+                dilemma_found = True
                 break  # Only apply once
+        
+        # QUESTION PENALTY (-2.5, applied once if no dilemma found)
+        # General questions still get penalty but less than dilemmas
+        if not dilemma_found:
+            for indicator in self.question_indicators:
+                if indicator in content_lower:
+                    score -= 2.5
+                    details['question_penalty'] = -2.5
+                    break  # Only apply once
         
         return score, details
     
