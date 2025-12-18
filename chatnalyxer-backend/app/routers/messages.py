@@ -78,8 +78,8 @@ def create_whatsapp_message(
 
     # ✅ Message is important - analyze with ML (keyword-based)
     ml_results = {
-        'priority_level': 'MEDIUM',
-        'urgency_score': 0.5,
+        'priority_level': 'NOT_PRIORITY',
+        'urgency_score': 0.0,
         'deadline_extracted': None,
         'extracted_keywords': '[]',
         'is_priority': 0,
@@ -114,10 +114,9 @@ def create_whatsapp_message(
 
     # Log priority message detection
     if ml_results['is_priority']:
-        print(
-            f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ml_results['priority_level']}, Score: {ml_results['urgency_score']:.2f})")
+        print(f"🔥 [PRIORITY] {payload.content[:50]}... (Score: {ml_results['urgency_score']:.2f})")
     else:
-        print(f"💾 Saved important message: {payload.content[:50]}...")
+        print(f"💾 [NORMAL] {payload.content[:50]}...")
 
     # Gemini AI background task REMOVED - not using Gemini anymore
 
