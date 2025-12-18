@@ -27,6 +27,7 @@ class MLMessageAnalyzer:
             'exam', 'test', 'quiz', 'examination', 'viva',
             # Deadlines and submissions
             'deadline', 'submit', 'submission', 'due date', 'last date',
+            'lab manual', 'record', 'notebook', 'practical',
             # Schedule changes (critical)
             'cancelled', 'canceled', 'cancel', 'postponed', 'preponed',
             'rescheduled', 'reschedule', 'shifted', 'moved',
@@ -48,7 +49,9 @@ class MLMessageAnalyzer:
             # Locations (when mentioned with events)
             'room', 'hall', 'auditorium', 'lab', 'venue',
             # Important events
-            'placement', 'interview', 'briefing'
+            'placement', 'interview', 'briefing',
+            # Student addressing
+            'students', 'everyone', 'all of you', 'need to'
         ]
         
         # URGENCY BOOST (+0.5 each)
@@ -56,7 +59,8 @@ class MLMessageAnalyzer:
         self.urgency_keywords = [
             'today', 'tonight', 'tomorrow',
             'now', 'urgent', 'asap', 'immediate',
-            'starts at', 'starting', 'join now'
+            'starts at', 'starting', 'join now',
+            'before', 'by', 'within', 'till', 'until'
         ]
         
         # CASUAL PENALTY (-2.0 each) - Prevents false positives
