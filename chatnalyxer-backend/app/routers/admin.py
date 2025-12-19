@@ -6,13 +6,18 @@ import os
 
 from ..database import get_db
 from .. import models
-from .whatsapp import whatsapp_statuses, kill_session
+# OLD: from .whatsapp import whatsapp_statuses, kill_session
+# TODO: Update admin dashboard to use Session Manager API
+import requests
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 # Hardcoded admin credentials (should be in env for production, but using env passing for now)
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# Session Manager URL
+SESSION_MANAGER_URL = "http://localhost:3002"
 
 class AdminLogin(BaseModel):
     username: str
@@ -42,25 +47,26 @@ def get_admin_dashboard(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
     user_list = []
     
+    # Get active sessions from Session Manager
+    try:
+        resp = requests.get(f"{SESSION_MANAGER_URL}/sessions/active", timeout=2)
+        active_sessions_data = resp.json() if resp.status_code == 200 else {"sessions": []}
+        active_sessions = {s["user_id"]: s for s in active_sessions_data.get("sessions", [])}
+    except:
+        active_sessions = {}
+    
     active_count = 0
     
     for user in users:
-        uid = str(user.id)
-        # Check if they have an entry in whatsapp_statuses
-        wa_status = whatsapp_statuses.get(uid)
+        # Check if user has active session
+        session = active_sessions.get(user.id)
         
-        is_active = False
-        status_msg = "Offline"
-        pid = None
+        is_active = user.whatsapp_connected
+        status_msg = "Connected" if is_active else "Offline"
+        pid = session.get("pid") if session else None
         
-        if wa_status:
-            # Consider active if 'ready' is true OR if there is a running PID
-            if wa_status.get('ready') or wa_status.get('pid'):
-                is_active = True
-                active_count += 1
-            
-            status_msg = wa_status.get('message', 'Offline')
-            pid = wa_status.get('pid')
+        if is_active:
+            active_count += 1
             
         user_list.append(UserStatus(
             user_id=user.id,
@@ -80,23 +86,30 @@ def get_admin_dashboard(db: Session = Depends(get_db)):
     }
 
 @router.post("/stop-user/{user_id}")
-def admin_stop_user(user_id: int):
+def admin_stop_user(user_id: int, db: Session = Depends(get_db)):
     """
     Admin endpoint to remotely kill a user's WhatsApp session
     """
-    str_uid = str(user_id)
-    success = kill_session(str_uid)
-    
-    if success:
-        return {"message": f"Successfully stopped session for user {user_id}"}
-    else:
-        # If it failed, it might be because it wasn't running, but kill_session handles that gracefully mostly.
-        # If it returns False, it's a critical error.
-        raise HTTPException(status_code=500, detail="Failed to stop user session")
+    try:
+        # Call Session Manager to stop user session
+        resp = requests.post(f"{SESSION_MANAGER_URL}/sessions/stop/{user_id}", timeout=5)
+        
+        if resp.status_code == 200:
+            # Update database
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            if user:
+                user.whatsapp_connected = False
+                user.whatsapp_session_port = None
+                db.commit()
+            
+            return {"message": f"Successfully stopped session for user {user_id}"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to stop session")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- OTP Service Management Endpoints ---
 # These endpoints allow the Admin Dashboard to manage the dedicated OTP Sender WhatsApp
-import requests
 from ..services.whatsapp_service import OTP_SERVICE_URL
 
 @router.get("/otp/status")
@@ -124,3 +137,134 @@ def stop_otp_service_connection():
         return {"message": "Disconnected"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# NEW: Enhanced Admin Dashboard Endpoints
+# ============================================
+
+@router.get("/sessions/active")
+def get_active_sessions(db: Session = Depends(get_db)):
+    """Get all active user WhatsApp sessions with detailed information"""
+    try:
+        response = requests.get(f"{SESSION_MANAGER_URL}/sessions/active", timeout=5)
+        
+        if response.status_code != 200:
+            return {"sessions": [], "count": 0}
+        
+        sessions_data = response.json()
+        sessions = sessions_data.get("sessions", [])
+        
+        # Enrich with user information
+        enriched_sessions = []
+        for session in sessions:
+            user = db.query(models.User).filter(models.User.id == session["user_id"]).first()
+            if user:
+                enriched_sessions.append({
+                    "user_id": session["user_id"],
+                    "username": user.username,
+                    "phone_number": user.phone_number,
+                    "port": session["port"],
+                    "status": session.get("status", "unknown"),
+                    "uptime": session.get("uptime", "N/A"),
+                    "started_at": session.get("started_at", "N/A"),
+                    "pid": session.get("pid")
+                })
+        
+        return {"sessions": enriched_sessions, "count": len(enriched_sessions)}
+    except requests.exceptions.RequestException:
+        return {"sessions": [], "count": 0, "error": "Session Manager unavailable"}
+
+@router.get("/health")
+def get_system_health(db: Session = Depends(get_db)):
+    """Get health status of all services"""
+    health_status = {
+        "backend": {"status": "running", "port": 8000},
+        "session_manager": {"status": "unknown", "port": 3002, "active_sessions": 0},
+        "admin_otp": {"status": "unknown", "port": 3001},
+        "database": {"status": "unknown", "total_users": 0, "total_messages": 0}
+    }
+    
+    # Check Session Manager
+    try:
+        response = requests.get(f"{SESSION_MANAGER_URL}/sessions/active", timeout=2)
+        if response.status_code == 200:
+            data = response.json()
+            health_status["session_manager"]["status"] = "running"
+            health_status["session_manager"]["active_sessions"] = data.get("count", 0)
+    except:
+        health_status["session_manager"]["status"] = "stopped"
+    
+    # Check Admin OTP
+    try:
+        response = requests.get("http://localhost:3001/health", timeout=2)
+        health_status["admin_otp"]["status"] = "running" if response.status_code == 200 else "stopped"
+    except:
+        health_status["admin_otp"]["status"] = "stopped"
+    
+    # Check Database
+    try:
+        health_status["database"]["status"] = "connected"
+        health_status["database"]["total_users"] = db.query(models.User).count()
+        health_status["database"]["total_messages"] = db.query(models.Message).count()
+    except:
+        health_status["database"]["status"] = "disconnected"
+    
+    return health_status
+
+@router.post("/whatsapp/connect")
+def admin_whatsapp_connect(db: Session = Depends(get_db)):
+    """Start WhatsApp session for admin"""
+    admin_user = db.query(models.User).filter(models.User.id == 1).first()
+    if not admin_user:
+        raise HTTPException(404, "Admin user not found")
+    
+    if admin_user.whatsapp_connected:
+        return {"success": True, "message": "Already connected", "port": admin_user.whatsapp_session_port}
+    
+    response = requests.post(f"{SESSION_MANAGER_URL}/sessions/start/1", json={}, timeout=10)
+    if response.status_code != 200:
+        raise HTTPException(500, "Failed to start admin session")
+    
+    data = response.json()
+    admin_user.whatsapp_connected = True
+    admin_user.whatsapp_session_port = data.get("port")
+    db.commit()
+    
+    return {"success": True, "message": "Admin session started", "port": data.get("port")}
+
+@router.get("/whatsapp/status")
+def admin_whatsapp_status(db: Session = Depends(get_db)):
+    """Get admin WhatsApp status"""
+    admin_user = db.query(models.User).filter(models.User.id == 1).first()
+    if not admin_user or not admin_user.whatsapp_connected:
+        return {"connected": False}
+    
+    response = requests.get(f"{SESSION_MANAGER_URL}/sessions/status/1", timeout=5)
+    if response.status_code == 200:
+        data = response.json()
+        return {
+            "connected": data.get("active", False),
+            "port": admin_user.whatsapp_session_port,
+            "phone_number": admin_user.phone_number,
+            "qr_code": data.get("qr_code"),
+            "ready": data.get("ready", False)
+        }
+    return {"connected": False}
+
+@router.post("/whatsapp/disconnect")
+def admin_whatsapp_disconnect(db: Session = Depends(get_db)):
+    """Disconnect admin WhatsApp"""
+    admin_user = db.query(models.User).filter(models.User.id == 1).first()
+    if not admin_user:
+        raise HTTPException(404, "Admin user not found")
+    
+    try:
+        requests.post(f"{SESSION_MANAGER_URL}/sessions/stop/1", timeout=5)
+    except:
+        pass
+    
+    admin_user.whatsapp_connected = False
+    admin_user.whatsapp_session_port = None
+    db.commit()
+    
+    return {"success": True, "message": "Admin WhatsApp disconnected"}

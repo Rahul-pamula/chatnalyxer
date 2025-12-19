@@ -300,5 +300,63 @@ class MLMessageAnalyzer:
         return None
 
 
+    def get_analytics_data(self, messages: List[Dict]) -> Dict:
+        """
+        Aggregate analytics from a list of message dicts
+        """
+        total = len(messages)
+        if total == 0:
+            return {
+                'total_messages': 0,
+                'priority_distribution': {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0},
+                'urgency_score_avg': 0.0,
+                'messages_with_deadlines': 0,
+                'top_keywords': []
+            }
+            
+        # Initialize counters
+        dist = {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
+        total_urgency = 0.0
+        deadlines_count = 0
+        keyword_counts = {}
+        
+        for msg in messages:
+            # Priority
+            p = msg.get('priority_level', 'LOW')
+            if p not in dist: p = 'LOW'
+            dist[p] += 1
+            
+            # Urgency
+            total_urgency += float(msg.get('urgency_score', 0) or 0)
+            
+            # Deadlines
+            if msg.get('deadline_extracted'):
+                deadlines_count += 1
+                
+            # Keywords
+            try:
+                kws = msg.get('extracted_keywords')
+                if isinstance(kws, str):
+                    kws_list = json.loads(kws)
+                else:
+                    kws_list = kws or []
+                    
+                for kw in kws_list:
+                    kw_lower = kw.lower()
+                    keyword_counts[kw_lower] = keyword_counts.get(kw_lower, 0) + 1
+            except:
+                pass
+                
+        # Calculate Top Keywords
+        sorted_kws = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        return {
+            'total_messages': total,
+            'priority_distribution': dist,
+            'urgency_score_avg': round(total_urgency / total, 2),
+            'messages_with_deadlines': deadlines_count,
+            'top_keywords': sorted_kws
+        }
+
 # Global analyzer instance
 analyzer = MLMessageAnalyzer()

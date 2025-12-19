@@ -1,30 +1,30 @@
 export const colors = {
-    // Brand Colors
-    primary: '#4F46E5', // Indigo 600
-    primaryDark: '#4338CA', // Indigo 700
-    primaryLight: '#818CF8', // Indigo 400
-    secondary: '#64748B', // Slate 500
-    accent: '#06B6D4', // Cyan 500
+    // Brand Colors - Instagram-inspired
+    primary: '#6366f1', // Indigo 500
+    primaryDark: '#4f46e5', // Indigo 600
+    primaryLight: '#818cf8', // Indigo 400
+    secondary: '#8b5cf6', // Purple 500
+    accent: '#06b6d4', // Cyan 500
 
     // Semantic Colors
-    success: '#10B981', // Emerald 500
-    warning: '#F59E0B', // Amber 500
-    error: '#EF4444', // Red 500
-    info: '#3B82F6', // Blue 500
+    success: '#10b981', // Emerald 500
+    warning: '#f59e0b', // Amber 500
+    error: '#ef4444', // Red 500
+    info: '#3b82f6', // Blue 500
 
-    // Text Colors
-    textPrimary: '#0F172A', // Slate 900
-    textSecondary: '#475569', // Slate 600
-    textTertiary: '#94A3B8', // Slate 400
-    textInverse: '#FFFFFF',
+    // Text Colors - Light Mode
+    textPrimary: '#0f172a', // Slate 900
+    textSecondary: '#64748b', // Slate 500
+    textTertiary: '#94a3b8', // Slate 400
+    textInverse: '#ffffff', // White
 
-    // Backgrounds
-    background: '#F8FAFC', // Slate 50
-    surface: '#FFFFFF',
-    surfaceHighlight: '#F1F5F9', // Slate 100
+    // Backgrounds - Light Mode
+    background: '#f8fafc', // Slate 50
+    surface: '#ffffff', // White
+    surfaceHighlight: '#f1f5f9', // Slate 100
 
-    // Borders
-    border: '#E2E8F0', // Slate 200
+    // Borders - Light Mode
+    border: '#e2e8f0', // Slate 200
 };
 
 export const shadows = {

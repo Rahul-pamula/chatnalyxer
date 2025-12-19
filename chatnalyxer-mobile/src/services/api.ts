@@ -17,6 +17,29 @@ export function setAuthToken(token?: string | null) {
   }
 }
 
+// Global 401 error handler to prevent infinite loops
+client.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      console.log('🔒 Authentication error - clearing token');
+
+      // Clear token from axios
+      delete client.defaults.headers.common["Authorization"];
+
+      // Clear from AsyncStorage
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      await AsyncStorage.default.removeItem('token');
+      await AsyncStorage.default.removeItem('user');
+
+      // Note: We can't redirect here directly, but the app will detect
+      // the missing token and redirect to login
+    }
+    return Promise.reject(error);
+  }
+);
+
 // --- Auth ---
 // --- Auth ---
 export async function loginWithPassword(phone: string, password: string) {
@@ -89,6 +112,15 @@ export async function getPriorityMessages(groupId?: number) {
   return data;
 }
 
+export async function getAllMessages(groupId?: number) {
+  let url = '/messages/public';
+  if (groupId) {
+    url += `?group_id=${groupId}`;
+  }
+  const { data } = await client.get(url);
+  return data;
+}
+
 // --- Messages ---
 export async function deleteMessage(messageId: number) {
   const { data } = await client.delete(`/messages/${messageId}`);
@@ -131,8 +163,8 @@ export async function getDashboard() {
 }
 
 // --- WhatsApp ---
-export async function startWhatsApp() {
-  const { data } = await client.post("/whatsapp/start");
+export async function connectWhatsApp() {
+  const { data } = await client.post("/whatsapp/connect");
   return data;
 }
 
@@ -141,7 +173,33 @@ export async function getWhatsAppStatus() {
   return data;
 }
 
-export async function stopWhatsApp() {
-  const { data } = await client.post("/whatsapp/stop");
+export async function disconnectWhatsApp() {
+  const { data } = await client.post("/whatsapp/disconnect");
+  return data;
+}
+
+// Legacy aliases for backward compatibility
+export const startWhatsApp = connectWhatsApp;
+export const stopWhatsApp = disconnectWhatsApp;
+
+// --- Email ---
+export async function linkEmail(email: string, password: string, provider: string = "gmail") {
+  const { data } = await client.post("/email/link", {
+    email,
+    password,
+    provider
+  });
+  return data;
+}
+// --- AI Chat ---
+export async function chatWithAI(message: string) {
+  const { data } = await client.post("/ai/chat", {
+    message
+  });
+  return data;
+}
+
+export async function toggleMessagePriority(messageId: number) {
+  const { data } = await client.post(`/messages/${messageId}/toggle-priority`);
   return data;
 }

@@ -31,11 +31,6 @@
       ],
       "edgeToEdgeEnabled": true
     },
-    "extra": {
-      "eas": {
-        "projectId": "your-project-id-here"
-      }
-    },
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -55,6 +50,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b6d7e0b5-b04b-4acb-821b-4059a54e214b"
+      }
+    },
+    "owner": "rahul_pamula"
   }
 }

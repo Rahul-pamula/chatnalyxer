@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert, ScrollView, Platform } from "react-native";
 import { useAuth } from "../src/context/AuthContext";
 import { registerAndRequestOTP } from "../src/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, shadows } from "../src/theme/colors";
+import { BASE_URL } from "../src/config";
 
 export default function Signup() {
     const router = useRouter();
@@ -98,8 +99,35 @@ export default function Signup() {
             if (otp.length !== 6) return setErr("Please enter a valid 6-digit OTP");
 
             setLoading(true);
-            await signInWithOTP(`+91${phoneNumber}`, otp);
-            router.replace("/setup"); // Or dashboard
+
+            // Verify OTP without logging in
+            const response = await fetch(`${BASE_URL}/auth/verify-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone_number: `+91${phoneNumber}`,
+                    otp_code: otp
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'OTP verification failed');
+            }
+
+            // Success! Redirect to login page
+            if (Platform.OS === 'web') {
+                // For web, use window.alert and navigate directly
+                window.alert('Account Created! 🎉\n\nYour account has been created successfully. Please sign in to continue.');
+                router.replace("/login");
+            } else {
+                // For mobile, use Alert.alert
+                Alert.alert(
+                    "Account Created! 🎉",
+                    "Your account has been created successfully. Please sign in to continue.",
+                    [{ text: "OK", onPress: () => router.replace("/login") }]
+                );
+            }
 
         } catch (error: any) {
             setErr(error.message || "Invalid OTP. Try again.");

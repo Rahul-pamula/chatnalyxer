@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Button, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
+import { Text, View, ActivityIndicator, Alert, Linking, Platform, ScrollView, TouchableOpacity, Modal, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { BASE_URL } from '../src/config';
+import { setupStyles as styles } from './setup-styles';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../src/theme/colors';
+import PairingCodeDisplay from './components/PairingCodeDisplay';
 
 export default function SetupScreen() {
     const router = useRouter();
@@ -18,12 +22,20 @@ export default function SetupScreen() {
     const [lastError, setLastError] = useState<string | null>(null);
     const [isExpired, setIsExpired] = useState(false);
     const [isPolling, setIsPolling] = useState(true);
+    const [countdown, setCountdown] = useState(60);
+    const [isMounted, setIsMounted] = useState(false);
+    const [linkMethod, setLinkMethod] = useState<'qr' | 'pairing' | null>(null); // Toggle between QR and pairing code
+    const [showPairingModal, setShowPairingModal] = useState(false);
 
     useEffect(() => {
-        if (!token) {
+        setIsMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (isMounted && !token) {
             router.replace('/login');
         }
-    }, [token]);
+    }, [token, isMounted]);
 
     useEffect(() => {
         if (token) {
@@ -34,16 +46,17 @@ export default function SetupScreen() {
     useEffect(() => {
         if (isWhatsAppConnected && !previousConnectionStatus) {
             Alert.alert(
-                'Connection Established!',
-                'Your WhatsApp account has been successfully connected. You can now select groups to analyze.',
-                [{ text: 'OK' }]
+                'Connection Established! 🎉',
+                'Your WhatsApp account is connected. You can now select groups to analyze.',
+                [{ text: 'Great!', onPress: () => router.push('/groups') }]
             );
         }
         setPreviousConnectionStatus(isWhatsAppConnected);
     }, [isWhatsAppConnected]);
 
+    // Polling for Status
     useEffect(() => {
-        if (!isPolling) return; // Don't poll when stopped
+        if (!isPolling) return;
 
         const interval = setInterval(async () => {
             try {
@@ -55,36 +68,54 @@ export default function SetupScreen() {
                 });
                 if (response.ok) {
                     const data = await response.json();
+
+                    // DEBUG: Log what we're receiving
+                    console.log('📊 WhatsApp Status:', {
+                        has_qr_code: !!data.qr_code,
+                        qr_length: data.qr_code?.length || 0,
+                        ready: data.ready,
+                        expired: data.expired,
+                        message: data.message,
+                        linkMethod: linkMethod,
+                        isExpired: isExpired
+                    });
+
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
                     setQrCode(data.qr_code || null);
 
-                    // Only update pairing code if it's present, don't overwrite with null during active setup
                     if (data.pairing_code) {
                         setPairingCode(data.pairing_code);
                     }
 
-                    // Check for expiration
                     if (data.expired === true) {
                         setIsExpired(true);
                         setQrCode(null);
                         setPairingCode(null);
-                        setIsPolling(false); // Stop polling when expired
-                        console.log('QR/Pairing code expired - stopped polling');
+                        setIsPolling(false);
                     }
-
-                    setLastError(null); // Clear error on success
-                } else {
-                    setLastError(`Status: ${response.status}`);
+                    setLastError(null);
                 }
             } catch (error: any) {
-                console.log('Failed to fetch WhatsApp status:', error);
-                setLastError(error.message || 'Fetch failed');
+                console.log("Polling error:", error);
             }
-        }, 5000); // Poll every 5 seconds (Avoid Ngrok Rate Limit)
+        }, 3000);
 
         return () => clearInterval(interval);
     }, [token, isPolling]);
+
+    // Countdown Timer
+    useEffect(() => {
+        let timer: any;
+        if ((qrCode || pairingCode) && !isExpired && countdown > 0) {
+            timer = setInterval(() => {
+                setCountdown((prev) => prev - 1);
+            }, 1000);
+        } else if (countdown === 0) {
+            setIsExpired(true);
+        }
+        return () => clearInterval(timer);
+    }, [qrCode, pairingCode, isExpired, countdown]);
 
     const checkWhatsAppConnection = async () => {
         setIsCheckingConnection(true);
@@ -97,25 +128,11 @@ export default function SetupScreen() {
             });
             if (response.ok) {
                 const data = await response.json();
-                if (data.message || data.ready) {
-                    setWhatsappStatusMessage(data.message || '');
-                    setIsWhatsAppConnected(data.ready || false);
-                    setQrCode(data.qr_code || null);
-                    setPairingCode(data.pairing_code || null);
-                } else {
-                    setWhatsappStatusMessage('WhatsApp not linked');
-                    setIsWhatsAppConnected(false);
-                    setQrCode(null);
-                    setPairingCode(null);
-                }
-            } else {
-                setIsWhatsAppConnected(false);
-                setWhatsappStatusMessage('WhatsApp not linked');
+                setIsWhatsAppConnected(data.ready || false);
+                setWhatsappStatusMessage(data.message || '');
             }
         } catch (error) {
-            console.log('WhatsApp connection check failed:', error);
-            setIsWhatsAppConnected(false);
-            setWhatsappStatusMessage('WhatsApp not linked');
+            console.log('Connection check failed:', error);
         } finally {
             setIsCheckingConnection(false);
         }
@@ -123,404 +140,285 @@ export default function SetupScreen() {
 
     const handleGenerateQR = async () => {
         try {
-            // Reset states for new attempt
             setIsExpired(false);
             setQrCode(null);
             setPairingCode(null);
-            setIsPolling(true); // Resume polling
+            setIsPolling(true);
+            setCountdown(60);
             setWhatsappStatusMessage('Initializing...');
 
-            const response = await fetch(`${BASE_URL}/whatsapp/start`, {
+            // NEW: Use /whatsapp/connect endpoint
+            const response = await fetch(`${BASE_URL}/whatsapp/connect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    // Don't send phone number - let it generate QR code
-                }),
             });
 
             if (!response.ok) {
                 throw new Error('Failed to start WhatsApp');
             }
-
-            Alert.alert('Generating QR/Pairing Code', 'Please wait for QR code or pairing code to appear...');
         } catch (error) {
             console.error('Error starting WhatsApp:', error);
-            Alert.alert('Error', 'Failed to generate QR code');
+            Alert.alert('Error', 'Failed to generate connection code');
         }
     };
-
-    const handleContinueToGroups = () => {
-        // After WhatsApp connection, navigate to groups page where user can see their groups
-        router.push('/groups');
-    };
-
-    const handleSkipSetup = () => {
-        router.push('/dashboard');
-    };
-
-    if (isCheckingConnection) {
-        return (
-            <View style={[styles.container, styles.centered]}>
-                <ActivityIndicator size="large" color="#0066cc" />
-                <Text style={styles.loadingText}>Checking WhatsApp connection...</Text>
-            </View>
-        );
-    }
 
     const handleLogout = async () => {
-        console.log("DEBUG: handleLogout called");
-
-        // WEB SUPPORT: Alert.alert is often buggy on web. Use native confirm.
-        if (Platform.OS === 'web') {
-            const confirmed = window.confirm('Are you sure you want to disconnect? This will stop message analysis.');
-            if (!confirmed) {
-                console.log("DEBUG: Logout cancelled (Web)");
-                return;
-            }
-            // Proceed to disconnect
-            await performLogout();
-            return;
-        }
-
-        // NATIVE SUPPORT: Use React Native Alert
-        Alert.alert(
-            'Disconnect WhatsApp',
-            'Are you sure you want to disconnect? This will stop message analysis.',
-            [
-                { text: 'Cancel', style: 'cancel', onPress: () => console.log("DEBUG: Logout cancelled") },
-                {
-                    text: 'Disconnect',
-                    style: 'destructive',
-                    onPress: performLogout
-                }
-            ]
-        );
-    };
-
-    const performLogout = async () => {
-        console.log("DEBUG: Disconnect confirmed, sending request...");
-        try {
-            setWhatsappStatusMessage('Disconnecting...');
-            console.log(`DEBUG: Sending POST to ${BASE_URL}/whatsapp/stop`);
-
-            const response = await fetch(`${BASE_URL}/whatsapp/stop`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token?.trim()}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            console.log("DEBUG: Logout response status:", response.status);
-
-            if (response.ok) {
-                console.log("DEBUG: Logout successful, clearing state");
+        const confirmLogout = async () => {
+            try {
+                setWhatsappStatusMessage('Disconnecting...');
+                // NEW: Use /whatsapp/disconnect endpoint
+                await fetch(`${BASE_URL}/whatsapp/disconnect`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token?.trim()}` }
+                });
                 setIsWhatsAppConnected(false);
                 setWhatsappStatusMessage('Disconnected');
                 setPreviousConnectionStatus(false);
                 setQrCode(null);
                 setPairingCode(null);
-                if (Platform.OS === 'web') {
-                    window.alert('Disconnected successfully');
-                }
-            } else {
-                console.log("DEBUG: Logout failed with status:", response.status);
-                Alert.alert('Error', 'Failed to disconnect properly');
+            } catch (error) {
+                Alert.alert('Error', 'Failed to disconnect');
             }
-        } catch (error) {
-            console.error("DEBUG: Logout network error:", error);
-            Alert.alert('Error', 'Network error during logout');
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm('Disconnect WhatsApp? This stops message analysis.')) {
+                await confirmLogout();
+            }
+        } else {
+            Alert.alert(
+                'Disconnect WhatsApp',
+                'Are you sure? This will stop message analysis.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Disconnect', style: 'destructive', onPress: confirmLogout }
+                ]
+            );
         }
     };
 
+    const handleEmailClick = () => {
+        Alert.alert(
+            "Coming Soon 🚀",
+            "Email integration is under development! We're actively building this feature to help you analyze emails alongside WhatsApp.",
+            [{ text: "Can't wait!" }]
+        );
+    };
+
+    if (isCheckingConnection) {
+        return (
+            <View style={[styles.container, styles.centered]}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.loadingText}>Connecting to server...</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>WhatsApp Setup</Text>
-                <Text style={styles.subtitle}>
-                    Connect your WhatsApp account to start analyzing messages
-                </Text>
-            </View>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
 
-            <View style={styles.content}>
-                {isWhatsAppConnected ? (
-                    <View style={styles.successContainer}>
-                        <Text style={styles.successTitle}>✅ WhatsApp Connected!</Text>
-                        <Text style={styles.successText}>
-                            {whatsappStatusMessage || 'Your WhatsApp account is successfully linked. You can now select groups to analyze.'}
+                {/* Header */}
+                <View style={styles.header}>
+                    {/* Profile Icon - Top Right */}
+                    <TouchableOpacity
+                        onPress={() => router.push('/profile')}
+                        style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            zIndex: 10,
+                            padding: 8
+                        }}
+                    >
+                        <Ionicons name="person-circle-outline" size={32} color={colors.primary} />
+                    </TouchableOpacity>
+
+                    <View style={{ paddingRight: 50 }}>
+                        <Text style={styles.title}>Chatnalyxer Hub</Text>
+                        <Text style={styles.subtitle}>
+                            Central command for your academic AI assistants.
                         </Text>
-                        <View style={styles.buttonContainer}>
-                            <Button
-                                title="Select Groups"
-                                onPress={handleContinueToGroups}
-                                color="#4CAF50"
-                            />
-                            <View style={styles.buttonSpacing} />
-                            <Button
-                                title="Logout from WhatsApp"
-                                onPress={handleLogout}
-                                color="#FF3B30"
-                            />
-                        </View>
                     </View>
-                ) : (
-                    <View style={styles.setupContainer}>
-                        <Text style={styles.instructionTitle}>Connect your WhatsApp</Text>
-                        <Text style={styles.instructionText}>
-                            Click the button below to generate a QR code, then scan it with WhatsApp.
+                </View>
+
+                {/* WhatsApp Section */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
+                        <Text style={styles.cardTitle}>  WhatsApp Integration</Text>
+                    </View>
+
+                    {/* Calendar Quick Access */}
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: colors.primary + '20',
+                            padding: 12,
+                            borderRadius: 8,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginBottom: 16
+                        }}
+                        onPress={() => router.push('/calendar')}
+                    >
+                        <Ionicons name="calendar" size={20} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>
+                            View Calendar & Events
                         </Text>
+                    </TouchableOpacity>
 
-                        {/* Button to Generate QR */}
-                        <View style={styles.buttonContainer}>
-                            <Button
-                                title={isExpired ? "QR Expired - Generate New QR" : qrCode || pairingCode ? "Generate New QR Code" : "Get QR Code"}
-                                onPress={handleGenerateQR}
-                                color={isExpired ? "#FF6B6B" : "#0066cc"}
-                            />
+                    {isWhatsAppConnected ? (
+                        <View>
+                            {/* Status Badge */}
+                            <View style={styles.statusBadge}>
+                                <Text style={styles.statusText}>✅ Connected & Analyzing</Text>
+                            </View>
+                            <Text style={styles.instructionText}>
+                                WhatsApp is live. Click below to view your personalized dashboard.
+                            </Text>
+
+                            <TouchableOpacity
+                                style={[styles.buttonPrimary, { marginBottom: 12 }]}
+                                onPress={() => router.push('/dashboard')}
+                            >
+                                <Text style={styles.buttonTextPrimary}>Open WhatsApp Dashboard</Text>
+                            </TouchableOpacity>
+
+                            <View style={{ flexDirection: 'row', gap: 10 }}>
+                                <TouchableOpacity
+                                    style={[styles.buttonSecondary, { flex: 1 }]}
+                                    onPress={() => router.push('/groups')}
+                                >
+                                    <Text style={styles.buttonTextSecondary}>Manage Groups</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.buttonDestructive, { flex: 1 }]}
+                                    onPress={handleLogout}
+                                >
+                                    <Text style={styles.buttonTextDestructive}>Disconnect</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
+                    ) : (
+                        <View style={styles.whatsappContent}>
+                            <Text style={styles.whatsappDesc}>
+                                Link your WhatsApp to analyze group messages with AI
+                            </Text>
 
-                        {/* Show Expiration Message */}
-                        {isExpired && (
-                            <View style={styles.expiredContainer}>
-                                <Text style={styles.expiredText}>⏰ QR/Pairing Code Expired</Text>
-                                <Text style={styles.expiredSubtext}>Click "Generate New QR" to try again</Text>
-                            </View>
-                        )}
+                            {/* Link Method Selection */}
+                            {!isWhatsAppConnected && !qrCode && !pairingCode && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '600', marginBottom: 12, color: '#333' }}>
+                                        Choose linking method:
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                                        <TouchableOpacity
+                                            style={[styles.methodButton, linkMethod === 'qr' && styles.methodButtonActive]}
+                                            onPress={() => {
+                                                setLinkMethod('qr');
+                                                handleGenerateQR();
+                                            }}
+                                        >
+                                            <Ionicons name="qr-code" size={24} color={linkMethod === 'qr' ? colors.primary : '#666'} />
+                                            <Text style={[styles.methodButtonText, linkMethod === 'qr' && styles.methodButtonTextActive]}>
+                                                QR Code
+                                            </Text>
+                                        </TouchableOpacity>
 
-                        {/* Show Pairing Code (Priority over QR) */}
-                        {pairingCode && !isExpired && (
-                            <View style={styles.codeWrapper}>
-                                <Text style={styles.instructionTitle}>Enter this code in WhatsApp:</Text>
-                                <Text style={styles.pairingCodeText}>{pairingCode}</Text>
-                                <Text style={styles.instructionText}>
-                                    Open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number
-                                </Text>
-                                <Text style={styles.expiryWarning}>⏰ Code expires in 60 seconds</Text>
-                            </View>
-                        )}
-
-                        {/* Fallback for QR (Less likely now) */}
-                        {qrCode && !pairingCode && !isExpired && (
-                            <View style={styles.qrContainer}>
-                                <Text style={styles.instructionTitle}>Scan this QR Code:</Text>
-                                <View style={styles.qrWrapper}>
-                                    <QRCode value={qrCode} size={250} />
+                                        <TouchableOpacity
+                                            style={[styles.methodButton, styles.methodButtonDisabled]}
+                                            disabled={true}
+                                        >
+                                            <View style={styles.methodButtonContent}>
+                                                <Ionicons name="keypad" size={24} color="#999" />
+                                                <Text style={[styles.methodButtonText, { color: '#999' }]}>
+                                                    Pairing Code
+                                                </Text>
+                                                <View style={styles.comingSoonBadgeSmall}>
+                                                    <Text style={styles.comingSoonTextSmall}>Coming Soon</Text>
+                                                </View>
+                                            </View>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
-                                <Text style={styles.expiryWarning}>⏰ QR expires in 60 seconds</Text>
-                            </View>
-                        )}
-                    </View>
-                )}
-            </View>
+                            )}
 
-            <View style={styles.footer}>
-                <Text style={styles.statusMessage}>{whatsappStatusMessage}</Text>
+                            {/* QR Code Display */}
+                            {qrCode && linkMethod === 'qr' && !isExpired && (
+                                <View style={styles.qrContainer}>
+                                    <Text style={{ marginBottom: 10, fontWeight: '600' }}>Scan with WhatsApp:</Text>
+                                    <Image
+                                        source={{ uri: qrCode }}
+                                        style={{ width: 220, height: 220 }}
+                                        resizeMode="contain"
+                                    />
+                                    <Text style={styles.expiryWarning}>QR expires in {countdown}s</Text>
+                                </View>
+                            )}
 
-                {/* Debug Info Section */}
-                <View style={{ padding: 10, backgroundColor: '#eee', borderRadius: 8, marginTop: 10, width: '100%' }}>
-                    <Text style={{ fontSize: 10, color: '#555', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
-                        Debug Info:
-                    </Text>
-                    <Text style={{ fontSize: 10, color: '#333' }}>URL: {BASE_URL}</Text>
-                    <Text style={{ fontSize: 10, color: '#333' }}>Last Poll: {new Date().toLocaleTimeString()}</Text>
-                    <Text style={{ fontSize: 10, color: '#333' }}>QR Length: {qrCode ? qrCode.length : 'null'}</Text>
-                    <Text style={{ fontSize: 10, color: '#333' }}>Pairing Code: {pairingCode || 'null'}</Text>
-                    {lastError && (
-                        <Text style={{ fontSize: 10, color: 'red', fontWeight: 'bold' }}>Error: {lastError}</Text>
+                            {/* Expired State */}
+                            {isExpired && (
+                                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                                    <Text style={{ color: '#e74c3c', fontWeight: 'bold' }}>Connection code expired</Text>
+                                </View>
+                            )}
+
+                            {/* Generate New Code Button */}
+                            {(qrCode || isExpired) && (
+                                <TouchableOpacity
+                                    style={styles.buttonPrimary}
+                                    onPress={handleGenerateQR}
+                                >
+                                    <Text style={styles.buttonTextPrimary}>
+                                        Generate New Code
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     )}
                 </View>
 
-                <View style={styles.buttonContainer}>
-                    <Button
-                        title="Check Connection"
-                        onPress={checkWhatsAppConnection}
-                        color="#2196F3"
-                    />
-                    <Button
-                        title="Skip Setup (Go to Dashboard)"
-                        onPress={handleSkipSetup}
-                        color="#666"
-                    />
+                {/* Pairing Code Modal */}
+                <Modal
+                    visible={showPairingModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowPairingModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <PairingCodeDisplay
+                                onClose={() => setShowPairingModal(false)}
+                                phoneNumber={user?.phone_number}
+                            />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Email Section (Coming Soon) */}
+                <View style={[styles.card, styles.emailSection]}>
+                    <View style={styles.comingSoonBadge}>
+                        <Text style={styles.comingSoonText}>Coming Soon</Text>
+                    </View>
+                    <Text style={styles.emailHeader}>📧 Email Integration</Text>
+                    <Text style={styles.emailDesc}>
+                        Connect your Student Email (Gmail/Outlook) to catch important announcements directly from your inbox.
+                    </Text>
+
+                    <TouchableOpacity
+                        style={[styles.buttonSecondary, { opacity: 0.7 }]}
+                        onPress={handleEmailClick}
+                    >
+                        <Text style={styles.buttonTextSecondary}>Connect Email</Text>
+                    </TouchableOpacity>
                 </View>
-            </View>
-        </View >
+
+            </ScrollView>
+        </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 20,
-    },
-    centered: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        marginBottom: 30,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'center',
-        lineHeight: 22,
-    },
-    content: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    successContainer: {
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#f8fff8',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#4CAF50',
-    },
-    successTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#4CAF50',
-        marginBottom: 10,
-    },
-    successText: {
-        fontSize: 16,
-        color: '#333',
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 20,
-    },
-    setupContainer: {
-        padding: 20,
-        backgroundColor: '#f8f9ff',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#0066cc',
-    },
-    instructionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 15,
-        textAlign: 'center',
-    },
-    instructionText: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 20,
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    qrContainer: {
-        alignItems: 'center',
-        marginTop: 20,
-        padding: 20,
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    qrImageContainer: {
-        marginTop: 15,
-        padding: 15,
-        backgroundColor: '#ffffff',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-    },
-    qrImage: {
-        width: 250,
-        height: 250,
-    },
-    qrWrapper: {
-        padding: 10,
-        backgroundColor: 'white',
-        borderRadius: 10,
-        marginBottom: 20,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    buttonContainer: {
-        gap: 10,
-    },
-    buttonSpacing: {
-        height: 10,
-    },
-    footer: {
-        marginTop: 20,
-        paddingTop: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 16,
-        fontSize: 16,
-        color: '#666',
-    },
-    statusMessage: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 10,
-    },
-    codeWrapper: {
-        padding: 20,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 8,
-        marginVertical: 20,
-        width: '100%',
-        alignItems: 'center',
-    },
-    pairingCodeText: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
-        letterSpacing: 4,
-    },
-    expiredContainer: {
-        marginTop: 20,
-        padding: 15,
-        backgroundColor: '#fff0f0',
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: '#FF6B6B',
-        alignItems: 'center',
-    },
-    expiredText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#d32f2f',
-        marginBottom: 5,
-    },
-    expiredSubtext: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-    },
-    expiryWarning: {
-        marginTop: 10,
-        fontSize: 12,
-        color: '#FF6B6B',
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-});

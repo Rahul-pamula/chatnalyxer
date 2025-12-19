@@ -82,6 +82,7 @@ def verify_otp(
     print(f"DEBUG: Validation result: {is_valid}, Msg: {error_msg}")
     
     if not is_valid:
+        print(f"DEBUG: OTP validation failed: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error_msg
@@ -116,8 +117,12 @@ def verify_otp(
     token = utils.create_access_token(data={"sub": user.username})
     print(f"DEBUG: Token generated for {user.username}")
     
-    return {"token": token, "user": user}
+    # Ensure profile data is loaded
+    if not user.user_profile:
+        db.refresh(user, attribute_names=["user_profile"])
 
+    # Explicitly use from_orm to trigger the custom logic for is_profile_complete
+    return {"token": token, "user": schemas.UserOut.from_orm(user)}
 
 @router.post("/login", response_model=schemas.AuthResponse)
 def login(
@@ -151,7 +156,13 @@ def login(
     
     # Generate token
     token = utils.create_access_token(data={"sub": user.username})
-    return {"token": token, "user": user}
+    
+    # Ensure profile data is loaded
+    if not user.user_profile:
+        db.refresh(user, attribute_names=["user_profile"])
+        
+    # Explicitly use from_orm to trigger the custom logic for is_profile_complete
+    return {"token": token, "user": schemas.UserOut.from_orm(user)}
 
 
 @router.post("/register-and-request-otp", status_code=status.HTTP_200_OK)

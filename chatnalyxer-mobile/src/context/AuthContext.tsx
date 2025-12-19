@@ -3,7 +3,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAuthToken } from "../services/api";
 import { BASE_URL } from "../config";
 
-type User = { id?: number; phone_number?: string, username?: string, is_verified?: boolean } | null;
+type User = {
+  id?: number;
+  phone_number?: string;
+  username?: string;
+  is_verified?: boolean;
+  user_type?: 'STUDENT' | 'FACULTY' | 'CASUAL';
+  profile_data?: any;
+  is_profile_complete?: boolean;
+} | null;
 type AuthContextType = {
   token: string | null;
   user: User;
@@ -11,6 +19,7 @@ type AuthContextType = {
   signInWithOTP: (phone_number: string, otp_code: string) => Promise<void>;
   signInWithPassword: (phone: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,6 +29,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshUser = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${BASE_URL}/users/profile`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        await AsyncStorage.setItem("user", JSON.stringify(userData));
+      }
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -28,8 +53,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (saved) {
           setToken(saved);
           setAuthToken(saved);
+
+          // Fetch fresh user data in background
+          try {
+            const response = await fetch(`${BASE_URL}/users/profile`, {
+              headers: { "Authorization": `Bearer ${saved}` }
+            });
+            if (response.ok) {
+              const userData = await response.json();
+              setUser(userData);
+              await AsyncStorage.setItem("user", JSON.stringify(userData));
+            } else if (savedUser) {
+              setUser(JSON.parse(savedUser));
+            }
+          } catch (e) {
+            if (savedUser) setUser(JSON.parse(savedUser));
+          }
         }
-        if (savedUser) setUser(JSON.parse(savedUser));
       } catch (e) {
         console.warn("Auth init error", e);
       } finally {
@@ -104,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, signInWithOTP, signInWithPassword, signOut }}>
+    <AuthContext.Provider value={{ token, user, loading, signInWithOTP, signInWithPassword, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

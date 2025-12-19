@@ -1,8 +1,0 @@
-version: "2"
-tunnels:
-  backend:
-    proto: http
-    addr: 8000
-  mobile:
-    proto: http
-    addr: 8081

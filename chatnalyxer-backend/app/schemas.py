@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 from datetime import datetime
 from typing import Optional, List, Any, Dict
 
@@ -23,6 +23,8 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     username: str
+    password: str
+    email: Optional[EmailStr] = None
 
 
 class UserLogin(UserBase):
@@ -35,9 +37,41 @@ class UserOut(BaseModel):
     phone_number: Optional[str] = None
     is_verified: bool
     email: Optional[EmailStr] = None
+    user_type: str = "CASUAL"
+    profile_data: Optional[Dict[str, Any]] = {}
+    is_profile_complete: bool = False  # New field to track onboarding status
+
+    @classmethod
+    def from_orm(cls, obj):
+        # Populate user_type and profile_data from user_profile relationship
+        data = {
+            "id": obj.id,
+            "username": obj.username,
+            "phone_number": obj.phone_number,
+            "is_verified": bool(obj.is_verified),
+            "email": obj.email,
+            "user_type": "CASUAL",
+            "profile_data": {},
+            "is_profile_complete": False
+        }
+        
+        # Get data from user_profile relationship if it exists
+        if hasattr(obj, 'user_profile') and obj.user_profile:
+            data["user_type"] = obj.user_profile.user_type or "CASUAL"
+            data["profile_data"] = obj.user_profile.profile_data or {}
+            data["is_profile_complete"] = True  # Profile exists, so it's complete
+        
+        return cls(**data)
 
     class Config:
         from_attributes = True
+        orm_mode = True
+
+class UserProfileUpdate(BaseModel):
+    user_type: Optional[str] = None
+    profile_data: Optional[Dict[str, Any]] = None
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 
 # ----- OTP Authentication -----
@@ -50,6 +84,16 @@ class OTPRequest(BaseModel):
 class UserRegisterRequest(OTPRequest):
     password: str
     email: Optional[EmailStr] = None
+    
+    @model_validator(mode='before')
+    @classmethod
+    def empty_str_to_none(cls, values):
+        """Convert empty email string to None before validation"""
+        if isinstance(values, dict) and 'email' in values:
+            email = values.get('email')
+            if isinstance(email, str) and not email.strip():
+                values['email'] = None
+        return values
 
 class UserLoginRequest(BaseModel):
     phone_number: str
@@ -114,8 +158,21 @@ class MessageOut(BaseModel):
     deadline_extracted: Optional[datetime] = None
     extracted_keywords: Optional[str] = None
     is_priority: Optional[int] = 0
+    
+    # RAG Fields
+    media_url: Optional[str] = None
+    media_type: Optional[str] = "text"
+    extracted_text: Optional[str] = None
+    
+    # Feedback
+    is_manual_override: bool = False
+
     # Soft delete field
     deleted_at: Optional[datetime] = None
+    
+    # Display fields for mobile app
+    group_name: Optional[str] = None
+    sender_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -124,10 +181,14 @@ class MessageOut(BaseModel):
 
 
 class WhatsAppMessageCreate(BaseModel):
+    user_id: int  # NEW: Required user ID
     content: str
     sender_name: str
-    group_id: str
-    timestamp: datetime
+    group_id: str  # WhatsApp group ID (e.g., "123456789@g.us")
+    timestamp: Optional[str] = None
+    media_url: Optional[str] = None
+    media_type: Optional[str] = "text"
+    extracted_content: Optional[str] = None  # NEW: Text extracted from PDF/image via Azure AI
 
 # ----- Dashboard Response -----
 

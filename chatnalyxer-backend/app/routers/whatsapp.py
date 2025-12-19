@@ -1,240 +1,381 @@
-from fastapi import APIRouter, HTTPException, Depends
-import subprocess
-import os
+"""
+WhatsApp Session Management Router
+Handles user WhatsApp connection/disconnection via Session Manager
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import Optional
+import requests
+from datetime import datetime
+
+from ..database import get_db
+from ..models import User
 from ..deps import get_current_user
 
-router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
+router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
-whatsapp_statuses = {}  # user_id: {"message": "", "ready": False, "qr_code": None, "pairing_code": None, "expired": False}
-
-
-@router.post("/status")
-def set_whatsapp_status(status: dict):
-    user_id = status.pop('user_id', None)
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
-    
-    # Debug log
-    qr_len = len(status.get('qr_code', '') or '')
-    print(f"DEBUG: Received status for user_id={user_id}. QR Length: {qr_len}. Keys: {status.keys()}")
-
-    # Merge with existing status to preserve fields if not provided in update
-    current = whatsapp_statuses.get(user_id, {})
-    whatsapp_statuses[user_id] = {**current, **status}
-    
-    return {"message": "Status updated"}
+# Session Manager URL
+SESSION_MANAGER_URL = "http://localhost:3002"
 
 
-def kill_session(user_id: str) -> bool:
+@router.post("/connect")
+async def connect_whatsapp(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Helper function to kill the WhatsApp process and clear session for a given user.
-    Returns True if successful (or already stopped), False if error.
+    Start WhatsApp session for current user
+    - Calls session manager to spawn user process
+    - Updates user.whatsapp_connected = True
     """
-    import signal
-    import time
-    import shutil
-    
-    print(f"DEBUG: kill_session requested for user {user_id}")
-    
     try:
-        # Check for stored PID
-        status = whatsapp_statuses.get(user_id, {})
-        pid = status.get('pid')
-        
-        print(f"DEBUG: Current status for {user_id}: {status}")
-        
-        if pid:
+        # ALWAYS stop any existing session first to get a fresh QR code
+        # This prevents the "1/3, 2/3, 3/3" QR limit issue
+        if current_user.whatsapp_connected:
             try:
-                print(f"🛑 Killing process with PID: {pid}")
-                os.kill(pid, signal.SIGTERM)
-                # Wait a split second to ensure it's gone
+                print(f"🔄 Stopping old session for user {current_user.id} to generate fresh QR...")
+                requests.post(
+                    f"{SESSION_MANAGER_URL}/sessions/stop/{current_user.id}",
+                    timeout=5
+                )
+                # Wait a moment for session to fully stop
+                import time
                 time.sleep(0.5)
-                print(f"✅ Process {pid} killed successfully via os.kill")
-            except ProcessLookupError:
-                print(f"⚠️ Process {pid} not found (already dead?)")
-            except Exception as e:
-                print(f"⚠️ Failed to kill process {pid}: {e}")
-        else:
-            # Fallback to pkill if no PID found (legacy support)
-            print(f"⚠️ No PID found for user {user_id}, falling back to pkill")
-            # Log what we are trying to kill
-            target = f"node index.js {user_id}"
-            print(f"DEBUG: Running pkill -f '{target}'")
-            try:
-                result = subprocess.run(["pkill", "-f", target], check=False, capture_output=True, text=True)
-                print(f"DEBUG: pkill result: returncode={result.returncode}, stdout='{result.stdout.strip()}', stderr='{result.stderr.strip()}'")
-            except Exception as pk_err:
-                 print(f"⚠️ pkill failed: {pk_err}")
+            except:
+                pass
+
+        # Start fresh session (will generate new QR code)
+        print(f"🆕 Starting new WhatsApp session for user {current_user.id}...")
+        response = requests.post(
+            f"{SESSION_MANAGER_URL}/sessions/start/{current_user.id}",
+            json={},  # Empty - will generate QR code
+            timeout=10
+        )
         
-        print(f"🛑 Stopped WhatsApp process for user {user_id}")
+        if response.status_code != 200:
+            raise HTTPException(500, "Failed to start WhatsApp session")
         
-        # Clear auth session folder for fresh start
-        whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
-        auth_path = os.path.join(whatsapp_dir, f"auth_info_baileys_{user_id}")
+        data = response.json()
         
-        if os.path.exists(auth_path):
-            try:
-                shutil.rmtree(auth_path, ignore_errors=True)
-                print(f"🧹 Cleared auth session for user {user_id}")
-            except Exception as e:
-                print(f"⚠️ Failed to clear auth session: {e}")
+        # Update database
+        current_user.whatsapp_connected = True
+        current_user.whatsapp_session_port = data.get("port")
+        db.commit()
         
-        # Clear status
-        whatsapp_statuses[user_id] = {
-            "message": "Stopped",
-            "ready": False,
-            "qr_code": None,
-            "pairing_code": None,
-            "expired": False,
-            "pid": None
+        print(f"✅ New session started on port {data.get('port')}")
+        
+        return {
+            "success": True,
+            "message": "WhatsApp session started - QR code will be available shortly",
+            "user_id": current_user.id,
+            "port": data.get("port")
         }
-        return True
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(503, f"Session manager unavailable: {str(e)}")
     except Exception as e:
-        print(f"❌ Critical error in kill_session: {e}")
-        return False
+        db.rollback()
+        raise HTTPException(500, f"Failed to connect WhatsApp: {str(e)}")
+
+
+@router.post("/disconnect")
+async def disconnect_whatsapp(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Stop WhatsApp session for current user
+    """
+    try:
+        if not current_user.whatsapp_connected:
+            return {"success": True, "message": "Already disconnected"}
+
+        # Call session manager to stop user session
+        requests.post(
+            f"{SESSION_MANAGER_URL}/sessions/stop/{current_user.id}",
+            timeout=10
+        )
+        
+        # Update database
+        current_user.whatsapp_connected = False
+        current_user.whatsapp_session_port = None
+        current_user.whatsapp_qr_code = None
+        current_user.whatsapp_pairing_code = None
+        db.commit()
+        
+        return {"success": True, "message": "WhatsApp session stopped"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to disconnect: {str(e)}")
 
 
 @router.get("/status")
-def get_whatsapp_status(current_user=Depends(get_current_user)):
-    user_id = str(current_user.id)
-    status = whatsapp_statuses.get(user_id, {"message": "WhatsApp not linked", "ready": False, "qr_code": None, "pairing_code": None, "expired": False})
-    
-    # Debug log (only if QR is present to avoid spam, or just periodically?)
-    # Printing every time might spam, but we need to see it.
-    qr_present = "YES" if status.get("qr_code") else "NO"
-    print(f"DEBUG: Serving status for user_id={user_id}. QR Present: {qr_present}")
-    
-    return status
-
-
-@router.post("/stop")
-def stop_whatsapp(current_user=Depends(get_current_user)):
-    """Kill the WhatsApp process and clear session for this user"""
-    user_id = str(current_user.id)
-    success = kill_session(user_id)
-    if success:
-        return {"message": "WhatsApp process stopped and session cleared"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to stop WhatsApp process")
-
-
-@router.post("/start")
-def start_whatsapp(current_user=Depends(get_current_user)):
-    user_id = str(current_user.id)
-    # Get phone number and strip special characters for command line argument
-    phone_number = current_user.phone_number.replace('+', '').replace(' ', '') if current_user.phone_number else ""
-    
+async def get_whatsapp_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get WhatsApp connection status and QR code if available
+    """
     try:
-        # Kill any existing node processes for this user
-        try:
-            subprocess.run(["pkill", "-f", f"node index.js {user_id}"], check=False)
-            print(f"🧹 Killed any existing node processes for user {user_id}")
-        except:
-            pass
+        # Always try to get QR code if user has whatsapp_connected = True
+        if current_user.whatsapp_connected:
+            # Try to get QR code directly
+            try:
+                qr_response = requests.get(
+                    f"{SESSION_MANAGER_URL}/sessions/qr/{current_user.id}",
+                    timeout=5
+                )
+                if qr_response.status_code == 200:
+                    qr_data = qr_response.json()
+                    if qr_data.get("qr"):
+                        # QR code exists!
+                        return {
+                            "ready": qr_data.get("ready", False),
+                            "qr_code": qr_data.get("qr"),
+                            "expired": qr_data.get("expired", False),
+                            "message": "Scan QR code to connect",
+                            "port": current_user.whatsapp_session_port
+                        }
+            except:
+                pass
+            
+            # No QR code, check session status
+            try:
+                response = requests.get(
+                    f"{SESSION_MANAGER_URL}/sessions/status/{current_user.id}",
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    session_data = response.json()
+                    return {
+                        "ready": session_data.get("ready", False),
+                        "connected": True,
+                        "active": session_data.get("active", False),
+                        "port": current_user.whatsapp_session_port,
+                        "status": session_data.get("status"),
+                        "message": "Connected" if session_data.get("ready") else "Connecting..."
+                    }
+            except:
+                pass
         
-        whatsapp_dir = os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.dirname(__file__)))), "whatsapp-integration")
-        
-        # Clear old session folder for fresh start (prevents 401 loops)
-        auth_path = os.path.join(whatsapp_dir, f"auth_info_baileys_{user_id}")
-        if os.path.exists(auth_path):
-            import shutil
-            shutil.rmtree(auth_path, ignore_errors=True)
-            print(f"🧹 Cleared old auth session for fresh start - user {user_id}")
-        
-        # Clean up any existing SingletonLock for this user (legacy cleanup)
-        session_dir = os.path.join(os.path.expanduser("~"), f".wwebjs-sessions-{user_id}")
-        singleton_lock = os.path.join(session_dir, f"session-chatnalyxer-bot-{user_id}", "SingletonLock")
-        
-        if os.path.exists(singleton_lock):
-            print(f"🧹 Removing existing SingletonLock for user {user_id}")
-            os.remove(singleton_lock)
-        
-        # Wait a moment for processes to fully terminate
-        import time
-        time.sleep(1)
-        
-        # Reset status for fresh start
-        whatsapp_statuses[user_id] = {
-            "message": "Initializing...",
+        # Not connected
+        return {
+            "connected": False,
             "ready": False,
-            "qr_code": None,
-            "pairing_code": None,
-            "expired": False
+            "message": "WhatsApp not connected. Click 'QR Code' to start."
         }
         
-        # Start node index.js with user_id AND phone_number
-        cmd = ["node", "index.js", user_id]
-        if phone_number:
-            cmd.append(phone_number)
-            
-        print(f"🚀 Launching WhatsApp subprocess: {' '.join(cmd)} in {whatsapp_dir}")
-        
-        # SELF-HEALING: Install dependencies if missing OR if specific package is missing
-        node_modules_path = os.path.join(whatsapp_dir, "node_modules")
-        baileys_path = os.path.join(node_modules_path, "@whiskeysockets", "baileys")
-        
-        # Check if the folder is missing OR if the critical dependency is missing
-        if not os.path.exists(node_modules_path) or not os.path.exists(baileys_path):
-            print(f"⚠️ Dependencies missing (Checked: {baileys_path}). Running 'npm install'...")
-            try:
-                # Run npm install with inherited environment and WAIT for completion
-                install_cmd = ["npm", "install"]
-                install_result = subprocess.run(
-                    install_cmd, 
-                    cwd=whatsapp_dir, 
-                    capture_output=True, 
-                    text=True,
-                    check=True,  # Raise exception on non-zero return code
-                    timeout=120  # 2 minute timeout for npm install
-                )
-                print(f"📦 'npm install' completed successfully")
-                if install_result.stdout:
-                    print(f"STDOUT: {install_result.stdout[:500]}")  # Truncate long output
-                    
-                # Verify Baileys was actually installed
-                if not os.path.exists(baileys_path):
-                    raise Exception(f"Baileys package still not found after npm install at: {baileys_path}")
-                    
-                print(f"✅ Baileys package verified at: {baileys_path}")
-                    
-            except subprocess.TimeoutExpired:
-                raise HTTPException(
-                    status_code=500, 
-                    detail="npm install timed out. Please try again or contact support."
-                )
-            except subprocess.CalledProcessError as e:
-                print(f"❌ npm install failed with return code {e.returncode}")
-                print(f"STDERR: {e.stderr}")
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Failed to install WhatsApp dependencies: {e.stderr[:200]}"
-                )
-            except Exception as e:
-                print(f"❌ Failed to auto-install dependencies: {e}")
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"Failed to prepare WhatsApp integration: {str(e)}"
-                )
-        
-        # Prepare environment variables
-        env = os.environ.copy()
-        # FORCE localhost for the node process since we are running locally
-        # This addresses the issue where Node sends data to Render instead of local backend
-        # Use dynamic PORT (Render provides this env var)
-        port = os.getenv("PORT", "8000")
-        env["API_BASE_URL"] = f"http://127.0.0.1:{port}"
-        
-        process = subprocess.Popen(cmd, cwd=whatsapp_dir, env=env)
-        print(f"✅ Subprocess started with PID: {process.pid}")
-        
-        # Update status with PID
-        current = whatsapp_statuses.get(user_id, {})
-        new_status = {**current, "pid": process.pid}
-        whatsapp_statuses[user_id] = new_status
-        
-        return {"message": "WhatsApp integration started", "pid": process.pid}
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start WhatsApp: {str(e)}")
+        raise HTTPException(500, f"Failed to get status: {str(e)}")
+
+
+@router.get("/qr")
+async def get_qr_code(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get QR code for WhatsApp linking
+    """
+    try:
+        if not current_user.whatsapp_connected:
+            raise HTTPException(400, "Start session first")
+
+        response = requests.get(
+            f"{SESSION_MANAGER_URL}/sessions/qr/{current_user.id}",
+            timeout=5
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(404, "QR code not available")
+        
+        data = response.json()
+        
+        if data.get("qr"):
+            current_user.whatsapp_qr_code = data["qr"]
+            db.commit()
+        
+        return data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get QR: {str(e)}")
+
+
+@router.post("/pairing-code")
+async def generate_pairing_code(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate pairing code for WhatsApp linking
+    Auto-starts session if not already connected
+    """
+    try:
+        # Auto-start session if not connected
+        if not current_user.whatsapp_connected:
+            print(f"🔄 Auto-starting session for user {current_user.id}")
+            
+            # Clean phone number (remove + and spaces)
+            clean_phone = current_user.phone_number.replace('+', '').replace(' ', '').replace('-', '') if current_user.phone_number else None
+            
+            start_response = requests.post(
+                f"{SESSION_MANAGER_URL}/sessions/start/{current_user.id}",
+                json={"phone_number": clean_phone},  # Pass cleaned phone number
+                timeout=10
+            )
+            
+            if start_response.status_code == 200:
+                data = start_response.json()
+                current_user.whatsapp_connected = True
+                current_user.whatsapp_session_port = data.get("port")
+                db.commit()
+                print(f"✅ Session started on port {data.get('port')}")
+                
+                # Wait 4 seconds for pairing code to be generated
+                import time
+                print("⏳ Waiting 4 seconds for pairing code generation...")
+                time.sleep(4)
+            else:
+                raise HTTPException(500, "Failed to start WhatsApp session")
+        else:
+            # Session exists but might have expired pairing code
+            # Restart session to get fresh pairing code
+            print(f"🔄 Restarting session for user {current_user.id} to get fresh pairing code")
+            
+            # Stop existing session
+            try:
+                requests.post(
+                    f"{SESSION_MANAGER_URL}/sessions/stop/{current_user.id}",
+                    timeout=5
+                )
+            except:
+                pass
+            
+            # Clean phone number
+            clean_phone = current_user.phone_number.replace('+', '').replace(' ', '').replace('-', '') if current_user.phone_number else None
+            
+            # Start new session
+            start_response = requests.post(
+                f"{SESSION_MANAGER_URL}/sessions/start/{current_user.id}",
+                json={"phone_number": clean_phone},
+                timeout=10
+            )
+            
+            if start_response.status_code == 200:
+                data = start_response.json()
+                current_user.whatsapp_session_port = data.get("port")
+                db.commit()
+                print(f"✅ Session restarted on port {data.get('port')}")
+                
+                # Wait 4 seconds for pairing code to be generated
+                import time
+                print("⏳ Waiting 4 seconds for pairing code generation...")
+                time.sleep(4)
+            else:
+                raise HTTPException(500, "Failed to restart WhatsApp session")
+
+        # Generate pairing code
+        response = requests.post(
+            f"{SESSION_MANAGER_URL}/sessions/pairing/{current_user.id}",
+            timeout=5
+        )
+        
+        print(f"📡 Pairing code response status: {response.status_code}")
+        print(f"📡 Pairing code response: {response.text}")
+        
+        if response.status_code != 200:
+            raise HTTPException(500, f"Failed to generate pairing code: {response.text}")
+        
+        data = response.json()
+        
+        if data.get("code"):
+            current_user.whatsapp_pairing_code = data["code"]
+            db.commit()
+        
+        return data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Pairing code error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Failed to generate code: {str(e)}")
+
+
+@router.post("/session-ended")
+async def session_ended(
+    user_id: int,
+    exit_code: Optional[int] = None,
+    reason: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Called by session manager when process dies
+    """
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(404, "User not found")
+        
+        user.whatsapp_connected = False
+        user.whatsapp_session_port = None
+        user.whatsapp_qr_code = None
+        user.whatsapp_pairing_code = None
+        db.commit()
+        
+        print(f"📊 User {user_id} session ended. Reason: {reason}")
+        
+        return {"success": True}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))
+
+
+@router.post("/update-status")
+async def update_whatsapp_status(
+    user_id: int,
+    ready: bool,
+    message: Optional[str] = None,
+    qr_code: Optional[str] = None,
+    pairing_code: Optional[str] = None,
+    expired: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Called by user WhatsApp services to update status
+    """
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(404, "User not found")
+        
+        if ready:
+            user.whatsapp_connected = True
+            user.whatsapp_last_connected = datetime.utcnow()
+        
+        if qr_code:
+            user.whatsapp_qr_code = qr_code
+        
+        if pairing_code:
+            user.whatsapp_pairing_code = pairing_code
+        
+        if expired:
+            user.whatsapp_qr_code = None
+            user.whatsapp_pairing_code = None
+        
+        db.commit()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, str(e))

@@ -9,11 +9,14 @@ import {
   Text,
   TouchableOpacity,
   View,
+  TextInput,
 } from "react-native";
 import { getGroups, updateGroupSelection } from "../src/services/api";
 import { useAuth } from "../src/context/AuthContext";
+import { BASE_URL } from "../src/config";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, shadows } from "../src/theme/colors";
+import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 
 type Group = {
   id: number;
@@ -35,11 +38,29 @@ export default function Groups() {
     loadGroups();
   }, [token]);
 
-
-
-  const loadGroups = async () => {
+  const loadGroups = async (syncFirst: boolean = false) => {
     setLoading(true);
     try {
+      // Optionally sync from WhatsApp first
+      if (syncFirst) {
+        try {
+          const syncResponse = await fetch(`${BASE_URL}/whatsapp/sync-groups`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (syncResponse.ok) {
+            const syncData = await syncResponse.json();
+            console.log(`✅ Synced ${syncData.count} groups from WhatsApp`);
+          }
+        } catch (syncErr) {
+          console.warn("⚠️ Sync failed, continuing with cached groups:", syncErr);
+        }
+      }
+
       const data = await getGroups();
       setGroups(data);
     } catch (err) {
@@ -64,7 +85,6 @@ export default function Groups() {
         )
       );
 
-      // Optional: Show toast or subtle feedback instead of Alert for better flow
     } catch (err) {
       console.error("❌ Failed to update group selection:", err);
       Alert.alert("Error", "Failed to update group selection. Please try again.");
@@ -74,6 +94,12 @@ export default function Groups() {
   };
 
   const selectedCount = groups.filter(g => g.is_selected).length;
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredGroups = groups.filter(g =>
+    g.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -107,7 +133,7 @@ export default function Groups() {
             Select groups to track important messages
           </Text>
         </View>
-        <Pressable style={styles.iconBtn} onPress={loadGroups}>
+        <Pressable style={styles.iconBtn} onPress={() => loadGroups(true)}>
           <Ionicons name="refresh" size={20} color={colors.primary} />
         </Pressable>
       </View>
@@ -118,49 +144,71 @@ export default function Groups() {
         </Text>
       </View>
 
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search groups..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor={colors.textTertiary}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+          </Pressable>
+        )}
+      </View>
+
       <FlatList
         contentContainerStyle={styles.listContent}
-        data={groups}
+        data={filteredGroups}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.card, item.is_selected && styles.selectedCard]}
-            onPress={() => toggleGroupSelection(item)}
-            activeOpacity={0.8}
-            disabled={updating[item.id]}
+        renderItem={({ item, index }) => (
+          <Animated.View
+            entering={FadeInDown.delay(index * 100).springify()}
+            layout={Layout.springify()}
+            style={{ marginBottom: 12 }}
           >
-            <View style={styles.cardInner}>
-              <View style={[styles.avatar, item.is_selected && styles.selectedAvatar]}>
-                <Text style={[styles.avatarText, item.is_selected && styles.selectedAvatarText]}>
-                  {item.name?.[0]?.toUpperCase() || "G"}
-                </Text>
-              </View>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-                <View style={styles.badgeRow}>
-                  {item.whatsapp_id ? (
-                    <View style={styles.badgeSuccess}>
-                      <Text style={styles.badgeText}>Synced</Text>
-                    </View>
+            <TouchableOpacity
+              style={[styles.card, item.is_selected && styles.selectedCard]}
+              onPress={() => toggleGroupSelection(item)}
+              activeOpacity={0.8}
+              disabled={updating[item.id]}
+            >
+              <View style={styles.cardInner}>
+                <View style={[styles.avatar, item.is_selected && styles.selectedAvatar]}>
+                  <Text style={[styles.avatarText, item.is_selected && styles.selectedAvatarText]}>
+                    {item.name?.[0]?.toUpperCase() || "G"}
+                  </Text>
+                </View>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
+                  <View style={styles.badgeRow}>
+                    {item.whatsapp_id ? (
+                      <View style={styles.badgeSuccess}>
+                        <Text style={styles.badgeText}>Synced</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.badgeNeutral}>
+                        <Text style={styles.badgeText}>Local</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.actionArea}>
+                  {updating[item.id] ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
-                    <View style={styles.badgeNeutral}>
-                      <Text style={styles.badgeText}>Local</Text>
+                    <View style={[styles.checkbox, item.is_selected && styles.checkboxActive]}>
+                      {item.is_selected && <Ionicons name="checkmark" size={14} color="white" />}
                     </View>
                   )}
                 </View>
               </View>
-
-              <View style={styles.actionArea}>
-                {updating[item.id] ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <View style={[styles.checkbox, item.is_selected && styles.checkboxActive]}>
-                    {item.is_selected && <Ionicons name="checkmark" size={14} color="white" />}
-                  </View>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </Animated.View>
         )}
       />
 
@@ -215,7 +263,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 16,
     borderRadius: 16,
-    marginBottom: 12,
+    marginBottom: 0, // Handled by Animated.View wrapper
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: 'transparent',
@@ -290,4 +338,23 @@ const styles = StyleSheet.create({
   btnPressed: { opacity: 0.9 },
   primaryBtnText: { color: colors.textInverse, fontWeight: "700", fontSize: 16 },
   footerText: { textAlign: 'center', color: colors.textTertiary, marginBottom: 16, fontSize: 12 },
+
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    color: colors.textPrimary,
+    fontSize: 15,
+  },
 });

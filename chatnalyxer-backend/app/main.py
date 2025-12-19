@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app import models
 from app.database import engine
-from app.routers import auth, groups, dashboard, messages, whatsapp, ai, users, admin
+from app.routers import auth, groups, dashboard, messages, whatsapp, ai, users, admin, email, pdf, notifications, events, media, debug
 from fastapi.middleware.cors import CORSMiddleware
 
 # Auto-create tables (for dev only)
@@ -79,3 +79,31 @@ app.include_router(ai.router)
 app.include_router(dashboard.router)
 app.include_router(whatsapp.router)
 app.include_router(admin.router)
+app.include_router(email.router)
+app.include_router(pdf.router)
+app.include_router(notifications.router)
+app.include_router(events.router)
+app.include_router(media.router)
+app.include_router(debug.router) # NEW: Debug endpoints
+
+# Start notification scheduler (optional)
+@app.on_event("startup")
+async def startup_event():
+    try:
+        from app.services.notification_service import start_notification_scheduler
+        from app.database import SessionLocal
+        start_notification_scheduler(SessionLocal)
+        print("✅ Notification scheduler started")
+    except ImportError as e:
+        print(f"⚠️ Notification scheduler disabled: {e}")
+        print("💡 To enable notifications, activate venv and install: pip install APScheduler")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    try:
+        from app.services.notification_service import stop_notification_scheduler
+        stop_notification_scheduler()
+        print("🛑 Notification scheduler stopped")
+    except ImportError:
+        pass
+

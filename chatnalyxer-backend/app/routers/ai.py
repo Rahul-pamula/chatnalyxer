@@ -66,51 +66,75 @@ def chat_with_ai(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Chat with AI assistant"""
+    """Chat with AI assistant using RAG (Recent Messages + PDFs)"""
     user_message = request.message
     
-    # Get context (recent important messages)
-    recent_messages = db.query(models.AnalyzedMessage).filter(
-        models.AnalyzedMessage.user_id == current_user.id,
-        models.AnalyzedMessage.is_important == True
-    ).order_by(models.AnalyzedMessage.created_at.desc()).limit(5).all()
+    # 1. Fetch Context: Recent Messages from User's Groups
+    user_group_ids = [g.group_id for g in current_user.groups]
     
-    tasks = db.query(models.AITask).filter(
-        models.AITask.user_id == current_user.id,
-        models.AITask.status == 'pending'
-    ).all()
+    # Fetch last 30 messages
+    recent_msgs = db.query(models.Message).filter(
+        models.Message.group_id.in_(user_group_ids),
+        models.Message.deleted_at.is_(None)
+    ).order_by(models.Message.created_at.desc()).limit(30).all()
     
-    # Build prompt
-    context_str = "\n".join([f"- {m.ai_summary}" for m in recent_messages])
-    tasks_str = "\n".join([f"- {t.task_description}" for t in tasks])
+    # 2. Build Context String
+    context_parts = []
     
+    # Add PDF/Image content first (High Priority Context)
+    for msg in recent_msgs:
+        if msg.extracted_text:
+            source = f"[Document/Image] (Sent by User {msg.sender_id} in Grp {msg.group_id})"
+            context_parts.append(f"{source}:\n{msg.extracted_text[:2000]}...") # Limit text length per doc
+            
+    # Add recent text messages
+    # Reverse to chronological order for the chat history
+    for msg in reversed(recent_msgs[:15]): 
+        if not msg.extracted_text: # Skip if already added as doc
+            context_parts.append(f"[Message] {msg.content}")
+            
+    context_str = "\n\n".join(context_parts)
+    
+    # 3. Construct Prompt
     prompt = f"""
-You are a personal assistant for {current_user.phone_number}.
-
-**Recent Important Updates:**
-{context_str}
-
-**Pending Tasks:**
-{tasks_str}
-
-**User:** {user_message}
-
-**Assistant:** (Respond helpfully, referencing context if relevant. Keep it concise.)
-"""
+    You are an intelligent study assistant for a student named {current_user.username}.
     
-    # Get AI response
+    **Context Data (Recent WhatsApp Messages & Documents):**
+    {context_str}
+    
+    **User Query:** {user_message}
+    
+    **Instructions:**
+    - You are a helpful AI study assistant.
+    - **LANGUAGE RULE:** ALWAYS reply in **ENGLISH** by default, especially when explaining messages in other languages (like Telugu/Hindi). 
+    - **EXCEPTION:** Only switch to the user's native language if they EXPLICITLY ask (e.g., "Telugu lo cheppu", "Explain in Hindi").
+    - PRIORITIZE the context above.
+    - CITATIONS: If you use information from a [Document], cite it.
+    - GENERAL CHAT: Answer general questions freely using your own knowledge.
+    - Do NOT say "I couldn't find that information" unless strictly necessary.
+    - Be friendly, encouraging, and concise.
+    """
+    
+    # 4. Generate Response
+    ai_text = "I'm having trouble connecting to my brain right now."
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        ai_text = response.text
+        if ai_analyzer and ai_analyzer.gemini_model:
+            response = ai_analyzer.gemini_model.generate_content(prompt)
+            ai_text = response.text
+        else:
+            ai_text = "AI Service is currently unavailable."
     except Exception as e:
-        ai_text = "I'm having trouble connecting to my brain right now. Please try again."
+        import traceback
+        traceback.print_exc()
+        print(f"Chat Error: {e}")
+        ai_text = f"Sorry, I encountered an error: {str(e)}"
     
-    # Store conversation
+    # 5. Store conversation
     conversation = models.AIConversation(
         user_id=current_user.id,
         user_message=user_message,
-        ai_response=ai_text
+        ai_response=ai_text,
+        context_used={'source_count': len(recent_msgs)}
     )
     db.add(conversation)
     db.commit()

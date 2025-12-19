@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, func, Boolean
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, func, Boolean, Date, Time
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from .database import Base
@@ -15,6 +15,20 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=True)
     is_verified = Column(Integer, default=0, nullable=False)  # 0=not verified, 1=verified
+    
+    # Multi-Persona Fields
+    user_type = Column(String(50), default="CASUAL", nullable=False) # STUDENT, FACULTY, CASUAL
+    profile_data = Column(JSONB, default={}, nullable=True) # Dynamic profile details
+    
+    # Push Notifications
+    push_token = Column(String(255), nullable=True) # Expo push token
+    
+    # WhatsApp Session Tracking
+    whatsapp_connected = Column(Boolean, default=False, nullable=False)
+    whatsapp_session_port = Column(Integer, nullable=True)
+    whatsapp_last_connected = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_qr_code = Column(Text, nullable=True)
+    whatsapp_pairing_code = Column(String(8), nullable=True)
 
     # relationship
     messages = relationship("Message", back_populates="sender")
@@ -25,6 +39,82 @@ class User(Base):
     analyzed_messages = relationship("AnalyzedMessage", back_populates="user")
     ai_tasks = relationship("AITask", back_populates="user")
     ai_conversations = relationship("AIConversation", back_populates="user")
+    email_credentials = relationship("EmailCredential", back_populates="user")
+    user_profile = relationship("UserProfile", back_populates="user", uselist=False)
+    events = relationship("Event", back_populates="user")
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    user_type = Column(String(50), default="CASUAL", nullable=False)
+    profile_data = Column(JSONB, default={}, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="user_profile")
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    event_date = Column(Date, nullable=False)
+    event_time = Column(Time, nullable=True)
+    location = Column(String(255), nullable=True)
+    reminder_minutes = Column(Integer, default=30)
+    is_all_day = Column(Boolean, default=False)
+    source = Column(String(50), default="manual")  # 'manual', 'ai_detected', 'whatsapp'
+    source_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="events")
+    source_message = relationship("Message", foreign_keys=[source_message_id])
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    scheduled_time = Column(DateTime(timezone=True), nullable=False)
+    is_sent = Column(Boolean, default=False)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    notification_type = Column(String(50), default="reminder")
+    related_event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True)
+    related_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    expo_push_token = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User")
+    related_event = relationship("Event", foreign_keys=[related_event_id])
+
+
+class EmailCredential(Base):
+    __tablename__ = "email_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    email_address = Column(String(255), nullable=False)
+    # In production, use Fernet/AES encryption. For MVP/Imagine Cup, simple storage or basic encoding is acceptable if noted.
+    # We will assume app_password is stored here.
+    app_password = Column(String(255), nullable=False)
+    provider = Column(String(50), default="gmail") # gmail, outlook
+    is_active = Column(Boolean, default=True)
+    last_synced = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="email_credentials")
 
 
 class OTP(Base):
@@ -93,6 +183,18 @@ class Message(Base):
     extracted_keywords = Column(Text, nullable=True)
     # 0=normal, 1=priority
     is_priority = Column(Integer, default=0, nullable=False)
+
+    # RAG Support Fields (Added for Chatbot)
+    media_url = Column(String(500), nullable=True) # URL/Path to stored file
+    media_type = Column(String(20), default="text", nullable=False) # text, image, document, audio
+    extracted_text = Column(Text, nullable=True) # Full text content for RAG analysis
+    
+    # AI Memory System - Ephemeral Media Processing (NEW)
+    extracted_content = Column(Text, nullable=True) # Full text from PDF/image via Azure AI (no file stored)
+    ai_summary = Column(String(500), nullable=True) # AI-generated title/summary
+    
+    # Feedback Loop Field
+    is_manual_override = Column(Boolean, default=False, nullable=False) # True if set by user manually
 
     # Enhanced ML fields for Indian student context
     # CLASS_CANCEL, SUBMISSION, EXAM, ATTENDANCE, GENERAL
