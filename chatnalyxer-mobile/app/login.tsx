@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useAuth } from "../src/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, shadows } from "../src/theme/colors";
@@ -36,89 +36,102 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.brandSection}>
-        <Image source={require("../assets/images/chatnalyxer-logo.jpg")} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to access your account</Text>
-      </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.brandSection}>
+          <Image source={require("../assets/images/chatnalyxer-logo.jpg")} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to access your account</Text>
+        </View>
 
-      <View style={styles.card}>
-        {/* Phone Number */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <View style={styles.inputWrapper}>
-            <View style={styles.countryBadge}>
-              <Text style={styles.countryCode}>+91</Text>
+        <View style={styles.card}>
+          {/* Phone Number */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <View style={styles.inputWrapper}>
+              <View style={styles.countryBadge}>
+                <Text style={styles.countryCode}>+91</Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="98765 43210"
+                placeholderTextColor={colors.textTertiary}
+                value={phoneNumber}
+                onChangeText={(t) => setPhoneNumber(formatPhoneNumber(t))}
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
             </View>
-            <TextInput
-              style={styles.input}
-              placeholder="98765 43210"
-              placeholderTextColor={colors.textTertiary}
-              value={phoneNumber}
-              onChangeText={(t) => setPhoneNumber(formatPhoneNumber(t))}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
           </View>
-        </View>
 
-        {/* Password */}
-        <View style={styles.inputGroup}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={styles.label}>Password</Text>
-            <Pressable onPress={() => router.push('/forgot-password')}>
-              <Text style={styles.forgotPass}>Forgot password?</Text>
-            </Pressable>
+          {/* Password */}
+          <View style={styles.inputGroup}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={styles.label}>Password</Text>
+              <Pressable onPress={() => router.push('/forgot-password')}>
+                <Text style={styles.forgotPass}>Forgot password?</Text>
+              </Pressable>
+            </View>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Your password"
+                placeholderTextColor={colors.textTertiary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Your password"
-              placeholderTextColor={colors.textTertiary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
-              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />
-            </Pressable>
-          </View>
-        </View>
 
-        {err ? (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={16} color={colors.error} />
-            <Text style={styles.err}>{err}</Text>
-          </View>
-        ) : null}
+          {err ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={16} color={colors.error} />
+              <Text style={styles.err}>{err}</Text>
+            </View>
+          ) : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Sign In</Text>}
-        </Pressable>
-
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <Pressable onPress={() => router.push('/signup')}>
-            <Text style={styles.linkText}>Sign up</Text>
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Sign In</Text>}
           </Pressable>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Pressable onPress={() => router.push('/signup')}>
+              <Text style={styles.linkText}>Sign up</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     backgroundColor: colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   brandSection: { alignItems: "center", marginBottom: 24 },
   logo: { width: 50, height: 50, marginBottom: 16, borderRadius: 12 },

@@ -4,14 +4,18 @@ import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/theme/colors';
 
-export default function BottomNav() {
+interface BottomNavProps {
+    onAIChatPress?: () => void;
+}
+
+export default function BottomNav({ onAIChatPress }: BottomNavProps) {
     const router = useRouter();
     const pathname = usePathname();
 
     const tabs = [
         { name: 'Home', icon: 'home', activeIcon: 'home', route: '/dashboard' },
-        { name: 'Search', icon: 'search-outline', activeIcon: 'search', route: '/search' },
-        { name: 'Add', icon: 'add-circle-outline', activeIcon: 'add-circle', route: '/create' },
+        { name: 'AI Chat', icon: 'sparkles-outline', activeIcon: 'sparkles', route: null }, // No route, uses callback
+        { name: 'Calendar', icon: 'calendar-outline', activeIcon: 'calendar', route: '/calendar' },
         { name: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart', route: '/analytics' },
         { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: '/profile' }
     ];
@@ -24,7 +28,13 @@ export default function BottomNav() {
                     <TouchableOpacity
                         key={tab.name}
                         style={styles.tab}
-                        onPress={() => router.push(tab.route as any)}
+                        onPress={() => {
+                            if (tab.name === 'AI Chat' && onAIChatPress) {
+                                onAIChatPress();
+                            } else if (tab.route) {
+                                router.push(tab.route as any);
+                            }
+                        }}
                         activeOpacity={0.7}
                     >
                         <Ionicons

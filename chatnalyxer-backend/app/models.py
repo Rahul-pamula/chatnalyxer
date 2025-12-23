@@ -22,6 +22,7 @@ class User(Base):
     
     # Push Notifications
     push_token = Column(String(255), nullable=True) # Expo push token
+    notifications_enabled = Column(Boolean, default=True, nullable=False) # User can disable notifications
     
     # WhatsApp Session Tracking
     whatsapp_connected = Column(Boolean, default=False, nullable=False)
@@ -42,6 +43,9 @@ class User(Base):
     email_credentials = relationship("EmailCredential", back_populates="user")
     user_profile = relationship("UserProfile", back_populates="user", uselist=False)
     events = relationship("Event", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+    interactions = relationship("UserInteraction", back_populates="user")
+
 
 
 class UserProfile(Base):
@@ -86,18 +90,53 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
+    
+    # Notification metadata
+    priority = Column(String(20))  # HIGH, MEDIUM, CRITICAL
+    notification_type = Column(String(50), default="reminder")
+    
+    # Scheduling
     scheduled_time = Column(DateTime(timezone=True), nullable=False)
     is_sent = Column(Boolean, default=False)
     sent_at = Column(DateTime(timezone=True), nullable=True)
-    notification_type = Column(String(50), default="reminder")
+    
+    # Read status
+    is_read = Column(Boolean, default=False, nullable=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Related entities
     related_event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True)
     related_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
     expo_push_token = Column(String(255), nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    user = relationship("User")
+    user = relationship("User", back_populates="notifications")
     related_event = relationship("Event", foreign_keys=[related_event_id])
+
+
+class UserInteraction(Base):
+    """
+    Track user interactions for behavior analysis and personalization
+    """
+    __tablename__ = "user_interactions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    interaction_type = Column(String(50), nullable=False)  # notification_opened, time_confirmed, app_opened, etc.
+    interaction_data = Column(JSONB, default={})  # Additional context
+    
+    # Related entities
+    notification_id = Column(Integer, ForeignKey("notifications.id", ondelete="SET NULL"), nullable=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="SET NULL"), nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="interactions")
+
 
 
 class EmailCredential(Base):

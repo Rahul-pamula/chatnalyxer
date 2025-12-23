@@ -85,29 +85,39 @@ async def disconnect_whatsapp(
     db: Session = Depends(get_db)
 ):
     """
-    Stop WhatsApp session for current user
+    Stop WhatsApp session and clean up all state
     """
     try:
         if not current_user.whatsapp_connected:
             return {"success": True, "message": "Already disconnected"}
 
-        # Call session manager to stop user session
-        requests.post(
+        # Call session manager to stop and clean auth
+        print(f"🛑 Disconnecting WhatsApp for user {current_user.id}...")
+        response = requests.post(
             f"{SESSION_MANAGER_URL}/sessions/stop/{current_user.id}",
+            json={"cleanAuth": True},  # Request auth cleanup
             timeout=10
         )
         
-        # Update database
+        # Wait for process to fully terminate and clean up
+        import time
+        time.sleep(1.5)
+        
+        # Clear ALL WhatsApp state in database
         current_user.whatsapp_connected = False
         current_user.whatsapp_session_port = None
         current_user.whatsapp_qr_code = None
         current_user.whatsapp_pairing_code = None
+        current_user.whatsapp_last_connected = None
         db.commit()
         
-        return {"success": True, "message": "WhatsApp session stopped"}
+        print(f"✅ User {current_user.id} disconnected and cleaned")
+        
+        return {"success": True, "message": "WhatsApp disconnected and cleaned"}
         
     except Exception as e:
         db.rollback()
+        print(f"❌ Disconnect error: {str(e)}")
         raise HTTPException(500, f"Failed to disconnect: {str(e)}")
 
 

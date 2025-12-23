@@ -14,7 +14,7 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 class PushTokenUpdate(BaseModel):
     push_token: str
 
-@router.post("/register-token")
+@router.post("/register")
 async def register_push_token(
     token_data: PushTokenUpdate,
     db: Session = Depends(get_db),
@@ -25,6 +25,7 @@ async def register_push_token(
     """
     try:
         current_user.push_token = token_data.push_token
+        current_user.notifications_enabled = True  # Enable notifications
         db.commit()
         logger.info(f"Updated push token for user {current_user.id}")
         
@@ -48,7 +49,7 @@ async def get_notifications(
     """
     notifications = db.query(models.Notification).filter(
         models.Notification.user_id == current_user.id
-    ).order_by(models.Notification.scheduled_time.desc()).limit(limit).all()
+    ).order_by(models.Notification.created_at.desc()).limit(limit).all()
     
     return {
         "notifications": [
@@ -56,7 +57,10 @@ async def get_notifications(
                 "id": n.id,
                 "title": n.title,
                 "message": n.message,
-                "scheduled_time": n.scheduled_time.isoformat(),
+                "priority": n.priority,
+                "is_read": n.is_read,
+                "read_at": n.read_at.isoformat() if n.read_at else None,
+                "scheduled_time": n.scheduled_time.isoformat() if n.scheduled_time else None,
                 "is_sent": n.is_sent,
                 "sent_at": n.sent_at.isoformat() if n.sent_at else None,
                 "type": n.notification_type,

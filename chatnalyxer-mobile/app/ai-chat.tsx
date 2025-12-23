@@ -15,13 +15,19 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { aiService, Message } from '../src/services/aiService';
+import { VoiceService } from '../src/services/VoiceService';
+import { BASE_URL } from '../src/config';
+import { useAuth } from '../src/context/AuthContext';
 
 export default function AIChatScreen() {
     const router = useRouter();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [voiceEnabled, setVoiceEnabled] = useState(true);
     const flatListRef = useRef<FlatList>(null);
+    const { token } = useAuth();
 
     useEffect(() => {
         // Initial welcome message
@@ -60,6 +66,11 @@ export default function AIChatScreen() {
             };
 
             setMessages((prev) => [...prev, aiMsg]);
+
+            // Read response aloud if voice is enabled
+            if (voiceEnabled) {
+                await VoiceService.speak(response.response);
+            }
         } catch (error) {
             console.error('Chat error:', error);
             const errorMsg: Message = {
@@ -93,6 +104,69 @@ export default function AIChatScreen() {
         );
     };
 
+    const handleVoiceInput = async () => {
+        try {
+            if (isRecording) {
+                // Stop recording
+                setIsRecording(false);
+                const audioUri = await VoiceService.stopListening();
+
+                if (audioUri && token) {
+                    setLoading(true);
+                    // Transcribe audio to text
+                    const transcribedText = await VoiceService.transcribeAudio(audioUri, BASE_URL, token);
+
+                    if (transcribedText) {
+                        setInputText(transcribedText);
+                        // Auto-send after transcription
+                        const userMsg: Message = {
+                            id: Date.now().toString(),
+                            role: 'user',
+                            content: transcribedText,
+                            timestamp: new Date(),
+                        };
+                        setMessages((prev) => [...prev, userMsg]);
+
+                        const response = await aiService.chat(transcribedText);
+                        const aiMsg: Message = {
+                            id: (Date.now() + 1).toString(),
+                            role: 'ai',
+                            content: response.response,
+                            timestamp: new Date(),
+                        };
+                        setMessages((prev) => [...prev, aiMsg]);
+
+                        if (voiceEnabled) {
+                            await VoiceService.speak(response.response);
+                        }
+                    }
+                    setLoading(false);
+                }
+            } else {
+                // Start recording
+                const hasPermission = await VoiceService.checkMicrophonePermission();
+                if (!hasPermission) {
+                    const granted = await VoiceService.requestMicrophonePermission();
+                    if (!granted) {
+                        alert('Microphone permission is required for voice input');
+                        return;
+                    }
+                }
+
+                await VoiceService.startListening();
+                setIsRecording(true);
+            }
+        } catch (error) {
+            console.error('Voice input error:', error);
+            setIsRecording(false);
+            setLoading(false);
+        }
+    };
+
+    const toggleVoiceOutput = () => {
+        setVoiceEnabled(!voiceEnabled);
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -109,6 +183,13 @@ export default function AIChatScreen() {
                         <Text style={styles.onlineText}>Online</Text>
                     </View>
                 </View>
+                <TouchableOpacity onPress={toggleVoiceOutput} style={styles.voiceToggle}>
+                    <Ionicons
+                        name={voiceEnabled ? 'volume-high' : 'volume-mute'}
+                        size={24}
+                        color={voiceEnabled ? '#10b981' : '#94a3b8'}
+                    />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/ai-tasks')} style={styles.tasksButton}>
                     <Ionicons name="list" size={24} color="#fff" />
                 </TouchableOpacity>
@@ -131,6 +212,17 @@ export default function AIChatScreen() {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <View style={styles.inputContainer}>
+                    <TouchableOpacity
+                        style={[styles.micButton, isRecording && styles.micButtonActive]}
+                        onPress={handleVoiceInput}
+                        disabled={loading}
+                    >
+                        <Ionicons
+                            name={isRecording ? 'stop-circle' : 'mic'}
+                            size={24}
+                            color={isRecording ? '#ef4444' : '#fff'}
+                        />
+                    </TouchableOpacity>
                     <TextInput
                         style={styles.input}
                         value={inputText}
@@ -139,11 +231,12 @@ export default function AIChatScreen() {
                         placeholderTextColor="#999"
                         multiline
                         maxLength={500}
+                        editable={!isRecording}
                     />
                     <TouchableOpacity
                         style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
                         onPress={sendMessage}
-                        disabled={!inputText.trim() || loading}
+                        disabled={!inputText.trim() || loading || isRecording}
                     >
                         {loading ? (
                             <ActivityIndicator size="small" color="#fff" />
@@ -202,6 +295,12 @@ const styles = StyleSheet.create({
         padding: 8,
         backgroundColor: 'rgba(255,255,255,0.1)',
         borderRadius: 8,
+        marginLeft: 8,
+    },
+    voiceToggle: {
+        padding: 8,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 8,
     },
     chatContainer: {
         padding: 16,
@@ -252,6 +351,18 @@ const styles = StyleSheet.create({
         backgroundColor: '#1e293b',
         borderTopWidth: 1,
         borderTopColor: '#334155',
+        gap: 8,
+    },
+    micButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#6366f1',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    micButtonActive: {
+        backgroundColor: '#ef4444',
     },
     input: {
         flex: 1,

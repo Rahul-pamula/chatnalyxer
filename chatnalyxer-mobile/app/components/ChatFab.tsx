@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     container: {
         position: 'absolute',
         bottom: 30,
-        right: 30,
+        left: 30,  // Changed from right to left
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 999,

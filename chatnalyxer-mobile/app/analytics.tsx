@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BASE_URL } from '../src/config';
 import { colors, shadows } from '../src/theme/colors';
+import { useAuth } from '../src/context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +29,7 @@ type Group = {
 
 export default function Analytics() {
   const router = useRouter();
+  const { token } = useAuth();
   const [selectedGroups, setSelectedGroups] = useState<Group[]>([]);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,25 +44,53 @@ export default function Analytics() {
       setLoading(true);
       setError(null);
 
-      // Fetch selected groups
-      const groupsResponse = await fetch(`${BASE_URL}/groups/selected`);
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      // Fetch selected groups with authentication
+      const groupsResponse = await fetch(`${BASE_URL}/groups/selected`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (groupsResponse.status === 401) {
+        // Token expired, redirect to login
+        Alert.alert('Session Expired', 'Please login again');
+        router.push('/login');
+        return;
+      }
+
       if (!groupsResponse.ok) {
         throw new Error('Failed to fetch groups');
       }
+
       const groups = await groupsResponse.json();
+
+      if (groups.length === 0) {
+        // No groups selected, redirect to groups page
+        setError('No groups selected');
+        setTimeout(() => router.push('/groups'), 2000);
+        return;
+      }
+
       setSelectedGroups(groups);
 
-      // Fetch analytics data
-      const analyticsResponse = await fetch(`${BASE_URL}/messages/analytics/public`);
+      // Fetch analytics data with authentication
+      const analyticsResponse = await fetch(`${BASE_URL}/messages/analytics/public`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
       if (!analyticsResponse.ok) {
         throw new Error('Failed to fetch analytics');
       }
+
       const analytics = await analyticsResponse.json();
       setAnalyticsData(analytics);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching analytics:', err);
-      setError('Failed to load analytics data');
+      setError(err.message || 'Failed to load analytics data');
     } finally {
       setLoading(false);
     }
@@ -159,7 +189,22 @@ export default function Analytics() {
   if (error) {
     return (
       <View style={[styles.container, styles.centered]}>
+        <Text style={styles.errorIcon}>⚠️</Text>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={fetchAnalytics}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+        {error === 'No groups selected' && (
+          <TouchableOpacity
+            style={styles.selectGroupsButton}
+            onPress={() => router.push('/groups')}
+          >
+            <Text style={styles.selectGroupsButtonText}>Select Groups</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -350,6 +395,31 @@ const styles = StyleSheet.create({
   infoFooter: { fontSize: 13, color: colors.primary, marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
 
   loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
-  errorText: { fontSize: 16, color: colors.error, textAlign: 'center' },
+  errorIcon: { fontSize: 48, marginBottom: 16 },
+  errorText: { fontSize: 16, color: colors.error, textAlign: 'center', marginBottom: 24 },
   emptyText: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectGroupsButton: {
+    backgroundColor: colors.success,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  selectGroupsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

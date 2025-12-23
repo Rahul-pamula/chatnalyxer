@@ -26,6 +26,7 @@ export default function SetupScreen() {
     const [isMounted, setIsMounted] = useState(false);
     const [linkMethod, setLinkMethod] = useState<'qr' | 'pairing' | null>(null); // Toggle between QR and pairing code
     const [showPairingModal, setShowPairingModal] = useState(false);
+    const [isGeneratingQR, setIsGeneratingQR] = useState(false); // Loading state for QR generation
 
     useEffect(() => {
         setIsMounted(true);
@@ -66,23 +67,34 @@ export default function SetupScreen() {
                         'ngrok-skip-browser-warning': 'true',
                     },
                 });
+
+                // Stop polling on authentication errors
+                if (response.status === 401) {
+                    console.log('⚠️ Authentication failed, stopping WhatsApp status polling');
+                    setIsPolling(false);
+                    setIsGeneratingQR(false);
+                    return;
+                }
+
                 if (response.ok) {
                     const data = await response.json();
-
-                    // DEBUG: Log what we're receiving
-                    console.log('📊 WhatsApp Status:', {
-                        has_qr_code: !!data.qr_code,
-                        qr_length: data.qr_code?.length || 0,
-                        ready: data.ready,
-                        expired: data.expired,
-                        message: data.message,
-                        linkMethod: linkMethod,
-                        isExpired: isExpired
-                    });
 
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
                     setQrCode(data.qr_code || null);
+
+                    // Stop polling once WhatsApp is connected
+                    if (data.ready === true) {
+                        console.log('✅ WhatsApp connected, stopping status polling');
+                        setIsPolling(false);
+                        setIsGeneratingQR(false);
+                        return;
+                    }
+
+                    // Turn off loading state when QR code arrives
+                    if (data.qr_code && isGeneratingQR) {
+                        setIsGeneratingQR(false);
+                    }
 
                     if (data.pairing_code) {
                         setPairingCode(data.pairing_code);
@@ -93,16 +105,19 @@ export default function SetupScreen() {
                         setQrCode(null);
                         setPairingCode(null);
                         setIsPolling(false);
+                        setIsGeneratingQR(false);
                     }
                     setLastError(null);
                 }
             } catch (error: any) {
                 console.log("Polling error:", error);
+                // Stop polling on network errors to prevent spam
+                setIsPolling(false);
             }
         }, 3000);
 
         return () => clearInterval(interval);
-    }, [token, isPolling]);
+    }, [token, isPolling, isGeneratingQR]);
 
     // Countdown Timer
     useEffect(() => {
@@ -139,13 +154,17 @@ export default function SetupScreen() {
     };
 
     const handleGenerateQR = async () => {
+        // Prevent multiple clicks
+        if (isGeneratingQR) return;
+
         try {
+            setIsGeneratingQR(true);
             setIsExpired(false);
             setQrCode(null);
             setPairingCode(null);
             setIsPolling(true);
             setCountdown(60);
-            setWhatsappStatusMessage('Initializing...');
+            setWhatsappStatusMessage('Generating QR code...');
 
             // NEW: Use /whatsapp/connect endpoint
             const response = await fetch(`${BASE_URL}/whatsapp/connect`, {
@@ -159,9 +178,14 @@ export default function SetupScreen() {
             if (!response.ok) {
                 throw new Error('Failed to start WhatsApp');
             }
+
+            // Keep loading state until QR code appears
+            // The polling will set isGeneratingQR to false when QR arrives
         } catch (error) {
             console.error('Error starting WhatsApp:', error);
             Alert.alert('Error', 'Failed to generate connection code');
+            setIsGeneratingQR(false);
+            setWhatsappStatusMessage('');
         }
     };
 
@@ -318,16 +342,32 @@ export default function SetupScreen() {
                                     </Text>
                                     <View style={{ flexDirection: 'row', gap: 12 }}>
                                         <TouchableOpacity
-                                            style={[styles.methodButton, linkMethod === 'qr' && styles.methodButtonActive]}
+                                            style={[
+                                                styles.methodButton,
+                                                linkMethod === 'qr' && styles.methodButtonActive,
+                                                isGeneratingQR && { opacity: 0.6 }
+                                            ]}
                                             onPress={() => {
                                                 setLinkMethod('qr');
                                                 handleGenerateQR();
                                             }}
+                                            disabled={isGeneratingQR}
                                         >
-                                            <Ionicons name="qr-code" size={24} color={linkMethod === 'qr' ? colors.primary : '#666'} />
-                                            <Text style={[styles.methodButtonText, linkMethod === 'qr' && styles.methodButtonTextActive]}>
-                                                QR Code
-                                            </Text>
+                                            {isGeneratingQR ? (
+                                                <>
+                                                    <ActivityIndicator size="small" color={colors.primary} />
+                                                    <Text style={[styles.methodButtonText, styles.methodButtonTextActive]}>
+                                                        Generating...
+                                                    </Text>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="qr-code" size={24} color={linkMethod === 'qr' ? colors.primary : '#666'} />
+                                                    <Text style={[styles.methodButtonText, linkMethod === 'qr' && styles.methodButtonTextActive]}>
+                                                        QR Code
+                                                    </Text>
+                                                </>
+                                            )}
                                         </TouchableOpacity>
 
                                         <TouchableOpacity
@@ -345,6 +385,19 @@ export default function SetupScreen() {
                                             </View>
                                         </TouchableOpacity>
                                     </View>
+                                </View>
+                            )}
+
+                            {/* Loading State - Show while generating QR */}
+                            {isGeneratingQR && !qrCode && (
+                                <View style={{ alignItems: 'center', marginVertical: 30 }}>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                    <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '600', color: colors.primary }}>
+                                        🔄 Generating QR Code...
+                                    </Text>
+                                    <Text style={{ marginTop: 8, fontSize: 14, color: '#666', textAlign: 'center' }}>
+                                        Please wait, this will only take a few seconds
+                                    </Text>
                                 </View>
                             )}
 
@@ -371,12 +424,20 @@ export default function SetupScreen() {
                             {/* Generate New Code Button */}
                             {(qrCode || isExpired) && (
                                 <TouchableOpacity
-                                    style={styles.buttonPrimary}
+                                    style={[styles.buttonPrimary, isGeneratingQR && { opacity: 0.6 }]}
                                     onPress={handleGenerateQR}
+                                    disabled={isGeneratingQR}
                                 >
-                                    <Text style={styles.buttonTextPrimary}>
-                                        Generate New Code
-                                    </Text>
+                                    {isGeneratingQR ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <ActivityIndicator size="small" color="#fff" />
+                                            <Text style={styles.buttonTextPrimary}>Generating...</Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.buttonTextPrimary}>
+                                            Generate New Code
+                                        </Text>
+                                    )}
                                 </TouchableOpacity>
                             )}
                         </View>

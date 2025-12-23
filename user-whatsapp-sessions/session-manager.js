@@ -155,19 +155,32 @@ app.post('/sessions/start/:userId', async (req, res) => {
  */
 app.post('/sessions/stop/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
+    const { cleanAuth = true } = req.body; // Default to cleaning auth
 
     try {
         if (!activeSessions.has(userId)) {
-            return res.status(404).json({
-                success: false,
-                message: 'No active session found'
+            // Even if no active session, try to clean auth folder if requested
+            if (cleanAuth) {
+                const authFolder = `./sessions/user_${userId}`;
+                try {
+                    const fs = await import('fs');
+                    fs.default.rmSync(authFolder, { recursive: true, force: true });
+                    console.log(`🧹 Cleaned auth folder for user ${userId} (no active session)`);
+                } catch (e) {
+                    console.log(`⚠️ Auth cleanup warning: ${e.message}`);
+                }
+            }
+
+            return res.json({
+                success: true,
+                message: 'No active session found, auth cleaned'
             });
         }
 
         const session = activeSessions.get(userId);
         console.log(`🛑 Stopping WhatsApp session for User ${userId}`);
 
-        // Try graceful shutdown first
+        // Try graceful shutdown first (SIGTERM will trigger graceful shutdown in user-session.js)
         try {
             session.process.kill('SIGTERM');
 
@@ -187,6 +200,23 @@ app.post('/sessions/stop/:userId', async (req, res) => {
 
         // Remove from active sessions
         activeSessions.delete(userId);
+
+        // Clean up auth folder if requested (backup cleanup in case process didn't do it)
+        if (cleanAuth) {
+            // Wait a moment for process to clean up first
+            setTimeout(async () => {
+                const authFolder = `./sessions/user_${userId}`;
+                try {
+                    const fs = await import('fs');
+                    if (fs.default.existsSync(authFolder)) {
+                        fs.default.rmSync(authFolder, { recursive: true, force: true });
+                        console.log(`🧹 Backup: Cleaned auth folder for user ${userId}`);
+                    }
+                } catch (e) {
+                    console.log(`⚠️ Backup auth cleanup warning: ${e.message}`);
+                }
+            }, 2500); // After SIGTERM grace period
+        }
 
         res.json({
             success: true,

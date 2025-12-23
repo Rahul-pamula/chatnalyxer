@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from app import models
 from app.database import engine
-from app.routers import auth, groups, dashboard, messages, whatsapp, ai, users, admin, email, pdf, notifications, events, media, debug
+from app.routers import (
+    auth, messages, users, groups, ai, dashboard, whatsapp, admin, email, pdf, notifications, events, media, debug, speech
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 # Auto-create tables (for dev only)
@@ -85,6 +87,12 @@ app.include_router(notifications.router)
 app.include_router(events.router)
 app.include_router(media.router)
 app.include_router(debug.router) # NEW: Debug endpoints
+app.include_router(speech.router) # NEW: Voice assistant endpoints
+
+# Import and add test router
+from app.routers import test_events
+app.include_router(test_events.router)
+
 
 # Start notification scheduler (optional)
 @app.on_event("startup")

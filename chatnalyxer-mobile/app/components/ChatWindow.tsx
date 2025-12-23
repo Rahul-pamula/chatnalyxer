@@ -75,12 +75,22 @@ export function ChatWindow({ visible, onClose, initialContext }: ChatWindowProps
             const response = await chatWithAI(userMsg.text);
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
-                text: response.response, // Adjusted to match API response schema
+                text: response.response,
                 sender: 'ai',
                 timestamp: new Date()
             };
-            setMessages(prev => [...prev, aiMsg]);
+
+            // Force immediate state update
+            setMessages(prev => {
+                const newMessages = [...prev, aiMsg];
+                // Scroll to bottom after state update
+                setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+                return newMessages;
+            });
         } catch (error) {
+            console.error('Chat error:', error);
             const errorMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 text: "Sorry, I'm having trouble connecting to the brain. Please try again.",

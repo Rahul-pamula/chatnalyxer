@@ -642,6 +642,58 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+
+/**
+ * Graceful shutdown handler
+ * Properly logs out from WhatsApp and cleans up auth files
+ */
+async function gracefulShutdown(signal) {
+    console.log(`🛑 Received ${signal}, shutting down gracefully...`);
+
+    try {
+        // 1. Logout from WhatsApp
+        if (sock) {
+            console.log('📤 Logging out from WhatsApp...');
+            await sock.logout();
+            console.log('✅ WhatsApp logout complete');
+        }
+    } catch (e) {
+        console.log('⚠️ Logout error:', e.message);
+    }
+
+    try {
+        // 2. End socket connection
+        if (sock) {
+            console.log('🔌 Closing socket connection...');
+            sock.end(undefined);
+            sock = null;
+        }
+    } catch (e) {
+        console.log('⚠️ Socket close error:', e.message);
+    }
+
+    try {
+        // 3. Clean up auth folder
+        console.log(`🧹 Cleaning auth folder: ${AUTH_FOLDER}`);
+        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+        console.log('✅ Auth folder cleaned');
+    } catch (e) {
+        console.log('⚠️ Auth cleanup error:', e.message);
+    }
+
+    console.log('✅ Shutdown complete');
+    process.exit(0);
+}
+
+// Handle SIGTERM (from session manager)
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Handle SIGINT (Ctrl+C during development)
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// ============================================
 // START SERVER
 // ============================================
 

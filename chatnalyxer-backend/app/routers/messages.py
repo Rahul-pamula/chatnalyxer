@@ -305,7 +305,7 @@ def list_messages(
     q = db.query(models.Message).filter(
         models.Message.deleted_at.is_(None),
         models.Message.group_id.in_(selected_group_ids) if selected_group_ids else False,
-        models.Message.priority_level.in_(['HIGH', 'MEDIUM'])  # Only HIGH and MEDIUM priority
+        models.Message.priority_level.in_(['CRITICAL', 'HIGH', 'MEDIUM'])  # Include CRITICAL priority
     )
     
     if group_id:

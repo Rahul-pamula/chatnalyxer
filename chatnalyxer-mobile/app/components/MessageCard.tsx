@@ -9,7 +9,7 @@ interface Message {
     sender_name: string;
     content: string;
     ai_summary?: string;
-    priority_level: 'HIGH' | 'MEDIUM' | 'LOW';
+    priority_level: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
     created_at: string;
     media_type?: string;
 }
@@ -17,11 +17,13 @@ interface Message {
 interface MessageCardProps {
     message: Message;
     onPress: () => void;
+    onDelete?: (messageId: number) => void;
 }
 
-export default function MessageCard({ message, onPress }: MessageCardProps) {
+export default function MessageCard({ message, onPress, onDelete }: MessageCardProps) {
     const getPriorityColor = () => {
         switch (message.priority_level) {
+            case 'CRITICAL': return '#DC2626'; // Dark red for critical
             case 'HIGH': return colors.error;
             case 'MEDIUM': return colors.warning;
             case 'LOW': return colors.success;
@@ -31,6 +33,7 @@ export default function MessageCard({ message, onPress }: MessageCardProps) {
 
     const getPriorityIcon = () => {
         switch (message.priority_level) {
+            case 'CRITICAL': return 'alert';
             case 'HIGH': return 'alert-circle';
             case 'MEDIUM': return 'warning';
             case 'LOW': return 'checkmark-circle';
@@ -71,12 +74,7 @@ export default function MessageCard({ message, onPress }: MessageCardProps) {
                         <Text style={styles.sender}>{message.sender_name}</Text>
                     </View>
                 </View>
-                <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor() + '20' }]}>
-                    <Ionicons name={getPriorityIcon() as any} size={14} color={getPriorityColor()} />
-                    <Text style={[styles.priorityText, { color: getPriorityColor() }]}>
-                        {message.priority_level}
-                    </Text>
-                </View>
+                {/* Priority badge removed for cleaner UI */}
             </View>
 
             {/* Content */}
@@ -100,16 +98,29 @@ export default function MessageCard({ message, onPress }: MessageCardProps) {
                     <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
                     <Text style={styles.time}>{getTimeAgo(message.created_at)}</Text>
                 </View>
-                {message.media_type && (
-                    <View style={styles.mediaTag}>
-                        <Ionicons
-                            name={message.media_type === 'pdf' ? 'document' : 'image'}
-                            size={14}
-                            color={colors.primary}
-                        />
-                        <Text style={styles.mediaText}>{message.media_type.toUpperCase()}</Text>
-                    </View>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {message.media_type && (
+                        <View style={styles.mediaTag}>
+                            <Ionicons
+                                name={message.media_type === 'pdf' ? 'document' : 'image'}
+                                size={14}
+                                color={colors.primary}
+                            />
+                            <Text style={styles.mediaText}>{message.media_type.toUpperCase()}</Text>
+                        </View>
+                    )}
+                    {onDelete && (
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                onDelete(message.id);
+                            }}
+                            style={styles.deleteButton}
+                        >
+                            <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -226,5 +237,10 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         color: colors.primary,
+    },
+    deleteButton: {
+        padding: 6,
+        borderRadius: 8,
+        backgroundColor: colors.error + '15',
     },
 });

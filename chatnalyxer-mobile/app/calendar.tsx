@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Platform, Animated } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,25 +16,69 @@ export default function CalendarScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Animation values
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(50)).current;
 
     useEffect(() => {
         fetchEvents();
+
+        // Add timeout to prevent infinite loading
+        const timeout = setTimeout(() => {
+            if (loading) {
+                setLoading(false);
+                // Don't show error, just stop loading
+                console.log('Calendar load timeout - continuing anyway');
+            }
+        }, 5000); // 5 second timeout
+
+        return () => clearTimeout(timeout);
     }, []);
+
+    // Trigger animations when events load
+    useEffect(() => {
+        if (!loading && events.length > 0) {
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(slideAnim, {
+                    toValue: 0,
+                    duration: 500,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [loading, events]);
 
     const fetchEvents = async () => {
         try {
+            setError(null);
             const response = await fetch(`${BASE_URL}/events`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
 
+            if (response.status === 401) {
+                setError('Session expired - please login again');
+                setTimeout(() => router.push('/login'), 2000);
+                return;
+            }
+
             if (response.ok) {
                 const data = await response.json();
                 setEvents(data.events || []);
+            } else {
+                setError('Failed to load events');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching events:', error);
+            setError(error.message || 'Failed to load events');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -181,14 +225,15 @@ export default function CalendarScreen() {
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+
+            {/* Modern Header */}
+            <View style={styles.modernHeader}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Calendar</Text>
-                <TouchableOpacity onPress={() => setShowAddModal(true)}>
-                    <Ionicons name="add-circle-outline" size={28} color={colors.primary} />
+                <Text style={styles.modernHeaderTitle}>Calendar</Text>
+                <TouchableOpacity onPress={() => setShowAddModal(true)} style={styles.addButton}>
+                    <Ionicons name="add-circle" size={28} color={colors.primary} />
                 </TouchableOpacity>
             </View>
 
@@ -197,14 +242,30 @@ export default function CalendarScreen() {
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.loadingText}>Loading events...</Text>
                 </View>
+            ) : error ? (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorIcon}>⚠️</Text>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <TouchableOpacity
+                        style={styles.retryButton}
+                        onPress={() => {
+                            setLoading(true);
+                            setError(null);
+                            fetchEvents();
+                        }}
+                    >
+                        <Text style={styles.retryButtonText}>Retry</Text>
+                    </TouchableOpacity>
+                </View>
             ) : (
                 <ScrollView
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
                 >
+
                     {/* Calendar */}
-                    <View style={styles.calendarContainer}>
+                    <Animated.View style={[styles.calendarContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
                         <Calendar
                             current={selectedDate}
                             onDayPress={(day) => setSelectedDate(day.dateString)}
@@ -227,7 +288,7 @@ export default function CalendarScreen() {
                                 textMonthFontSize: 18,
                             }}
                         />
-                    </View>
+                    </Animated.View>
 
                     {/* Events for Selected Date */}
                     <View style={styles.eventsSection}>
@@ -286,6 +347,33 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderBottomWidth: 1,
         borderColor: colors.border,
+    },
+    modernHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 60,
+        paddingBottom: 20,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        ...shadows.sm,
+    },
+    backButton: {
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: colors.surface,
+    },
+    modernHeaderTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        flex: 1,
+        textAlign: 'center',
+    },
+    addButton: {
+        padding: 4,
     },
     backBtn: {
         padding: 8,
@@ -387,5 +475,52 @@ const styles = StyleSheet.create({
         marginTop: 12,
         fontSize: 16,
         color: colors.textSecondary,
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 32,
+    },
+    errorIcon: {
+        fontSize: 48,
+        marginBottom: 16,
+    },
+    errorText: {
+        fontSize: 16,
+        color: colors.error,
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    retryButton: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    retryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    quickEventButton: {
+        backgroundColor: '#007AFF',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: 16,
+        margin: 16,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    quickEventText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
