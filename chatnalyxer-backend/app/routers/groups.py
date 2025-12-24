@@ -26,9 +26,13 @@ def create_group(group: schemas.GroupCreate, db: Session = Depends(get_db)):
 
 @router.get("/", response_model=list[schemas.GroupOut])
 def list_groups(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get groups that the current user is a member of (only active groups)"""
     # Get groups that the current user is a member of
+    # Filter by is_active to exclude deleted WhatsApp groups
     user_groups = db.query(models.Group).join(models.GroupMember).filter(
-        models.GroupMember.user_id == current_user.id).all()
+        models.GroupMember.user_id == current_user.id,
+        models.Group.is_active == True  # Only show active groups
+    ).all()
     return user_groups
 
 
@@ -67,6 +71,7 @@ def sync_groups_from_whatsapp(
     """Sync groups from WhatsApp integration service"""
     created_count = 0
     updated_count = 0
+    deactivated_count = 0
     
     # Verify user exists
     user = db.query(models.User).filter(models.User.id == payload.user_id).first()
@@ -76,6 +81,20 @@ def sync_groups_from_whatsapp(
             detail=f"User with id {payload.user_id} not found"
         )
 
+    # Get list of current WhatsApp group IDs
+    current_whatsapp_ids = [g.get('whatsapp_id') for g in payload.groups if g.get('whatsapp_id')]
+    
+    # Mark groups as inactive if they're no longer in WhatsApp
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == payload.user_id
+    ).all()
+    
+    for group in user_groups:
+        if group.whatsapp_id not in current_whatsapp_ids and group.is_active:
+            group.is_active = False
+            deactivated_count += 1
+
+    # Process current WhatsApp groups
     for group_data in payload.groups:
         whatsapp_id = group_data.get('whatsapp_id')
         name = group_data.get('name')
@@ -93,6 +112,10 @@ def sync_groups_from_whatsapp(
             if existing_group.name != name:
                 existing_group.name = name
                 updated_count += 1
+            # Reactivate if it was inactive
+            if not existing_group.is_active:
+                existing_group.is_active = True
+                updated_count += 1
             group = existing_group
         else:
             # Create new group
@@ -100,6 +123,7 @@ def sync_groups_from_whatsapp(
                 name=name,
                 whatsapp_id=whatsapp_id,
                 is_selected=0,  # Default to not selected
+                is_active=True,  # New groups are active
                 user_id=payload.user_id # ✅ Link to user directly
             )
             db.add(new_group)
@@ -124,9 +148,10 @@ def sync_groups_from_whatsapp(
     db.commit()
 
     return {
-        "message": f"Synced groups for user {payload.user_id}: {created_count} created, {updated_count} updated",
+        "message": f"Synced groups for user {payload.user_id}: {created_count} created, {updated_count} updated, {deactivated_count} deactivated",
         "created": created_count,
-        "updated": updated_count
+        "updated": updated_count,
+        "deactivated": deactivated_count
     }
 
 

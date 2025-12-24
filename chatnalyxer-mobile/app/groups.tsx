@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { getGroups, updateGroupSelection } from "../src/services/api";
 import { useAuth } from "../src/context/AuthContext";
@@ -31,6 +32,7 @@ export default function Groups() {
   const { user, token } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
@@ -39,7 +41,9 @@ export default function Groups() {
   }, [token]);
 
   const loadGroups = async (syncFirst: boolean = false) => {
-    setLoading(true);
+    const isRefreshing = refreshing;
+    if (!isRefreshing) setLoading(true);
+
     try {
       // Optionally sync from WhatsApp first
       if (syncFirst) {
@@ -54,7 +58,7 @@ export default function Groups() {
 
           if (syncResponse.ok) {
             const syncData = await syncResponse.json();
-            console.log(`✅ Synced ${syncData.count} groups from WhatsApp`);
+            console.log(`✅ Synced ${syncData.count || 0} groups from WhatsApp`);
           }
         } catch (syncErr) {
           console.warn("⚠️ Sync failed, continuing with cached groups:", syncErr);
@@ -68,7 +72,13 @@ export default function Groups() {
       Alert.alert("Error", "Failed to load groups. Please try again.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadGroups(true); // Always sync when pulling to refresh
   };
 
   const toggleGroupSelection = async (group: Group) => {
@@ -117,7 +127,7 @@ export default function Groups() {
         <Text style={styles.emptySubtitle}>
           Make sure WhatsApp integration is running and groups are synced
         </Text>
-        <Pressable style={styles.primaryBtn} onPress={loadGroups}>
+        <Pressable style={styles.primaryBtn} onPress={() => loadGroups(true)}>
           <Text style={styles.primaryBtnText}>Refresh List</Text>
         </Pressable>
       </View>
@@ -164,6 +174,14 @@ export default function Groups() {
         contentContainerStyle={styles.listContent}
         data={filteredGroups}
         keyExtractor={(item) => item.id.toString()}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
         renderItem={({ item, index }) => (
           <Animated.View
             entering={FadeInDown.delay(index * 100).springify()}

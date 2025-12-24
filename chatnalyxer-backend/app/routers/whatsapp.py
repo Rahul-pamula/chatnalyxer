@@ -389,3 +389,120 @@ async def update_whatsapp_status(
     except Exception as e:
         db.rollback()
         raise HTTPException(500, str(e))
+
+
+@router.post("/sync-groups")
+async def sync_groups_from_whatsapp(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch current WhatsApp groups from session manager and sync with database
+    Marks deleted groups as inactive
+    """
+    try:
+        if not current_user.whatsapp_connected:
+            raise HTTPException(400, "WhatsApp not connected")
+        
+        # Get current groups from session manager
+        print(f"📡 Fetching groups from WhatsApp for user {current_user.id}...")
+        response = requests.get(
+            f"{SESSION_MANAGER_URL}/sessions/{current_user.id}/groups",
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(500, "Failed to fetch groups from WhatsApp")
+        
+        whatsapp_groups = response.json().get("groups", [])
+        print(f"📊 Found {len(whatsapp_groups)} groups in WhatsApp")
+        
+        # Import Group model
+        from ..models import Group, GroupMember
+        
+        # Get current WhatsApp group IDs
+        current_whatsapp_ids = [g.get("id") for g in whatsapp_groups if g.get("id")]
+        
+        # Mark groups as inactive if they're no longer in WhatsApp
+        user_groups = db.query(Group).join(GroupMember).filter(
+            GroupMember.user_id == current_user.id
+        ).all()
+        
+        deactivated_count = 0
+        for group in user_groups:
+            if group.whatsapp_id not in current_whatsapp_ids and group.is_active:
+                group.is_active = False
+                deactivated_count += 1
+        
+        # Process current WhatsApp groups
+        created_count = 0
+        updated_count = 0
+        
+        for group_data in whatsapp_groups:
+            whatsapp_id = group_data.get("id")
+            name = group_data.get("subject") or group_data.get("name", "Unknown Group")
+            
+            if not whatsapp_id:
+                continue
+            
+            # Check if group exists
+            existing_group = db.query(Group).filter(
+                Group.whatsapp_id == whatsapp_id
+            ).first()
+            
+            if existing_group:
+                # Update name if changed
+                if existing_group.name != name:
+                    existing_group.name = name
+                    updated_count += 1
+                # Reactivate if it was inactive
+                if not existing_group.is_active:
+                    existing_group.is_active = True
+                    updated_count += 1
+                group = existing_group
+            else:
+                # Create new group
+                new_group = Group(
+                    name=name,
+                    whatsapp_id=whatsapp_id,
+                    is_selected=0,
+                    is_active=True,
+                    user_id=current_user.id
+                )
+                db.add(new_group)
+                db.commit()
+                db.refresh(new_group)
+                group = new_group
+                created_count += 1
+            
+            # Ensure user membership
+            membership = db.query(GroupMember).filter(
+                GroupMember.user_id == current_user.id,
+                GroupMember.group_id == group.id
+            ).first()
+            
+            if not membership:
+                new_membership = GroupMember(
+                    user_id=current_user.id,
+                    group_id=group.id
+                )
+                db.add(new_membership)
+        
+        db.commit()
+        
+        print(f"✅ Sync complete: {created_count} created, {updated_count} updated, {deactivated_count} deactivated")
+        
+        return {
+            "success": True,
+            "count": len(whatsapp_groups),
+            "created": created_count,
+            "updated": updated_count,
+            "deactivated": deactivated_count,
+            "message": f"Synced {len(whatsapp_groups)} groups"
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(503, f"Session manager unavailable: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to sync groups: {str(e)}")

@@ -310,6 +310,31 @@ app.post('/sessions/pairing/:userId', async (req, res) => {
     }
 });
 
+// Get groups for a user session
+app.get('/sessions/:userId/groups', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+
+    if (!activeSessions.has(userId)) {
+        return res.status(404).json({
+            error: 'No active session. Start session first.'
+        });
+    }
+
+    const session = activeSessions.get(userId);
+
+    try {
+        // Forward request to user's WhatsApp service
+        const response = await axios.get(`http://localhost:${session.port}/groups`); // Assuming the user's service has a /groups endpoint
+        res.json(response.data);
+    } catch (error) {
+        console.error(`❌ Error fetching groups for user ${userId}:`, error);
+        res.status(500).json({
+            error: 'Failed to fetch groups',
+            message: error.message
+        });
+    }
+});
+
 /**
  * List all active sessions
  */

@@ -75,31 +75,38 @@ class SmartMessageProcessor:
                     event_type=deadline_info.get('event_type', 'event')
                 )
                 
-                # Create event
-                event = Event(
-                    user_id=user.id,
-                    title=deadline_info.get('subject', 'Event'),
-                    description=message.content,
-                    event_date=event_datetime.date(),
-                    event_time=event_datetime.time(),
-                    event_type=deadline_info.get('event_type'),
-                    source='ai_detected',
-                    source_message_id=message.id
-                )
-                
-                db.add(event)
-                db.commit()
-                db.refresh(event)
-                
-                event_created = event
-                logger.info(f"  ✅ Event created: {event.title}")
-                
-                # Step 4: Schedule Reminders
-                reminders_scheduled = await ReminderScheduler.schedule_reminders(
-                    db=db,
-                    event=event,
-                    user=user
-                )
+                # ✅ CHECK IF EVENT IS IN THE PAST
+                now = datetime.now()
+                if event_datetime <= now:
+                    logger.info(f"  ⏰ Event is in the past ({event_datetime}), skipping creation")
+                    logger.info(f"     Current time: {now}")
+                    # Don't create event for past deadlines
+                else:
+                    # Create event only if it's in the future
+                    event = Event(
+                        user_id=user.id,
+                        title=deadline_info.get('subject', 'Event'),
+                        description=message.content,
+                        event_date=event_datetime.date(),
+                        event_time=event_datetime.time(),
+                        event_type=deadline_info.get('event_type'),
+                        source='ai_detected',
+                        source_message_id=message.id
+                    )
+                    
+                    db.add(event)
+                    db.commit()
+                    db.refresh(event)
+                    
+                    event_created = event
+                    logger.info(f"  ✅ Event created: {event.title}")
+                    
+                    # Step 4: Schedule Reminders
+                    reminders_scheduled = await ReminderScheduler.schedule_reminders(
+                        db=db,
+                        event=event,
+                        user=user
+                    )
             
             # Step 5: Send Notification for HIGH/CRITICAL messages
             notification_sent = False

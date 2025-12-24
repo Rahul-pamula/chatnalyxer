@@ -630,6 +630,42 @@ app.post('/send-otp', async (req, res) => {
     }
 });
 
+// Get WhatsApp groups
+app.get('/groups', async (req, res) => {
+    if (!sock) {
+        return res.status(503).json({ error: 'WhatsApp not connected' });
+    }
+
+    try {
+        // Fetch all groups
+        const groups = await sock.groupFetchAllParticipating();
+
+        // Convert to array
+        const groupsList = Object.values(groups).map(group => ({
+            id: group.id,
+            subject: group.subject,
+            name: group.subject,
+            participants: group.participants?.length || 0,
+            creation: group.creation,
+            owner: group.owner
+        }));
+
+        console.log(`📊 Fetched ${groupsList.length} groups`);
+
+        res.json({
+            success: true,
+            count: groupsList.length,
+            groups: groupsList
+        });
+    } catch (error) {
+        console.error('❌ Error fetching groups:', error);
+        res.status(500).json({
+            error: 'Failed to fetch groups',
+            message: error.message
+        });
+    }
+});
+
 // Health Check
 app.get('/health', (req, res) => {
     res.json({
