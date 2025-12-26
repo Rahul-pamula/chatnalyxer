@@ -8,6 +8,13 @@ export interface Message {
     role: 'user' | 'ai';
     content: string;
     timestamp: Date;
+    event_data?: {
+        id: number;
+        title: string;
+        content: string;
+        deadline: string;
+        group_name: string;
+    };
 }
 
 export interface Task {

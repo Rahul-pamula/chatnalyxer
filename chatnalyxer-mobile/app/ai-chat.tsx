@@ -63,6 +63,7 @@ export default function AIChatScreen() {
                 role: 'ai',
                 content: response.response, // Backend returns { response: "text" }
                 timestamp: new Date(),
+                event_data: response.event_data // Save event details
             };
 
             setMessages((prev) => [...prev, aiMsg]);
@@ -97,6 +98,26 @@ export default function AIChatScreen() {
                 <Text style={[styles.messageText, isUser ? styles.userText : styles.aiText]}>
                     {item.content}
                 </Text>
+
+                {/* Render Notification Button for AI Messages if event data exists */}
+                {!isUser && item.event_data && (
+                    <TouchableOpacity
+                        style={styles.notificationButton}
+                        onPress={() => {
+                            router.push({
+                                pathname: `/notifications/${item.event_data?.id}`,
+                                params: {
+                                    content: item.event_data?.content,
+                                    deadline: item.event_data?.deadline,
+                                    group_name: item.event_data?.group_name
+                                }
+                            } as any);
+                        }}
+                    >
+                        <Ionicons name="notifications-outline" size={16} color="#10b981" />
+                    </TouchableOpacity>
+                )}
+
                 <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.aiTimestamp]}>
                     {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
@@ -133,6 +154,7 @@ export default function AIChatScreen() {
                             role: 'ai',
                             content: response.response,
                             timestamp: new Date(),
+                            event_data: response.event_data // Save event details
                         };
                         setMessages((prev) => [...prev, aiMsg]);
 
@@ -386,4 +408,14 @@ const styles = StyleSheet.create({
     sendButtonDisabled: {
         backgroundColor: '#475569',
     },
+    // New Style for Notification Button (Matches MessageCard.tsx)
+    notificationButton: {
+        padding: 6,
+        borderRadius: 8,
+        backgroundColor: 'rgba(52, 211, 153, 0.15)', // Light green tint
+        marginTop: 8,
+        alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: 'rgba(52, 211, 153, 0.3)',
+    }
 });

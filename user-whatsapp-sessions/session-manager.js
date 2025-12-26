@@ -205,6 +205,13 @@ app.post('/sessions/stop/:userId', async (req, res) => {
         if (cleanAuth) {
             // Wait a moment for process to clean up first
             setTimeout(async () => {
+                // RACE CONDITION FIX: check if a NEW session has started for this user
+                // If the user quickly restarted (Stop -> Start), we must NOT delete the folder
+                if (activeSessions.has(userId)) {
+                    console.log(`⚠️ Skipping auth cleanup for user ${userId} - New session already active`);
+                    return;
+                }
+
                 const authFolder = `./sessions/user_${userId}`;
                 try {
                     const fs = await import('fs');

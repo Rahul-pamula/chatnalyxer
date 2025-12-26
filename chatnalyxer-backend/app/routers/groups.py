@@ -157,10 +157,11 @@ def sync_groups_from_whatsapp(
 
 @router.get("/selected", response_model=list[schemas.GroupOut])
 def get_selected_groups(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get only selected groups for the current user"""
+    """Get only selected AND active groups for the current user"""
     user_groups = db.query(models.Group).join(models.GroupMember).filter(
         models.GroupMember.user_id == current_user.id,
-        models.Group.is_selected == 1
+        models.Group.is_selected == 1,
+        models.Group.is_active == True  # ✅ Ensure we only return active groups
     ).all()
     return user_groups
 
@@ -174,6 +175,7 @@ def get_selected_groups_for_user(
     """Get selected groups for a specific user (for WhatsApp integration)"""
     user_groups = db.query(models.Group).join(models.GroupMember).filter(
         models.GroupMember.user_id == user_id,
-        models.Group.is_selected == 1
+        models.Group.is_selected == 1,
+        models.Group.is_active == True # ✅ Ensure we only processed active groups
     ).all()
     return user_groups

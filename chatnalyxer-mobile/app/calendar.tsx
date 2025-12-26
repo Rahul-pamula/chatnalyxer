@@ -43,9 +43,9 @@ export default function CalendarScreen() {
         return () => clearTimeout(timeout);
     }, [params.date]);
 
-    // Trigger animations when events load
+    // Trigger animations when loading is done (regardless of event count)
     useEffect(() => {
-        if (!loading && events.length > 0) {
+        if (!loading) {
             Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 1,
@@ -59,7 +59,7 @@ export default function CalendarScreen() {
                 }),
             ]).start();
         }
-    }, [loading, events]);
+    }, [loading]);
 
     const fetchEvents = async () => {
         try {

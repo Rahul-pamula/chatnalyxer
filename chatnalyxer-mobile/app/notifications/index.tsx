@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, StatusBar, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { colors } from '../src/theme/colors';
-import BottomNav from './components/BottomNav';
+import { colors } from '../../src/theme/colors';
+import BottomNav from '../components/BottomNav';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../src/context/AuthContext';
-import { BASE_URL } from '../src/config';
+import { useAuth } from '../../src/context/AuthContext';
+import { BASE_URL } from '../../src/config';
+import { useRouter } from 'expo-router';
 
 interface Notification {
     id: number;
     title: string;
     message: string;
-    scheduled_for: string;
+    scheduled_time: string; // Corrected from scheduled_for
+    event_deadline?: string; // New field from backend
     is_sent: boolean;
     is_read: boolean;
     priority: 'HIGH' | 'MEDIUM' | 'CRITICAL';
@@ -19,6 +21,7 @@ interface Notification {
 
 export default function Notifications() {
     const { token } = useAuth();
+    const router = useRouter(); // Added router
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +40,10 @@ export default function Notifications() {
 
             if (response.ok) {
                 const data = await response.json();
-                setNotifications(data);
+                const finalNotifications = data.notifications || [];
+                setNotifications(finalNotifications);
+            } else {
+                console.error("❌ Notification Fetch Failed:", response.status);
             }
         } catch (error) {
             console.error('Error fetching notifications:', error);
@@ -112,7 +118,23 @@ export default function Notifications() {
                 styles.notificationCard,
                 !notification.is_read && styles.unreadCard
             ]}
-            onPress={() => markAsRead(notification.id)}
+            onPress={() => {
+                // Navigate to schedule details
+                router.push({
+                    pathname: `/notifications/${notification.id}`,
+                    params: {
+                        content: notification.message, // Map message to content for details screen
+                        // Use event_deadline if available (for correct Timeline), else scheduled_time
+                        deadline: notification.event_deadline || notification.scheduled_time,
+                        group_name: "System Reminder" // Default since not all notifications have groups
+                    }
+                } as any);
+
+                // Also mark as read
+                if (!notification.is_read) {
+                    markAsRead(notification.id);
+                }
+            }}
         >
             <View style={styles.notificationHeader}>
                 <View style={styles.priorityBadge}>
@@ -126,12 +148,12 @@ export default function Notifications() {
                     </Text>
                 </View>
                 <Text style={styles.timeText}>
-                    {formatScheduledTime(notification.scheduled_for)}
+                    {formatScheduledTime(notification.scheduled_time)}
                 </Text>
             </View>
 
             <Text style={styles.notificationTitle}>{notification.title}</Text>
-            <Text style={styles.notificationMessage}>{notification.message}</Text>
+            <Text style={styles.notificationMessage} numberOfLines={2}>{notification.message}</Text>
 
             <View style={styles.notificationFooter}>
                 <View style={styles.statusBadge}>
@@ -144,6 +166,9 @@ export default function Notifications() {
                         {notification.is_sent ? 'Sent' : 'Scheduled'}
                     </Text>
                 </View>
+
+                {/* Add Chevron to indicate clickable */}
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
             </View>
         </TouchableOpacity>
     );
@@ -175,7 +200,7 @@ export default function Notifications() {
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                     }
                 >
-                    {notifications.length === 0 ? (
+                    {(!notifications || notifications.length === 0) ? (
                         <View style={styles.emptyState}>
                             <Ionicons name="notifications-outline" size={64} color={colors.textSecondary} />
                             <Text style={styles.emptyText}>No notifications yet</Text>
@@ -185,7 +210,7 @@ export default function Notifications() {
                         </View>
                     ) : (
                         <View style={styles.notificationsList}>
-                            {notifications && notifications.length > 0 && notifications.map(renderNotification)}
+                            {notifications.map(renderNotification)}
                         </View>
                     )}
                 </ScrollView>

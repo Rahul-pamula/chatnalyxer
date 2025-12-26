@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 from ..database import get_db
 from .. import models
 from ..deps import get_current_user
@@ -64,7 +65,17 @@ async def get_notifications(
                 "is_sent": n.is_sent,
                 "sent_at": n.sent_at.isoformat() if n.sent_at else None,
                 "type": n.notification_type,
-                "event_id": n.related_event_id
+                "event_id": n.related_event_id,
+                # Resolve the actual deadline for the Timeline view
+                "event_deadline": (
+                    datetime.combine(n.related_event.event_date, n.related_event.event_time).isoformat()
+                    if n.related_event and n.related_event.event_time
+                    else (
+                        n.related_event.event_date.isoformat() 
+                        if n.related_event 
+                        else (n.scheduled_time.isoformat() if n.scheduled_time else None)
+                    )
+                )
             }
             for n in notifications
         ]
@@ -92,3 +103,26 @@ async def delete_notification(
     db.commit()
     
     return {"success": True, "message": "Notification deleted"}
+
+@router.post("/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Mark a notification as read.
+    """
+    notification = db.query(models.Notification).filter(
+        models.Notification.id == notification_id,
+        models.Notification.user_id == current_user.id
+    ).first()
+    
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    notification.is_read = True
+    notification.read_at = datetime.utcnow()
+    db.commit()
+    
+    return {"success": True, "message": "Notification marked as read"}

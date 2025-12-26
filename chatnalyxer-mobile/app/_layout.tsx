@@ -51,6 +51,8 @@ function InitialLayout() {
         <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
         <Stack.Screen name="admin/login" options={{ title: "Admin Login" }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "Admin Dashboard", headerLeft: () => null }} />
+        {/* Explicitly hide header for notification details */}
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
       </Stack>
     </View>
   );

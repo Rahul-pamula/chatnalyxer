@@ -86,7 +86,7 @@ export default function GroupDetails() {
                     <Text style={styles.avatarText}>{groupName.charAt(0).toUpperCase()}</Text>
                 </View>
                 <View>
-                    <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
+                    <Text style={styles.headerTitle}>{groupName}</Text>
                     <Text style={styles.headerSubtitle}>Important Updates</Text>
                 </View>
             </View>
@@ -173,7 +173,8 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: colors.textPrimary,
-        maxWidth: 200,
+        flexWrap: 'wrap', // Allow text to wrap
+        textAlign: 'center', // Center align multiline text
     },
     headerSubtitle: {
         fontSize: 12,

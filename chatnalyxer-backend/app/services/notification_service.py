@@ -136,10 +136,15 @@ async def schedule_event_reminders(event_id: int, db: Session):
         event_datetime = datetime.combine(event.event_date, event.event_time or datetime.min.time())
         reminder_time = event_datetime - timedelta(minutes=event.reminder_minutes)
         
-        # Don't schedule if reminder time is in the past
+        # Don't schedule if reminder time is in the past, UNLESS it's very recent, 
+        # but for manual events user wants to see it in the list regardless.
+        # So if reminder is in past, set it to now + 1 min so it triggers immediately?
+        # Or just let it be created with past time so it shows up in list but might not push
+        
         if reminder_time <= datetime.now():
-            logger.warning(f"Reminder time for event {event_id} is in the past, skipping")
-            return
+            # Force it to be at least now so it appears in list
+            logger.info(f"Reminder time for event {event_id} was in past, adjusting to now")
+            reminder_time = datetime.now() + timedelta(seconds=10)
         
         # Create notification
         notification = models.Notification(

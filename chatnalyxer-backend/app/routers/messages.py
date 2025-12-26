@@ -466,14 +466,14 @@ def delete_message(
 
     message.deleted_at = get_ist_now()
     
-    # Also delete associated event if it exists
-    event = db.query(models.ScheduledEvent).filter(
+    # Also delete associated event(s) if they exist
+    # Using delete() directly allows handling multiple events if they exist
+    deleted_events = db.query(models.ScheduledEvent).filter(
         models.ScheduledEvent.message_id == message_id
-    ).first()
+    ).delete()
     
-    if event:
-        db.delete(event) # Hard delete the event for now as it doesn't have deleted_at
-        # Or if we want soft delete, we'd need to add deleted_at to ScheduledEvent
+    if deleted_events:
+        print(f"🗑️ Also deleted {deleted_events} scheduled event(s) associated with message {message_id}")
         
     db.commit()
     return {"message": "Message and associated event moved to trash successfully"}
@@ -551,9 +551,14 @@ def permanent_delete_message(
         raise HTTPException(
             status_code=404, detail="Message not found in trash")
 
+    # Also delete associated event(s) if they exist (just in case they weren't deleted during soft delete)
+    db.query(models.ScheduledEvent).filter(
+        models.ScheduledEvent.message_id == message_id
+    ).delete()
+
     db.delete(message)
     db.commit()
-    return {"message": "Message permanently deleted"}
+    return {"message": "Message and associated events permanently deleted"}
 
 
 @router.post("/{message_id}/toggle-priority", response_model=schemas.MessageOut)

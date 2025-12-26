@@ -230,17 +230,29 @@ async def delete_event(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Delete an event.
+    Delete an event (Manual or AI/Scheduled).
     """
+    # 1. Try to find in manual events
     event = db.query(models.Event).filter(
         models.Event.id == event_id,
         models.Event.user_id == current_user.id
     ).first()
     
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
-    db.delete(event)
-    db.commit()
-    
-    return {"success": True, "message": "Event deleted"}
+    if event:
+        db.delete(event)
+        db.commit()
+        return {"success": True, "message": "Event deleted"}
+
+    # 2. If not found, try to find in scheduled events (AI created)
+    scheduled_event = db.query(models.ScheduledEvent).filter(
+        models.ScheduledEvent.id == event_id,
+        models.ScheduledEvent.user_id == current_user.id
+    ).first()
+
+    if scheduled_event:
+        db.delete(scheduled_event)
+        db.commit()
+        return {"success": True, "message": "Scheduled event deleted"}
+
+    # 3. If neither found
+    raise HTTPException(status_code=404, detail="Event not found")

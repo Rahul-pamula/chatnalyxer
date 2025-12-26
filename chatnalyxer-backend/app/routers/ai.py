@@ -7,6 +7,7 @@ from ..deps import get_current_user
 from ..services.ai_analyzer import ai_analyzer
 import google.generativeai as genai
 import os
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -106,21 +107,127 @@ def chat_with_ai(
     
     **Instructions:**
     - You are a helpful AI study assistant.
-    - **LANGUAGE RULE:** ALWAYS reply in **ENGLISH** by default, especially when explaining messages in other languages (like Telugu/Hindi). 
-    - **EXCEPTION:** Only switch to the user's native language if they EXPLICITLY ask (e.g., "Telugu lo cheppu", "Explain in Hindi").
-    - PRIORITIZE the context above.
-    - CITATIONS: If you use information from a [Document], cite it.
-    - GENERAL CHAT: Answer general questions freely using your own knowledge.
-    - Do NOT say "I couldn't find that information" unless strictly necessary.
+    - **LANGUAGE RULE:** ALWAYS reply in **ENGLISH** by default.
+    - **Tools:** You have access to a tool `schedule_event`. call it if the user asks to schedule something.
+    - If the user asks to "schedule" or "remind" them about something, USE THE TOOL.
+    - Current Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     - Be friendly, encouraging, and concise.
     """
+    
+    # Tool Definition
+    tools_config = [
+        {
+            "function_declarations": [
+                {
+                    "name": "schedule_event",
+                    "description": "Schedule a new event or reminder in the calendar",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Title of the event"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Description of the event"
+                            },
+                            "deadline": {
+                                "type": "string",
+                                "description": "Date and time of the event in ISO format (YYYY-MM-DD HH:MM:SS)"
+                            }
+                        },
+                        "required": ["title", "deadline"]
+                    }
+                }
+            ]
+        }
+    ]
     
     # 4. Generate Response
     ai_text = "I'm having trouble connecting to my brain right now."
     try:
         if ai_analyzer and ai_analyzer.gemini_model:
-            response = ai_analyzer.gemini_model.generate_content(prompt)
-            ai_text = response.text
+            # Generate with tools
+            response = ai_analyzer.gemini_model.generate_content(
+                prompt,
+                tools=tools_config
+            )
+            
+            # Check for function call
+            if response.parts and response.parts[0].function_call:
+                fc = response.parts[0].function_call
+                if fc.name == 'schedule_event':
+                    args = fc.args
+                    
+                    try:
+                        # Parse deadline
+                        deadline_str = args.get('deadline')
+                        # Gemini might return ISO or other formats, try best effort
+                        if 'T' in deadline_str:
+                            dt = datetime.fromisoformat(deadline_str)
+                        else:
+                            dt = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M:%S')
+                            
+                        # Create the event using the generic Event model
+                        new_event = models.Event(
+                            user_id=current_user.id,
+                            title=args.get('title'),
+                            description=args.get('description', ''),
+                            event_date=dt.date(),
+                            event_time=dt.time(),
+                            source='ai_chat',
+                            is_all_day=False,
+                            reminder_minutes=30
+                        )
+                        db.add(new_event)
+                        db.commit()
+                        db.refresh(new_event)
+                        
+                        # Added: Create Notification record so it appears in the Notification Schedule
+                        # Default to 30 mins before or immediate if close
+                        reminder_time = dt - timedelta(minutes=30)
+                        if reminder_time < datetime.now():
+                            reminder_time = datetime.now() + timedelta(minutes=1)
+                            
+                        new_notification = models.Notification(
+                            user_id=current_user.id,
+                            title=f"Reminder: {new_event.title}",
+                            message=f"{new_event.description or new_event.title} is coming up at {dt.strftime('%I:%M %p')}",
+                            scheduled_time=reminder_time,
+                            notification_type="event_reminder",
+                            related_event_id=new_event.id,
+                            priority="HIGH",
+                            is_read=False,
+                            is_sent=False
+                        )
+                        db.add(new_notification)
+                        db.commit()
+                        db.refresh(new_notification) # Refresh to get ID
+                        
+                        ai_text = f"✅ Okay, I've scheduled '{args.get('title')}' for {dt.strftime('%B %d at %I:%M %p')}."
+                        
+                        # Return event data for UI button
+                        return {
+                            "response": ai_text,
+                            "event_data": {
+                                "id": new_notification.id,
+                                "event_id": new_event.id,
+                                "title": new_event.title,
+                                "content": new_event.description or new_event.title,
+                                "deadline": dt.isoformat(),
+                                "group_name": "AI Assistant"
+                            }
+                        }
+                        
+                    except Exception as e:
+                        print(f"Scheduling Error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        ai_text = f"I tried to schedule that, but I got confused with the date format ({args.get('deadline')}). Please try again."
+            else:
+                ai_text = response.text
+                
         else:
             ai_text = "AI Service is currently unavailable."
     except Exception as e:
@@ -134,7 +241,7 @@ def chat_with_ai(
         user_id=current_user.id,
         user_message=user_message,
         ai_response=ai_text,
-        context_used={'source_count': len(recent_msgs)}
+        context_used={'source_count': len(recent_msgs), 'function_call': 'schedule_event' if '✅' in ai_text else None}
     )
     db.add(conversation)
     db.commit()

@@ -15,7 +15,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 export default function Dashboard() {
+  // ... (keep state and logic same) ...
   const router = useRouter();
   const { token, user } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -25,7 +28,7 @@ export default function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const notifiedMessagesRef = React.useRef<Set<number>>(new Set());
 
-  // Load notified IDs on mount
+  // ... (keep useEffects and handlers same) ...
   useEffect(() => {
     AsyncStorage.getItem('notifiedMessages').then(json => {
       if (json) {
@@ -36,9 +39,8 @@ export default function Dashboard() {
   }, []);
 
   const handleDeleteMessage = async (messageId: number) => {
+    // ... (keep logic) ...
     console.log('🗑️ Delete button clicked for message:', messageId);
-
-    // Use window.confirm for web, Alert for mobile
     const confirmed = typeof window !== 'undefined' && window.confirm
       ? window.confirm('Move this message to trash?')
       : await new Promise<boolean>((resolve) => {
@@ -52,46 +54,27 @@ export default function Dashboard() {
         );
       });
 
-    if (!confirmed) {
-      console.log('❌ Delete cancelled by user');
-      return;
-    }
+    if (!confirmed) return;
 
-    console.log('⚠️ DELETE CONFIRMED - Starting delete process...');
     try {
-      console.log('🔄 Sending DELETE request to:', `${BASE_URL}/messages/${messageId}`);
-      console.log('🔑 Token:', token ? 'Present' : 'Missing');
-
       const response = await fetch(`${BASE_URL}/messages/${messageId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      console.log('📡 Response status:', response.status);
-
       if (response.ok) {
-        console.log('✅ Message deleted successfully');
         setMessages(messages.filter((m: any) => m.id !== messageId));
       } else {
         const errorText = await response.text();
-        console.error('❌ Delete failed:', response.status, errorText);
-        if (typeof window !== 'undefined' && window.alert) {
-          window.alert(`Failed to delete: ${errorText}`);
-        } else {
-          Alert.alert('Error', `Failed to delete: ${errorText}`);
-        }
+        Alert.alert('Error', `Failed to delete: ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Error deleting message:', error);
-      if (typeof window !== 'undefined' && window.alert) {
-        window.alert('Failed to delete message');
-      } else {
-        Alert.alert('Error', 'Failed to delete message');
-      }
+      Alert.alert('Error', 'Failed to delete message');
     }
   };
 
   const fetchData = async () => {
+    // ... (keep fetchData logic exactly as is) ...
     try {
       setLoading(true);
 
@@ -114,7 +97,6 @@ export default function Dashboard() {
       }
 
       // CHECK FOR NEW URGENT MESSAGES TO NOTIFY LOCALLY
-      // (Bypasses Expo Go Push Limitations)
       if (messagesRes.ok) {
         const freshMessages = await messagesRes.clone().json();
         const urgentMessages = freshMessages.filter((m: any) =>
@@ -124,28 +106,20 @@ export default function Dashboard() {
 
         for (const msg of urgentMessages) {
           console.log('🔔 Triggering local notification for:', msg.id);
-
-          // 1. Play In-App Sound
           await SoundManager.playUrgentSound();
-
-          // 2. Schedule Immediate Notification
           await scheduleLocalNotification(
             `URGENT: ${msg.group_name || 'New Message'}`,
             msg.ai_summary || msg.content,
             1
           );
-
-          // 3. Schedule Timed Reminders (15m, 1h, 1d) if deadline exists
           if (msg.deadline_extracted) {
             const deadlineDate = new Date(msg.deadline_extracted.substring(0, 19));
             await scheduleDeadlineReminders(deadlineDate, msg.ai_summary || msg.content);
           }
-
           notifiedMessagesRef.current.add(msg.id);
         }
 
         if (urgentMessages.length > 0) {
-          // Save notified set
           AsyncStorage.setItem('notifiedMessages', JSON.stringify(Array.from(notifiedMessagesRef.current)));
         }
       }
@@ -159,13 +133,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-
-    // Auto-refresh every 10 seconds
     const interval = setInterval(() => {
       fetchData();
-    }, 10000); // 10 seconds
-
-    // Cleanup interval on unmount
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -183,7 +153,7 @@ export default function Dashboard() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
 
@@ -273,7 +243,7 @@ export default function Dashboard() {
         visible={isChatOpen}
         onClose={() => setIsChatOpen(false)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -282,37 +252,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    backgroundColor: 'transparent',
-    zIndex: 1000,
-  },
   dashboardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
+    paddingVertical: 12, // Reduced padding as SafeAreaView handles top
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -330,24 +275,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-  },
-  logo: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontFamily: 'System',
-    letterSpacing: -0.5,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  headerIcons: {
-    flexDirection: 'row',
     gap: 16,
   },
   feed: {

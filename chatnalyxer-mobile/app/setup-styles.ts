@@ -1,10 +1,11 @@
 import { StyleSheet, Platform } from 'react-native';
 import { colors } from '../src/theme/colors';
 
+// ... (imports)
 export const setupStyles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f7fa', // Softer background
+        backgroundColor: '#f5f7fa',
     },
     scrollContent: {
         padding: 24,
@@ -16,23 +17,33 @@ export const setupStyles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        marginBottom: 32,
-        alignItems: 'center',
-        marginTop: Platform.OS === 'ios' ? 20 : 0,
+        marginBottom: 24,
+        marginTop: 10,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    titleContainer: {
+        flex: 1,
+        paddingRight: 16,
+    },
+    profileButton: {
+        padding: 4,
     },
     title: {
         fontSize: 28,
         fontWeight: '800',
         color: '#1a1a1a',
-        marginBottom: 12,
-        textAlign: 'center',
+        marginBottom: 8,
+        textAlign: 'left',
     },
     subtitle: {
         fontSize: 16,
         color: '#666',
-        textAlign: 'center',
-        lineHeight: 24,
-        maxWidth: '85%',
+        textAlign: 'left',
+        lineHeight: 22,
     },
     card: {
         backgroundColor: '#ffffff',
@@ -53,7 +64,7 @@ export const setupStyles = StyleSheet.create({
         marginBottom: 16,
     },
     cardTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#2c3e50',
     },
@@ -163,42 +174,51 @@ export const setupStyles = StyleSheet.create({
         color: '#34495e',
         marginBottom: 8,
     },
-    comingSoonBadge: {
-        backgroundColor: '#fff3e0',
-        alignSelf: 'flex-start',
+    // "Coming Soon" - Top Right of Card
+    comingSoonBadgeInline: {
+        backgroundColor: '#FFF8E1', // Very light yellow background
+        borderColor: '#FFC107',     // Amber border
+        borderWidth: 1,
         paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-        marginBottom: 12,
+        paddingVertical: 2,
+        borderRadius: 12,
+        marginLeft: 8,
     },
-    comingSoonText: {
-        color: '#fff',
+    comingSoonTextInline: {
+        color: '#B00020', // Dark contrast color (Dark Red)
         fontSize: 10,
         fontWeight: '700',
         letterSpacing: 0.5,
     },
+
     methodButtonContent: {
-        flexDirection: 'row',
+        flexDirection: 'column', // Changed to column to stack icon/text
         alignItems: 'center',
+        justifyContent: 'center', // Center content
         gap: 8,
-        position: 'relative',
+        width: '100%',
     },
-    comingSoonBadgeSmall: {
-        backgroundColor: colors.warning,
+    // The Pairing Code Badge (Absolute Positioned)
+    comingSoonBadgeAbsolute: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: '#FF5252', // Red background for high visibility
         paddingHorizontal: 6,
-        paddingVertical: 2,
+        paddingVertical: 3,
         borderRadius: 4,
-        marginLeft: 4,
+        zIndex: 10,
+        elevation: 2,
     },
     comingSoonTextSmall: {
-        color: '#fff',
-        fontSize: 8,
+        color: '#fff', // White text on Red bg
+        fontSize: 9,
         fontWeight: '700',
         letterSpacing: 0.3,
     },
     methodButtonDisabled: {
-        opacity: 0.5,
-        backgroundColor: '#f5f5f5',
+        opacity: 0.6,
+        backgroundColor: '#f9f9f9',
     },
     emailDesc: {
         fontSize: 14,
@@ -236,20 +256,30 @@ export const setupStyles = StyleSheet.create({
     whatsappDesc: {
         fontSize: 14,
         color: '#666',
-        marginBottom: 16,
+        marginBottom: 20,
         lineHeight: 20,
+    },
+    methodTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 12,
+        color: '#333'
+    },
+    methodsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        height: 100, // Fixed height for consistency
     },
     methodButton: {
         flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
         borderRadius: 12,
         borderWidth: 2,
         borderColor: '#e0e0e0',
         backgroundColor: '#fff',
-        gap: 8,
+        padding: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative', // For absolute badge
     },
     methodButtonActive: {
         borderColor: colors.primary,
@@ -259,6 +289,7 @@ export const setupStyles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#666',
+        textAlign: 'center',
     },
     methodButtonTextActive: {
         color: colors.primary,
@@ -286,4 +317,30 @@ export const setupStyles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
     },
+    calendarButton: {
+        backgroundColor: colors.primary + '20',
+        padding: 12,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 16
+    },
+    calendarButtonText: {
+        color: colors.primary,
+        fontWeight: '600',
+        fontSize: 14
+    },
+    generatingText: {
+        marginTop: 16,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.primary
+    },
+    waitText: {
+        marginTop: 8,
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center'
+    }
 });
