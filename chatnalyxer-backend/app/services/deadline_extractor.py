@@ -67,6 +67,11 @@ Extract the following information:
 
 3. **deadline_time**: Time in HH:MM:SS format (24-hour)
    - If mentioned explicitly: use that time
+   - **CRITICAL: Handle Ambiguous Times (No AM/PM):**
+     - If message says "at 5" or "by 8" (no AM/PM), infer the **NEXT NEAREST FUTURE TIME**.
+     - Example: If now is 2 PM and message says "at 5", assume 5 PM (17:00).
+     - Example: If now is 6 PM and message says "at 5", assume 5 PM TOMORROW (or context dependent).
+     - Default to sensible business hours (9AM-9PM) if unsure.
    - If "morning": use 09:00:00
    - If "afternoon": use 14:00:00
    - If "evening": use 18:00:00
@@ -174,4 +179,6 @@ If no deadline is found, return:
             time_str = DeadlineExtractor.get_smart_default_time(event_type)
         
         datetime_str = f"{date_str} {time_str}"
-        return datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+        dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+        # Make timezone-aware (Local Time) to ensure correct diff calculation
+        return dt.astimezone()

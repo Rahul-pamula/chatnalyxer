@@ -12,6 +12,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
+# New endpoint for auto-created scheduled events from deadlines
+@router.get("/scheduled")
+async def get_scheduled_events(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Get scheduled events auto-created from message deadlines.
+    """
+    try:
+        logger.info(f"📅 Fetching scheduled events for user: {current_user.username} (ID: {current_user.id})")
+        
+        events = db.query(models.ScheduledEvent).filter(
+            models.ScheduledEvent.user_id == current_user.id,
+            models.ScheduledEvent.is_completed == False
+        ).order_by(models.ScheduledEvent.deadline.asc()).all()
+        
+        logger.info(f"✅ Found {len(events)} scheduled events for user {current_user.username}")
+        
+        return {
+            "events": [
+                {
+                    "id": e.id,
+                    "title": e.title,
+                    "description": e.description,
+                    "deadline": e.deadline.isoformat() if e.deadline else None,
+                    "message_id": e.message_id,
+                    "is_completed": e.is_completed,
+                    "created_at": e.created_at.isoformat() if e.created_at else None
+                }
+                for e in events
+            ]
+        }
+    except Exception as e:
+        logger.error(f"❌ Error fetching scheduled events: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
+
 class EventCreate(BaseModel):
     title: str
     description: Optional[str] = None

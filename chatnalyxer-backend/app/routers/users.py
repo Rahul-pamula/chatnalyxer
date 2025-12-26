@@ -96,3 +96,12 @@ def update_profile(
         db.refresh(current_user, attribute_names=["user_profile"])
         
     return schemas.UserOut.from_orm(current_user)
+@router.post("/push-token")
+def save_push_token(
+    token_req: schemas.PushTokenRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    current_user.push_token = token_req.push_token
+    db.commit()
+    return {"message": "Push token saved"}

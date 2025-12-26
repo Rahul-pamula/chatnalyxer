@@ -31,8 +31,8 @@ class User(Base):
     whatsapp_qr_code = Column(Text, nullable=True)
     whatsapp_pairing_code = Column(String(8), nullable=True)
 
-    # relationship
-    messages = relationship("Message", back_populates="sender")
+    # relationship - specify foreign_keys to avoid ambiguity with receiver_user_id
+    messages = relationship("Message", back_populates="sender", foreign_keys="Message.sender_id")
     groups = relationship("GroupMember", back_populates="user")
     
     # AI relationships
@@ -210,6 +210,9 @@ class Message(Base):
 
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    
+    # Track which user's WhatsApp session received this message (for multi-user isolation)
+    receiver_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # ML-based priority detection fields
     priority_level = Column(String(10), default="MEDIUM",
@@ -244,8 +247,40 @@ class Message(Base):
     # NULL = not deleted, timestamp = deleted
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    sender = relationship("User", back_populates="messages")
+    sender = relationship("User", back_populates="messages", foreign_keys=[sender_id])
     group = relationship("Group", back_populates="messages")
+
+
+
+
+# --- Scheduled Events for Deadline Management ---
+
+class ScheduledEvent(Base):
+    __tablename__ = "scheduled_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False)
+    
+    # Event details
+    title = Column(String(500), nullable=False)  # From AI summary or content
+    description = Column(Text, nullable=True)     # Full message content
+    deadline = Column(DateTime(timezone=True), nullable=False)
+    
+    # Notification settings
+    notify_1h_before = Column(Boolean, default=True)
+    notify_1d_before = Column(Boolean, default=True)
+    notification_sent_1h = Column(Boolean, default=False)
+    notification_sent_1d = Column(Boolean, default=False)
+    
+    # Status
+    is_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    user = relationship("User")
+    message = relationship("Message")
 
 
 # --- AI Integration Models ---

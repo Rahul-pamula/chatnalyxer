@@ -26,8 +26,19 @@ try:
     import os
     if os.getcwd() not in sys.path:
         sys.path.append(os.getcwd())
+    
+    # Migration 1: Add user_id to groups
     from migrate_groups_userid import migrate
     migrate()
+    
+    # Migration 2: Add receiver_user_id to messages
+    from migrate_receiver_user_id import migrate as migrate_receiver
+    migrate_receiver()
+    
+    # Migration 3: Add scheduled_events table
+    from migrate_scheduled_events import migrate as migrate_events
+    migrate_events()
+    
     print("✅ Auto-migration success!")
 except Exception as e:
     print(f"⚠️ Auto-migration failed (might be already done): {e}")

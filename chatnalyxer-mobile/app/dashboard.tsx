@@ -8,8 +8,10 @@ import { BASE_URL } from '../src/config';
 import BottomNav from './components/BottomNav';
 import GroupStories from './components/GroupStories';
 import MessageCard from './components/MessageCard';
-import { ChatFab } from './components/ChatFab';
 import { ChatWindow } from './components/ChatWindow';
+import { scheduleLocalNotification, scheduleDeadlineReminders } from '../src/services/notifications';
+import { SoundManager } from './components/SoundManager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
@@ -21,6 +23,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const notifiedMessagesRef = React.useRef<Set<number>>(new Set());
+
+  // Load notified IDs on mount
+  useEffect(() => {
+    AsyncStorage.getItem('notifiedMessages').then(json => {
+      if (json) {
+        const ids = JSON.parse(json);
+        ids.forEach((id: number) => notifiedMessagesRef.current.add(id));
+      }
+    });
+  }, []);
 
   const handleDeleteMessage = async (messageId: number) => {
     console.log('🗑️ Delete button clicked for message:', messageId);
@@ -99,6 +112,43 @@ export default function Dashboard() {
         const data = await groupsRes.json();
         setGroups(data);
       }
+
+      // CHECK FOR NEW URGENT MESSAGES TO NOTIFY LOCALLY
+      // (Bypasses Expo Go Push Limitations)
+      if (messagesRes.ok) {
+        const freshMessages = await messagesRes.clone().json();
+        const urgentMessages = freshMessages.filter((m: any) =>
+          (m.priority_level === 'CRITICAL' || m.priority_level === 'HIGH') &&
+          !notifiedMessagesRef.current.has(m.id)
+        );
+
+        for (const msg of urgentMessages) {
+          console.log('🔔 Triggering local notification for:', msg.id);
+
+          // 1. Play In-App Sound
+          await SoundManager.playUrgentSound();
+
+          // 2. Schedule Immediate Notification
+          await scheduleLocalNotification(
+            `URGENT: ${msg.group_name || 'New Message'}`,
+            msg.ai_summary || msg.content,
+            1
+          );
+
+          // 3. Schedule Timed Reminders (15m, 1h, 1d) if deadline exists
+          if (msg.deadline_extracted) {
+            const deadlineDate = new Date(msg.deadline_extracted.substring(0, 19));
+            await scheduleDeadlineReminders(deadlineDate, msg.ai_summary || msg.content);
+          }
+
+          notifiedMessagesRef.current.add(msg.id);
+        }
+
+        if (urgentMessages.length > 0) {
+          // Save notified set
+          AsyncStorage.setItem('notifiedMessages', JSON.stringify(Array.from(notifiedMessagesRef.current)));
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -109,6 +159,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(() => {
+      fetchData();
+    }, 10000); // 10 seconds
+
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
   }, []);
 
   const onRefresh = () => {

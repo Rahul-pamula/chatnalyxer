@@ -1,6 +1,6 @@
-// Backend URL Configuration - Local Development
-export const BASE_URL = 'http://10.91.26.32:8000'; // Local network IP
-export const OTP_URL = 'http://10.91.26.32:8000';
+// Backend URL Configuration - Ngrok Tunnel (for cross-network testing)
+export const BASE_URL = 'https://4bea37335ba2.ngrok-free.app';
+export const OTP_URL = 'https://4bea37335ba2.ngrok-free.app';
 export const QR_URL = `${BASE_URL}/qr`;
 
 // For Azure production (when ready), uncomment below:

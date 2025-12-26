@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Platform, Animated } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../src/theme/colors';
@@ -11,6 +11,7 @@ import AddEventModal from './components/AddEventModal';
 export default function CalendarScreen() {
     const router = useRouter();
     const { token } = useAuth();
+    const params = useLocalSearchParams();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -23,6 +24,11 @@ export default function CalendarScreen() {
     const slideAnim = useRef(new Animated.Value(50)).current;
 
     useEffect(() => {
+        // Handle date parameter from URL (when navigating from message deadline)
+        if (params.date && typeof params.date === 'string') {
+            setSelectedDate(params.date);
+        }
+
         fetchEvents();
 
         // Add timeout to prevent infinite loading
@@ -35,7 +41,7 @@ export default function CalendarScreen() {
         }, 5000); // 5 second timeout
 
         return () => clearTimeout(timeout);
-    }, []);
+    }, [params.date]);
 
     // Trigger animations when events load
     useEffect(() => {
@@ -58,24 +64,54 @@ export default function CalendarScreen() {
     const fetchEvents = async () => {
         try {
             setError(null);
-            const response = await fetch(`${BASE_URL}/events`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
 
-            if (response.status === 401) {
+            // Fetch both manual events and auto-created scheduled events
+            const [manualResponse, scheduledResponse] = await Promise.all([
+                fetch(`${BASE_URL}/events/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${BASE_URL}/events/scheduled`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            if (manualResponse.status === 401 || scheduledResponse.status === 401) {
                 setError('Session expired - please login again');
                 setTimeout(() => router.push('/login'), 2000);
                 return;
             }
 
-            if (response.ok) {
-                const data = await response.json();
-                setEvents(data.events || []);
-            } else {
-                setError('Failed to load events');
+            let allEvents: any[] = [];
+
+            // Add manual events
+            if (manualResponse.ok) {
+                const manualData = await manualResponse.json();
+                const manualEvents = (manualData.events || []).map((e: any) => ({
+                    ...e,
+                    source: e.source || 'manual',
+                    event_date: e.event_date,
+                    event_time: e.event_time
+                }));
+                allEvents = [...allEvents, ...manualEvents];
             }
+
+            // Add scheduled events (from deadlines)
+            if (scheduledResponse.ok) {
+                const scheduledData = await scheduledResponse.json();
+                console.log('📅 Scheduled events fetched:', scheduledData.events?.length || 0);
+                const scheduledEvents = (scheduledData.events || []).map((e: any) => ({
+                    ...e,
+                    source: 'ai_detected',
+                    // Convert deadline to event_date and event_time for consistent display
+                    event_date: e.deadline ? new Date(e.deadline).toISOString().split('T')[0] : null,
+                    event_time: e.deadline ? new Date(e.deadline).toTimeString().slice(0, 5) : null,
+                    deadline: e.deadline
+                }));
+                allEvents = [...allEvents, ...scheduledEvents];
+            }
+
+            console.log('📊 Total events loaded:', allEvents.length);
+            setEvents(allEvents);
         } catch (error: any) {
             console.error('Error fetching events:', error);
             setError(error.message || 'Failed to load events');
@@ -118,7 +154,7 @@ export default function CalendarScreen() {
     const markedDates: any = {};
     events.forEach((event: any) => {
         const date = event.event_date;
-        if (!markedDates[date]) {
+        if (date && !markedDates[date]) {
             markedDates[date] = { marked: true, dots: [] };
         }
     });
@@ -314,7 +350,7 @@ export default function CalendarScreen() {
                     <View style={styles.eventsSection}>
                         <Text style={styles.sectionTitle}>Upcoming Events</Text>
                         {events
-                            .filter(e => new Date(e.event_date) >= new Date())
+                            .filter(e => e.event_date && new Date(e.event_date) >= new Date())
                             .slice(0, 5)
                             .map(renderEventCard)
                         }

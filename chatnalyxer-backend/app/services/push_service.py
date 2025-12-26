@@ -3,8 +3,9 @@ Push Notification Service
 Handles sending push notifications via Expo Push API
 """
 
-import requests
+import httpx
 import logging
+from datetime import datetime
 from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
@@ -67,11 +68,16 @@ async def send_push_notification(
         
         # Send to Expo Push API
         logger.info(f"Sending push notification to user {user_id}: {title}")
-        response = requests.post(
-            EXPO_PUSH_URL,
-            json=message,
-            headers={"Content-Type": "application/json"}
-        )
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                EXPO_PUSH_URL,
+                json=message,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                }
+            )
         
         # Check response
         if response.status_code == 200:
@@ -87,10 +93,13 @@ async def send_push_notification(
             # Save notification to database
             notification = Notification(
                 user_id=user_id,
-                message_id=data.get("messageId") if data else None,
+                related_message_id=data.get("messageId") if data else None,
                 title=title,
-                body=body,
-                priority=priority
+                message=body,
+                priority=priority,
+                is_sent=True,
+                sent_at=datetime.now(),
+                notification_type="push"
             )
             db.add(notification)
             db.commit()

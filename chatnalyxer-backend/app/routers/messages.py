@@ -135,6 +135,7 @@ def create_whatsapp_message(
         content=payload.content,
         group_id=group.id,
         sender_id=default_user.id,
+        receiver_user_id=payload.user_id,  # Track which user received this message
         created_at=get_ist_now(), # Use server time
         priority_level=ai_results['priority_level'],
         urgency_score=ai_results['urgency_score'],
@@ -197,6 +198,23 @@ def create_whatsapp_message(
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    
+    # Auto-create scheduled event if deadline was extracted
+    if msg.deadline_extracted:
+        try:
+            event = models.ScheduledEvent(
+                user_id=payload.user_id,
+                message_id=msg.id,
+                title=msg.ai_summary[:500] if msg.ai_summary else msg.content[:500],
+                description=msg.content,
+                deadline=msg.deadline_extracted
+            )
+            db.add(event)
+            db.commit()
+            print(f"📅 Auto-created event for message {msg.id} with deadline: {msg.deadline_extracted}")
+        except Exception as e:
+            print(f"⚠️ Failed to create event: {e}")
+            # Don't fail the message creation if event creation fails
     
     # 🤖 Generate AI Summary for extracted content (NEW - Phase 1)
     if payload.extracted_content and ai_analyzer:
@@ -294,24 +312,33 @@ def list_messages(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    # Get user's selected groups
-    selected_group_ids = db.query(models.Group.id).join(models.GroupMember).filter(
-        models.GroupMember.user_id == user.id,
-        models.Group.is_selected == 1
-    ).all()
-    selected_group_ids = [g[0] for g in selected_group_ids]
-    
-    # Filter messages by selected groups and exclude LOW priority
+    # Filter messages received by this user only
     q = db.query(models.Message).filter(
         models.Message.deleted_at.is_(None),
-        models.Message.group_id.in_(selected_group_ids) if selected_group_ids else False,
-        models.Message.priority_level.in_(['CRITICAL', 'HIGH', 'MEDIUM'])  # Include CRITICAL priority
+        models.Message.receiver_user_id == user.id,  # Filter by receiver
+        models.Message.priority_level.in_(['CRITICAL', 'HIGH', 'MEDIUM'])
     )
     
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
     
-    messages = q.order_by(models.Message.created_at.desc()).limit(100).all()
+    
+    # Smart ordering: deadlines first (closest first), then by priority, then by creation time
+    from sqlalchemy import case, nullslast
+    
+    messages = q.order_by(
+        # Messages with deadlines first (closest deadline at top)
+        nullslast(models.Message.deadline_extracted.asc()),
+        # Then by priority level
+        case(
+            (models.Message.priority_level == 'CRITICAL', 1),
+            (models.Message.priority_level == 'HIGH', 2),
+            (models.Message.priority_level == 'MEDIUM', 3),
+            else_=4
+        ),
+        # Finally by creation time (newest first)
+        models.Message.created_at.desc()
+    ).limit(100).all()
     
     # Populate group_name and sender_name for each message
     for msg in messages:
@@ -357,14 +384,11 @@ def list_priority_messages_public(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Get priority messages from user's groups only"""
-    # Get user's group IDs for isolation
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    """Get priority messages received by this user only"""
     q = db.query(models.Message).filter(
         models.Message.is_priority == 1,
         models.Message.deleted_at.is_(None),
-        models.Message.group_id.in_(user_group_ids)
+        models.Message.receiver_user_id == user.id  # Filter by receiver, not group
     )
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
@@ -416,11 +440,9 @@ def empty_trash(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Permanently delete ALL messages in trash for user's groups"""
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    """Permanently delete ALL messages in trash received by this user"""
     deleted_count = db.query(models.Message).filter(
-        models.Message.group_id.in_(user_group_ids),
+        models.Message.receiver_user_id == user.id,
         models.Message.deleted_at.is_not(None)
     ).delete(synchronize_session=False)
     
@@ -434,20 +456,27 @@ def delete_message(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Soft delete a message by ID (only from user's groups)"""
+    """Soft delete a message by ID (only messages received by this user)"""
     message = db.query(models.Message).filter(
-        models.Message.id == message_id).first()
+        models.Message.id == message_id,
+        models.Message.receiver_user_id == user.id
+    ).first()
     if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
-    
-    # Security: Verify message belongs to user's group
-    user_group_ids = [g.group_id for g in user.groups]
-    if message.group_id not in user_group_ids:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this message")
+        raise HTTPException(status_code=404, detail="Message not found or not authorized")
 
     message.deleted_at = get_ist_now()
+    
+    # Also delete associated event if it exists
+    event = db.query(models.ScheduledEvent).filter(
+        models.ScheduledEvent.message_id == message_id
+    ).first()
+    
+    if event:
+        db.delete(event) # Hard delete the event for now as it doesn't have deleted_at
+        # Or if we want soft delete, we'd need to add deleted_at to ScheduledEvent
+        
     db.commit()
-    return {"message": "Message moved to trash successfully"}
+    return {"message": "Message and associated event moved to trash successfully"}
 
 
 @router.delete("")
@@ -455,15 +484,13 @@ def delete_all_messages(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Soft delete all messages from user's groups only"""
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    """Soft delete all messages received by this user"""
     print(f"Moving all messages to trash for user {user.id}")
     db.query(models.Message).filter(
-        models.Message.group_id.in_(user_group_ids)
+        models.Message.receiver_user_id == user.id
     ).update({models.Message.deleted_at: get_ist_now()})
     db.commit()
-    print(f"All messages from user {user.id}'s groups moved to trash")
+    print(f"All messages received by user {user.id} moved to trash")
     return {"message": "All messages moved to trash successfully"}
 
 
@@ -476,14 +503,10 @@ def list_trash_messages(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """List trashed messages for the user's groups"""
-    # Get user's group IDs
-    user_group_ids = [g.group_id for g in user.groups]
-    
-    # Filter deleted messages from user's groups
+    """List trashed messages received by this user"""
     q = db.query(models.Message).filter(
         models.Message.deleted_at.is_not(None),
-        models.Message.group_id.in_(user_group_ids)
+        models.Message.receiver_user_id == user.id
     )
     if group_id:
         q = q.filter(models.Message.group_id == group_id)
@@ -496,12 +519,10 @@ def restore_message(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Restore a trashed message from user's groups"""
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    """Restore a trashed message received by this user"""
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
-        models.Message.group_id.in_(user_group_ids),
+        models.Message.receiver_user_id == user.id,
         models.Message.deleted_at.is_not(None)
     ).first()
     if not message:
@@ -520,12 +541,10 @@ def permanent_delete_message(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user)
 ):
-    """Permanently delete a trashed message from user's groups"""
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    """Permanently delete a trashed message received by this user"""
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
-        models.Message.group_id.in_(user_group_ids),
+        models.Message.receiver_user_id == user.id,
         models.Message.deleted_at.is_not(None)
     ).first()
     if not message:
@@ -547,12 +566,10 @@ def toggle_message_priority(
     Feedback Loop: User toggles priority. 
     This trains the system by marking the message as a 'manual override'.
     """
-    # Verify user has access to this message
-    user_group_ids = [g.group_id for g in user.groups]
-    
+    # Verify user received this message
     message = db.query(models.Message).filter(
         models.Message.id == message_id,
-        models.Message.group_id.in_(user_group_ids)
+        models.Message.receiver_user_id == user.id
     ).first()
     
     if not message:

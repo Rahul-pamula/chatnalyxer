@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 
 function InitialLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, token } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -23,10 +23,22 @@ function InitialLayout() {
       // If profile IS complete, but we are on profile-setup, send them to dashboard
       const inSetup = segments[0] === 'profile-setup';
       if (inSetup) {
-        router.replace('/setup');
       }
     }
   }, [user, loading, segments]);
+
+  // Register for push notifications when user is logged in
+  useEffect(() => {
+    if (user && token) {
+      import("../src/services/notifications").then(({ registerForPushNotificationsAsync, savePushToken }) => {
+        registerForPushNotificationsAsync().then(pushToken => {
+          if (pushToken) {
+            savePushToken(pushToken, token);
+          }
+        });
+      });
+    }
+  }, [user, token]);
 
   return (
     <View style={styles.container}>

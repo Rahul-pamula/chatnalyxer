@@ -74,6 +74,12 @@ class UserProfileUpdate(BaseModel):
     email: Optional[EmailStr] = None
 
 
+# ----- Push Notifications -----
+
+class PushTokenRequest(BaseModel):
+    push_token: str
+
+
 # ----- OTP Authentication -----
 
 
