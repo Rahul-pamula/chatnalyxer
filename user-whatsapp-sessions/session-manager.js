@@ -24,7 +24,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
 const BASE_PORT = 4000; // User sessions start from port 4000
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 console.log(`🚀 Starting WhatsApp Session Manager on Port ${PORT}`);
 
