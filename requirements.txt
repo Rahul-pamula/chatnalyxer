@@ -1,6 +1,7 @@
 # FastAPI and ASGI Server
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
+gunicorn==21.2.0
 
 # Database
 SQLAlchemy==2.0.36
