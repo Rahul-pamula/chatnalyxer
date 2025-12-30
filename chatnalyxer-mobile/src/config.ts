@@ -1,8 +1,12 @@
-// Backend URL Configuration - Ngrok Tunnel (for cross-network testing)
-export const BASE_URL = 'https://7a99e1a67aa1.ngrok-free.app';
-export const OTP_URL = 'https://7a99e1a67aa1.ngrok-free.app';
+// Backend URL Configuration - Ngrok Tunnel
+export const BASE_URL = 'http://localhost:8000';
+export const OTP_URL = 'http://localhost:8000';
 export const QR_URL = `${BASE_URL}/qr`;
 
-// For Azure production (when ready), uncomment below:
+// For iOS Simulator / Android Emulator (use localhost):
+// export const BASE_URL = 'http://localhost:8000';
+// export const OTP_URL = 'http://localhost:8000';
+
+// For Azure production (when ready):
 // export const BASE_URL = 'https://chatnalyxer-backend-1765864832.azurewebsites.net';
 // export const OTP_URL = 'https://chatnalyxer-backend-1765864832.azurewebsites.net';

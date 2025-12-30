@@ -27,8 +27,10 @@ export default function Notifications() {
     const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
-        fetchNotifications();
-    }, []);
+        if (token) {
+            fetchNotifications();
+        }
+    }, [token]);
 
     const fetchNotifications = async () => {
         try {
@@ -90,8 +92,26 @@ export default function Notifications() {
         }
     };
 
+    const parseDate = (dateString: string) => {
+        // Fix for naive ISO strings being parsed as UTC in some engines
+        // If the string looks like "YYYY-MM-DDTHH:MM:SS" without Z or offset, parse as local
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(dateString) && !/Z|[+-]\d{2}:?\d{2}$/.test(dateString)) {
+            const parts = dateString.split(/[-T:.]/);
+            return new Date(
+                parseInt(parts[0]),
+                parseInt(parts[1]) - 1, // Month is 0-indexed
+                parseInt(parts[2]),
+                parseInt(parts[3]),
+                parseInt(parts[4]),
+                parseInt(parts[5] || '0')
+            );
+        }
+        return new Date(dateString);
+    };
+
     const formatScheduledTime = (dateString: string) => {
-        const date = new Date(dateString);
+        if (!dateString) return '';
+        const date = parseDate(dateString);
         const now = new Date();
         const diff = date.getTime() - now.getTime();
         const minutes = Math.floor(diff / 60000);

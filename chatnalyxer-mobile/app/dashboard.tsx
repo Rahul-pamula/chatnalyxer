@@ -132,12 +132,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => {
+    if (token) {
       fetchData();
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+      const interval = setInterval(() => {
+        fetchData();
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [token]);
 
   const onRefresh = () => {
     setRefreshing(true);

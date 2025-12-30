@@ -4,13 +4,27 @@ Processes PDFs and images in-memory using Azure AI services.
 No files are saved - only extracted text is returned.
 """
 
-from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.vision.imageanalysis import ImageAnalysisClient
-from azure.core.credentials import AzureKeyCredential
 from io import BytesIO
 import os
 from typing import Optional
 import logging
+
+# Optional Azure imports - gracefully degrade if not available
+try:
+    from azure.ai.documentintelligence import DocumentIntelligenceClient
+    DOCUMENT_INTELLIGENCE_AVAILABLE = True
+except ImportError:
+    DOCUMENT_INTELLIGENCE_AVAILABLE = False
+    DocumentIntelligenceClient = None
+
+try:
+    from azure.ai.vision.imageanalysis import ImageAnalysisClient
+    from azure.core.credentials import AzureKeyCredential
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
+    ImageAnalysisClient = None
+    AzureKeyCredential = None
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +58,10 @@ class AzureMediaAnalyzer:
             Extracted text content or None if failed
         """
         try:
+            if not DOCUMENT_INTELLIGENCE_AVAILABLE:
+                logger.warning("Azure Document Intelligence package not installed")
+                return None
+            
             if not self.doc_endpoint or not self.doc_key:
                 logger.error("Azure Document Intelligence not configured")
                 return None
@@ -83,6 +101,10 @@ class AzureMediaAnalyzer:
             Combined caption and OCR text or None if failed
         """
         try:
+            if not VISION_AVAILABLE:
+                logger.warning("Azure Vision API package not installed")
+                return None
+            
             if not self.vision_endpoint or not self.vision_key:
                 logger.error("Azure Vision API not configured")
                 return None

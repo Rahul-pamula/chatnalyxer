@@ -4,6 +4,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { getTrashMessages, restoreMessage, permanentDeleteMessage, emptyTrash } from '../src/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../src/theme/colors';
+import { useAuth } from '../src/context/AuthContext';
 
 type TrashMessage = {
     id: number;
@@ -19,14 +20,17 @@ type TrashMessage = {
 
 export default function Trash() {
     const router = useRouter();
+    const { token } = useAuth(); // Get token
     const [messages, setMessages] = useState<TrashMessage[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     useFocusEffect(
         React.useCallback(() => {
-            fetchTrashMessages();
-        }, [])
+            if (token) {
+                fetchTrashMessages();
+            }
+        }, [token])
     );
 
     const fetchTrashMessages = async (silent = false) => {

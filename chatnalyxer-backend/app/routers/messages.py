@@ -244,10 +244,28 @@ Title:"""
     if ai_results['is_priority']:
         print(
             f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ai_results['priority_level']}, Score: {ai_results['urgency_score']:.2f})")
+        
+        # 🔔 NEW: Create an immediate notification record for high-priority messages
+        # This ensures they appear in the app's notification center even without a deadline
+        try:
+            new_notification = models.Notification(
+                user_id=payload.user_id,
+                title=f"Priority: {msg.message_category.replace('_', ' ').title()}",
+                message=msg.ai_summary or msg.content[:200],
+                scheduled_time=get_ist_now(), # Immediate
+                notification_type="priority_alert",
+                related_message_id=msg.id,
+                priority="HIGH",
+                is_read=False,
+                is_sent=False
+            )
+            db.add(new_notification)
+            db.commit()
+            print(f"🔔 Immediate notification created for priority message {msg.id}")
+        except Exception as e:
+            print(f"⚠️ Failed to create immediate notification: {e}")
     else:
         print(f"💾 Saved important message: {payload.content[:50]}...")
-
-    # Gemini AI background task REMOVED - not using Gemini anymore
 
     return msg
 

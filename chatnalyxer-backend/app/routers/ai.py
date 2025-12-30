@@ -169,6 +169,10 @@ def chat_with_ai(
                         else:
                             dt = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M:%S')
                             
+                        # Make timezone aware (assume local time if naive)
+                        if dt.tzinfo is None:
+                            dt = dt.astimezone()
+                            
                         # Create the event using the generic Event model
                         new_event = models.Event(
                             user_id=current_user.id,

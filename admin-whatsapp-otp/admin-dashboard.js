@@ -59,7 +59,11 @@ async function connectAdminWhatsApp() {
             logger,
             printQRInTerminal: false,
             auth: state,
-            browser: ['Chatnalyxer Admin', 'Chrome', '1.0.0']
+            browser: ['Chatnalyxer Admin', 'Chrome', '1.0.0'],
+            connectTimeoutMs: 60000,
+            defaultQueryTimeoutMs: 60000,
+            retryRequestDelayMs: 5000,
+            keepAliveIntervalMs: 10000,
         });
 
         adminSocket.ev.on('connection.update', async (update) => {
@@ -72,16 +76,31 @@ async function connectAdminWhatsApp() {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect?.error instanceof Boom)
-                    ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
-                    : true;
+                const statusCode = (lastDisconnect?.error instanceof Boom)
+                    ? lastDisconnect.error.output.statusCode
+                    : undefined;
+
+                let shouldReconnect = (statusCode !== DisconnectReason.loggedOut);
 
                 console.log('⚠️ Admin WhatsApp disconnected');
+                if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                    console.log('🛑 Session invalid/logged out. Clearing auth and retrying...');
+                    const fs = await import('fs');
+                    try {
+                        fs.default.rmSync('./admin-wa-auth', { recursive: true, force: true });
+                        console.log('🧹 Auth folder cleared.');
+                        shouldReconnect = true; // Force reconnect to generate new QR
+                    } catch (e) {
+                        console.error('Failed to clear auth:', e);
+                    }
+                }
+
                 adminConnected = false;
                 adminQR = null;
                 if (qrTimer) clearInterval(qrTimer);
 
                 if (shouldReconnect) {
+                    console.log('🔄 Attempting to reconnect in 3s...');
                     setTimeout(() => connectAdminWhatsApp(), 3000);
                 }
             } else if (connection === 'open') {
@@ -192,7 +211,12 @@ app.post('/admin/send-otp', async (req, res) => {
         const jid = phone_number.includes('@') ? phone_number : `${phone_number}@s.whatsapp.net`;
         await adminSocket.sendMessage(jid, { text: message });
 
-        console.log(`📤 OTP sent to ${phone_number}`);
+        // await adminSocket.sendMessage(jid, { text: message }); // Removed duplicate
+
+        console.error('\n\n==================================================');
+        console.error(`📤 OTP sent to ${phone_number}`);
+        console.error(`📝 OTP Content: "${message}"`);
+        console.error('==================================================\n\n');
         res.json({ success: true, message: 'OTP sent' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -214,7 +238,10 @@ app.post('/send-otp', async (req, res) => {
         const jid = phone_number.includes('@') ? phone_number : `${phone_number}@s.whatsapp.net`;
         await adminSocket.sendMessage(jid, { text: message });
 
-        console.log(`📤 OTP sent to ${phone_number}`);
+        console.error('\n\n==================================================');
+        console.error(`📤 OTP sent to ${phone_number}`);
+        console.error(`📝 OTP Content: "${message}"`);
+        console.error('==================================================\n\n');
         res.json({ success: true, message: 'OTP sent' });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -236,6 +263,22 @@ app.get('/admin/users', async (req, res) => {
 });
 
 // ============================================
+// USER MANAGEMENT API
+// ============================================
+
+app.post('/admin/users/:userId/disconnect', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const axios = (await import('axios')).default;
+        // Call session manager to stop session
+        await axios.post(`http://localhost:3002/sessions/stop/${userId}`);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ============================================
 // DASHBOARD UI
 // ============================================
 
@@ -250,32 +293,34 @@ app.get('/', (req, res) => {
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body { 
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                        background: #f5f7fa;
+                        background: #f8f9fa; /* Light gray background for contrast */
                     }
                     .login-container {
                         display: flex;
                         justify-content: center;
                         align-items: center;
                         min-height: 100vh;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        background: #ffffff; /* White background as requested */
                     }
                     .login-box {
                         background: white;
                         padding: 40px;
                         border-radius: 12px;
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.08); /* Softer shadow */
                         width: 100%;
                         max-width: 400px;
+                        border: 1px solid #eee;
                     }
                     .login-box h1 { text-align: center; margin-bottom: 30px; color: #333; }
                     .form-group { margin-bottom: 20px; }
-                    .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+                    .form-group label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
                     .form-group input {
                         width: 100%;
                         padding: 12px;
                         border: 2px solid #e0e0e0;
                         border-radius: 8px;
                         font-size: 16px;
+                        transition: border-color 0.2s;
                     }
                     .form-group input:focus { outline: none; border-color: #667eea; }
                     .btn {
@@ -288,11 +333,19 @@ app.get('/', (req, res) => {
                         font-size: 16px;
                         font-weight: 600;
                         cursor: pointer;
+                        display: inline-flex;
+                        justify-content: center;
+                        align-items: center;
+                        gap: 8px;
                     }
-                    .btn:hover { transform: translateY(-2px); }
+                    .btn:hover { transform: translateY(-1px); opacity: 0.95; }
+                    .btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+                    
                     .btn-small { width: auto; padding: 8px 16px; font-size: 14px; }
                     .btn-success { background: #4caf50; }
                     .btn-danger { background: #f44336; }
+                    .btn-outline { background: transparent; border: 1px solid #ccc; color: #555; }
+                    .btn-outline:hover { background: #f5f5f5; }
 
                     .dashboard { display: none; padding: 40px; max-width: 1200px; margin: 0 auto; }
                     .header {
@@ -300,10 +353,11 @@ app.get('/', (req, res) => {
                         padding: 24px;
                         border-radius: 12px;
                         margin-bottom: 24px;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
+                        border: 1px solid #eaeaea;
                     }
                     .stats-grid {
                         display: grid;
@@ -315,8 +369,9 @@ app.get('/', (req, res) => {
                         background: white;
                         padding: 24px;
                         border-radius: 12px;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                         text-align: center;
+                        border: 1px solid #eaeaea;
                     }
                     .stat-number {
                         font-size: 36px;
@@ -333,40 +388,96 @@ app.get('/', (req, res) => {
                         background: white;
                         padding: 24px;
                         border-radius: 12px;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
                         margin-bottom: 24px;
+                        border: 1px solid #eaeaea;
                     }
-                    .section h2 { margin-bottom: 16px; color: #333; }
+                    .section h2 { margin-bottom: 16px; color: #333; font-size: 18px; display: flex; align-items: center; gap: 8px; }
                     .qr-container { text-align: center; padding: 20px; }
-                    .qr-container img { max-width: 300px; margin: 16px auto; }
+                    
+                    /* QR Scanning Animation */
+                    .qr-wrapper {
+                        position: relative;
+                        display: inline-block;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    }
+                    .qr-wrapper img {
+                        display: block;
+                        max-width: 250px;
+                    }
+                    .scan-line {
+                        position: absolute;
+                        width: 100%;
+                        height: 3px;
+                        background: #4caf50;
+                        box-shadow: 0 0 4px #4caf50;
+                        top: 0;
+                        left: 0;
+                        animation: scan 2.5s infinite linear;
+                        opacity: 0.6;
+                    }
+                    @keyframes scan {
+                        0% { top: 0; }
+                        50% { top: 100%; }
+                        100% { top: 0; }
+                    }
+
                     .user-list { display: flex; flex-direction: column; gap: 12px; }
                     .user-card {
-                        background: #f8f9fa;
+                        background: white;
                         padding: 16px;
                         border-radius: 8px;
-                        border: 2px solid #e0e0e0;
+                        border: 1px solid #eaeaea;
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
+                        transition: transform 0.2s;
                     }
+                    .user-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
                     .user-info { flex: 1; }
                     .user-name { font-weight: 700; font-size: 16px; color: #333; margin-bottom: 4px; }
-                    .user-phone { color: #666; font-size: 14px; margin-bottom: 4px; }
-                    .user-status { font-size: 12px; color: #4caf50; font-weight: 600; }
+                    .user-phone { color: #666; font-size: 14px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+                    .user-pid { font-family: monospace; font-size: 12px; color: #888; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+                    
+                    .status-group {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-end;
+                        gap: 8px;
+                    }
                     .status-badge {
-                        display: inline-block;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
                         padding: 4px 12px;
-                        border-radius: 12px;
+                        border-radius: 20px;
                         font-size: 12px;
                         font-weight: 600;
-                        background: #4caf50;
-                        color: white;
                     }
+                    .status-connected { background: #e8f5e9; color: #2e7d32; }
+                    .status-error { background: #ffebee; color: #c62828; }
+                    
+                    /* Loader */
+                    .loader {
+                        border: 3px solid #f3f3f3;
+                        border-top: 3px solid #667eea;
+                        border-radius: 50%;
+                        width: 20px;
+                        height: 20px;
+                        animation: spin 1s linear infinite;
+                    }
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
                     .no-users {
                         text-align: center;
                         color: #999;
                         padding: 40px;
                         font-size: 16px;
+                        background: #fcfcfc;
+                        border-radius: 8px;
+                        border: 1px dashed #ddd;
                     }
                 </style>
             </head>
@@ -378,11 +489,11 @@ app.get('/', (req, res) => {
                         <form id="loginForm">
                             <div class="form-group">
                                 <label>Username</label>
-                                <input type="text" id="username" required>
+                                <input type="text" id="username" required placeholder="admin">
                             </div>
                             <div class="form-group">
                                 <label>Password</label>
-                                <input type="password" id="password" required>
+                                <input type="password" id="password" required placeholder="••••••••">
                             </div>
                             <button type="submit" class="btn">Login</button>
                         </form>
@@ -391,35 +502,41 @@ app.get('/', (req, res) => {
 
                 <div id="dashboard" class="dashboard">
                     <div class="header">
-                        <h1>📊 Admin Dashboard</h1>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:24px;">📊</span>
+                            <h1 style="font-size:24px;">Admin Dashboard</h1>
+                        </div>
                         <button class="btn btn-danger btn-small" onclick="logout()">Logout</button>
                     </div>
 
                     <!-- Summary Stats -->
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <div class="stat-number" id="totalUsers">0</div>
+                            <div class="stat-number" id="totalUsers">-</div>
                             <div class="stat-label">Total Users</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-number" id="activeSessions">0</div>
+                            <div class="stat-number" id="activeSessions">-</div>
                             <div class="stat-label">Active Sessions</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-number" id="totalMessages">0</div>
+                            <div class="stat-number" id="totalMessages">-</div>
                             <div class="stat-label">Total Messages</div>
                         </div>
                     </div>
 
                     <!-- Admin WhatsApp -->
                     <div class="section">
-                        <h2>📱 Admin WhatsApp</h2>
+                        <h2>📱 Admin WhatsApp Integration</h2>
                         <div id="adminWhatsApp"></div>
                     </div>
 
                     <!-- Active Users -->
                     <div class="section">
-                        <h2>👥 Active Users</h2>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                            <h2>👥 Active Processing Sessions</h2>
+                            <button class="btn btn-outline btn-small" onclick="loadUsers()">🔄 Refresh</button>
+                        </div>
                         <div id="userList"></div>
                     </div>
                 </div>
@@ -429,6 +546,7 @@ app.get('/', (req, res) => {
                     let refreshInterval;
                     let qrCountdown = 60;
                     let qrTimer = null;
+                    let isConnecting = false;
 
                     if (sessionId) checkSession();
 
@@ -441,7 +559,7 @@ app.get('/', (req, res) => {
                             if (data.valid) {
                                 showDashboard();
                                 loadDashboard();
-                                refreshInterval = setInterval(loadDashboard, 5000);
+                                refreshInterval = setInterval(loadDashboard, 10000); // Slower interval
                             } else {
                                 showLogin();
                             }
@@ -468,7 +586,7 @@ app.get('/', (req, res) => {
                                 localStorage.setItem('adminSessionId', sessionId);
                                 showDashboard();
                                 loadDashboard();
-                                refreshInterval = setInterval(loadDashboard, 5000);
+                                refreshInterval = setInterval(loadDashboard, 10000);
                             } else {
                                 showError('Invalid credentials');
                             }
@@ -518,29 +636,67 @@ app.get('/', (req, res) => {
                             
                             if (data.connected) {
                                 if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }
-                                section.innerHTML = '<div style="text-align:center;"><div style="font-size:18px;color:#4caf50;margin-bottom:12px;">✅ Connected</div><div style="color:#666;margin-bottom:16px;">Phone: +' + (data.phone_number || 'N/A') + '</div><button class="btn btn-danger btn-small" onclick="disconnectWhatsApp()">Disconnect</button></div>';
+                                isConnecting = false;
+                                section.innerHTML = \`
+                                    <div style="text-align:center; padding: 20px;">
+                                        <div style="font-size:18px; color:#4caf50; margin-bottom:12px; font-weight:600;">✅ System Connected</div>
+                                        <div style="color:#666; margin-bottom:20px;">
+                                            Phone: <strong>+\${data.phone_number || 'N/A'}</strong>
+                                        </div>
+                                        <button class="btn btn-danger btn-small" onclick="disconnectWhatsApp()">Disconnect & Reset</button>
+                                    </div>\`;
                             } else if (data.qr_code && data.countdown > 0) {
-                                // QR code is valid - show it with countdown
+                                // QR code is valid
+                                isConnecting = false;
                                 if (!qrTimer) {
                                     qrTimer = setInterval(() => { 
                                         qrCountdown--; 
+                                        const display = document.getElementById('qr-countdown-display');
+                                        if (display) display.textContent = '⏱️ Refreshing in ' + qrCountdown + 's';
+                                        
                                         if (qrCountdown <= 0) {
                                             clearInterval(qrTimer);
                                             qrTimer = null;
-                                            loadAdminWhatsApp(); // Refresh to show expired state
+                                            loadAdminWhatsApp();
                                         }
                                     }, 1000);
                                 }
                                 qrCountdown = data.countdown;
-                                section.innerHTML = '<div class="qr-container"><p>Scan with WhatsApp:</p><img src="' + data.qr_code + '" alt="QR Code"/><div style="font-size:18px;font-weight:700;color:' + (qrCountdown <= 10 ? '#f44336' : '#667eea') + ';margin-top:16px;">⏱️ ' + qrCountdown + 's</div></div>';
+                                section.innerHTML = \`
+                                    <div class="qr-container">
+                                        <p style="margin-bottom:16px;">Scan this QR code with WhatsApp (Linked Devices)</p>
+                                        <div class="qr-wrapper">
+                                            <img src="\${data.qr_code}" alt="QR Code"/>
+                                            <div class="scan-line"></div>
+                                        </div>
+                                        <div id="qr-countdown-display" style="font-size:16px; font-weight:600; color:\${qrCountdown <= 10 ? '#f44336' : '#667eea'}; margin-top:16px;">
+                                            ⏱️ Refreshing in \${qrCountdown}s
+                                        </div>
+                                    </div>\`;
                             } else if (data.qr_code && data.countdown <= 0) {
-                                // QR code expired - show reconnect button
+                                // Expired
                                 if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }
-                                section.innerHTML = '<div style="text-align:center;"><div style="font-size:18px;color:#f44336;margin-bottom:12px;">⏰ QR Code Expired</div><p style="color:#666;margin-bottom:16px;">The QR code has expired after 60 seconds</p><button class="btn btn-success btn-small" onclick="reconnectWhatsApp()">Generate New QR</button></div>';
+                                section.innerHTML = \`
+                                    <div style="text-align:center; padding: 20px;">
+                                        <div style="font-size:16px; color:#f44336; margin-bottom:12px;">⏰ OR Code Expired</div>
+                                        <button class="btn btn-success" onclick="reconnectWhatsApp()">Generate New QR Code</button>
+                                    </div>\`;
                             } else {
-                                // Not connected, no QR - show connect button
+                                // Not connected
                                 if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }
-                                section.innerHTML = '<div style="text-align:center;"><button class="btn btn-success btn-small" onclick="connectWhatsApp()">Connect WhatsApp</button></div>';
+                                if (isConnecting) {
+                                     section.innerHTML = \`
+                                        <div style="text-align:center; padding: 40px;">
+                                            <div class="loader" style="margin: 0 auto 16px;"></div>
+                                            <div style="color:#666;">Requests connection...</div>
+                                        </div>\`;
+                                } else {
+                                    section.innerHTML = \`
+                                        <div style="text-align:center; padding: 20px;">
+                                            <p style="color:#666; margin-bottom:16px;">Connect system WhatsApp to enable OTP sending</p>
+                                            <button class="btn btn-success" onclick="connectWhatsApp()">Connect WhatsApp</button>
+                                        </div>\`;
+                                }
                             }
                         } catch (e) {
                             console.error(e);
@@ -548,19 +704,47 @@ app.get('/', (req, res) => {
                     }
 
                     async function connectWhatsApp() {
-                        await fetch('/admin/whatsapp/connect', { method: 'POST' });
-                        setTimeout(loadAdminWhatsApp, 1000);
+                        isConnecting = true;
+                        loadAdminWhatsApp(); // Show loader immediately
+                        try {
+                            const res = await fetch('/admin/whatsapp/connect', { method: 'POST' });
+                            const data = await res.json();
+                            if(!data.success) throw new Error(data.message);
+                            setTimeout(loadAdminWhatsApp, 1500);
+                        } catch (e) {
+                            isConnecting = false;
+                            alert('Failed to connect: ' + e.message);
+                            loadAdminWhatsApp();
+                        }
                     }
 
                     async function disconnectWhatsApp() {
-                        if (!confirm('Disconnect?')) return;
+                        if (!confirm('Are you sure you want to disconnect the admin WhatsApp?')) return;
                         await fetch('/admin/whatsapp/disconnect', { method: 'POST' });
                         loadAdminWhatsApp();
                     }
 
                     async function reconnectWhatsApp() {
+                        isConnecting = true;
+                        loadAdminWhatsApp();
                         await fetch('/admin/whatsapp/reconnect', { method: 'POST' });
                         setTimeout(loadAdminWhatsApp, 2000);
+                    }
+
+                    // User Management
+                    async function disconnectUser(userId) {
+                        if(!confirm(\`Disconnect and stop processing for User ID \${userId}?\`)) return;
+                        try {
+                            const res = await fetch(\`/admin/users/\${userId}/disconnect\`, { method: 'POST' });
+                            const data = await res.json();
+                            if (data.success) {
+                                loadUsers(); // Refresh list
+                            } else {
+                                alert('Failed: ' + data.error);
+                            }
+                        } catch(e) {
+                            alert('Error: ' + e.message);
+                        }
                     }
 
                     async function loadUsers() {
@@ -568,36 +752,57 @@ app.get('/', (req, res) => {
                             const res = await fetch('/admin/users');
                             const data = await res.json();
                             
-                            // Update stats
-                            document.getElementById('totalUsers').textContent = data.stats?.total_users || 0;
-                            document.getElementById('activeSessions').textContent = data.stats?.active_sessions || 0;
+                            if (data.stats) {
+                                document.getElementById('totalUsers').textContent = data.stats.total_users;
+                                document.getElementById('activeSessions').textContent = data.stats.active_sessions;
+                            }
                             
-                            // Fetch total messages from backend health endpoint
+                            // Try total messages
                             try {
                                 const healthRes = await fetch('http://localhost:8000/admin/health');
                                 const healthData = await healthRes.json();
-                                document.getElementById('totalMessages').textContent = healthData.database?.total_messages || 0;
-                            } catch (e) {
-                                document.getElementById('totalMessages').textContent = '0';
-                            }
+                                document.getElementById('totalMessages').textContent = healthData.database?.total_messages || '-';
+                            } catch (e) {}
                             
                             const userList = document.getElementById('userList');
                             
                             if (!data.users || data.users.length === 0) {
-                                userList.innerHTML = '<div class="no-users">No active users</div>';
+                                userList.innerHTML = '<div class="no-users">No users found</div>';
                                 return;
                             }
                             
-                            // Filter only active users
-                            const activeUsers = data.users.filter(u => u.is_active_scanner);
+                            // Show active scanners or those with PIDs
+                            // Check for PID existence to determine logic "Active"
+                            const activeUsers = data.users.filter(u => u.is_active_scanner || u.pid);
                             
                             if (activeUsers.length === 0) {
-                                userList.innerHTML = '<div class="no-users">No active users</div>';
+                                userList.innerHTML = '<div class="no-users">No active sessions running</div>';
                                 return;
                             }
                             
                             userList.innerHTML = activeUsers.map(user => {
-                                return '<div class="user-card"><div class="user-info"><div class="user-name">' + user.username + '</div><div class="user-phone">📞 ' + user.phone_number + '</div><div class="user-status">PID: ' + (user.pid || 'N/A') + '</div></div><div class="status-badge">✅ ' + (user.status_message || 'Connected') + '</div></div>';
+                                const hasPid = user.pid && user.pid !== 'N/A';
+                                const statusClass = hasPid ? 'status-connected' : 'status-error';
+                                const statusText = hasPid ? 'Process Running' : 'Process Missing';
+                                const statusIcon = hasPid ? '✅' : '⚠️';
+                                
+                                return \`
+                                    <div class="user-card">
+                                        <div class="user-info">
+                                            <div class="user-name">\${user.username || 'Unknown'}</div>
+                                            <div class="user-phone">
+                                                <span>📞 \${user.phone_number}</span>
+                                            </div>
+                                            <div class="user-pid">PID: \${user.pid || 'N/A'}</div>
+                                        </div>
+                                        <div class="status-group">
+                                            <div class="status-badge \${statusClass}">
+                                                \${statusIcon} \${statusText}
+                                            </div>
+                                            \${hasPid ? \`<button class="btn btn-danger btn-small" style="font-size:12px; padding:4px 8px;" onclick="disconnectUser(\${user.id})">Disconnect</button>\` : ''}
+                                        </div>
+                                    </div>
+                                \`;
                             }).join('');
                         } catch (e) {
                             console.error('Failed to load users:', e);
