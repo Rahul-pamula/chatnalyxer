@@ -173,6 +173,14 @@ app.post('/admin/whatsapp/disconnect', async (req, res) => {
             await adminSocket.logout();
             adminSocket = null;
         }
+
+        // Clean up session files
+        const authPath = './admin-wa-auth';
+        if (fs.existsSync(authPath)) {
+            fs.rmSync(authPath, { recursive: true, force: true });
+            console.log('🧹 Auth folder cleared on manual disconnect.');
+        }
+
         adminConnected = false;
         adminQR = null;
         if (qrTimer) clearInterval(qrTimer);

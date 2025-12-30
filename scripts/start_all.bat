@@ -20,20 +20,20 @@ timeout /t 2 /nobreak >nul
 
 :: --- STEP 2: START BACKEND ---
 echo 📦 Starting Backend API (Port 8000)...
-start "Chatnalyxer Backend" cmd /k "cd chatnalyxer-backend && venv\Scripts\activate && uvicorn app.main:app --host 0.0.0.0 --reload"
+start "Chatnalyxer Backend" cmd /k "cd ..\chatnalyxer-backend && venv\Scripts\activate && uvicorn app.main:app --host 0.0.0.0 --reload"
 
 :: --- STEP 3: START SESSION MANAGER ---
 echo 📱 Starting WhatsApp Session Manager (Port 3002)...
-start "WhatsApp Session Manager" cmd /k "cd user-whatsapp-sessions && npm start"
+start "WhatsApp Session Manager" cmd /k "cd ..\user-whatsapp-sessions && npm start"
 
 :: --- STEP 4: START ADMIN DASHBOARD ---
 echo 🔐 Starting Admin Dashboard (Port 3001)...
-start "Admin Dashboard" cmd /k "cd admin-whatsapp-otp && node admin-dashboard.js"
+start "Admin Dashboard" cmd /k "cd ..\admin-whatsapp-otp && node admin-dashboard.js"
 
 :: --- STEP 5: START MOBILE APP ---
 echo 📱 Starting Mobile App (Expo)...
 timeout /t 3 /nobreak >nul
-start "Chatnalyxer Mobile" cmd /k "cd chatnalyxer-mobile && npx expo start --clear"
+start "Chatnalyxer Mobile" cmd /k "cd ..\chatnalyxer-mobile && npx expo start --clear"
 
 echo.
 echo ✅ All services launched in new windows!
