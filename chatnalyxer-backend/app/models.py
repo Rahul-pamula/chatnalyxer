@@ -106,7 +106,7 @@ class Notification(Base):
     
     # Related entities
     related_event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True)
-    related_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    related_message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
     expo_push_token = Column(String(255), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -114,6 +114,7 @@ class Notification(Base):
     # Relationships
     user = relationship("User", back_populates="notifications")
     related_event = relationship("Event", foreign_keys=[related_event_id])
+    related_message = relationship("Message", foreign_keys=[related_message_id])
 
 
 class UserInteraction(Base):
@@ -191,8 +192,8 @@ class GroupMember(Base):
     __tablename__ = "group_members"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
 
     user = relationship("User", back_populates="groups")
     group = relationship("Group", back_populates="members")
@@ -208,11 +209,11 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True),
                         server_default=func.now(), nullable=False)
 
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
     
     # Track which user's WhatsApp session received this message (for multi-user isolation)
-    receiver_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    receiver_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
 
     # ML-based priority detection fields
     priority_level = Column(String(10), default="MEDIUM",
@@ -259,8 +260,8 @@ class ScheduledEvent(Base):
     __tablename__ = "scheduled_events"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
     
     # Event details
     title = Column(String(500), nullable=False)  # From AI summary or content

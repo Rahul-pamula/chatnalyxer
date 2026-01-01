@@ -161,13 +161,10 @@ def chat_with_ai(
                     args = fc.args
                     
                     try:
-                        # Parse deadline
+                        # Parse deadline using dateutil for robustness
+                        from dateutil import parser
                         deadline_str = args.get('deadline')
-                        # Gemini might return ISO or other formats, try best effort
-                        if 'T' in deadline_str:
-                            dt = datetime.fromisoformat(deadline_str)
-                        else:
-                            dt = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M:%S')
+                        dt = parser.parse(deadline_str)
                             
                         # Make timezone aware (assume local time if naive)
                         if dt.tzinfo is None:
@@ -191,8 +188,12 @@ def chat_with_ai(
                         # Added: Create Notification record so it appears in the Notification Schedule
                         # Default to 30 mins before or immediate if close
                         reminder_time = dt - timedelta(minutes=30)
-                        if reminder_time < datetime.now():
-                            reminder_time = datetime.now() + timedelta(minutes=1)
+                        
+                        # Use aware current time for comparison
+                        now_aware = datetime.now().astimezone()
+                        
+                        if reminder_time < now_aware:
+                            reminder_time = now_aware + timedelta(minutes=1)
                             
                         new_notification = models.Notification(
                             user_id=current_user.id,
@@ -228,7 +229,7 @@ def chat_with_ai(
                         print(f"Scheduling Error: {e}")
                         import traceback
                         traceback.print_exc()
-                        ai_text = f"I tried to schedule that, but I got confused with the date format ({args.get('deadline')}). Please try again."
+                        ai_text = f"I tried to schedule that, but encountered an error: {str(e)} (Date: {args.get('deadline')})"
             else:
                 ai_text = response.text
                 

@@ -493,6 +493,14 @@ def delete_message(
     if deleted_events:
         print(f"🗑️ Also deleted {deleted_events} scheduled event(s) associated with message {message_id}")
         
+    # Also delete associated notifications (Priority Alerts)
+    deleted_notifications = db.query(models.Notification).filter(
+        models.Notification.related_message_id == message_id
+    ).delete()
+    
+    if deleted_notifications:
+        print(f"🗑️ Also deleted {deleted_notifications} notification(s) associated with message {message_id}")
+        
     db.commit()
     return {"message": "Message and associated event moved to trash successfully"}
 
@@ -507,8 +515,16 @@ def delete_all_messages(
     db.query(models.Message).filter(
         models.Message.receiver_user_id == user.id
     ).update({models.Message.deleted_at: get_ist_now()})
+    
+    # Also delete all priority notifications for this user
+    # (Since we moved all messages to trash, we shouldn't alert on them)
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.id,
+        models.Notification.related_message_id.is_not(None) # Only message-related ones
+    ).delete()
+    
     db.commit()
-    print(f"All messages received by user {user.id} moved to trash")
+    print(f"All messages received by user {user.id} moved to trash, notifications cleaned")
     return {"message": "All messages moved to trash successfully"}
 
 

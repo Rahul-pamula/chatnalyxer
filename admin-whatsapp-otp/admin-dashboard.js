@@ -9,6 +9,7 @@ import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaile
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import QRCode from 'qrcode';
+import fs from 'fs';
 
 const app = express();
 app.use(express.json());
@@ -85,9 +86,8 @@ async function connectAdminWhatsApp() {
                 console.log('⚠️ Admin WhatsApp disconnected');
                 if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                     console.log('🛑 Session invalid/logged out. Clearing auth and retrying...');
-                    const fs = await import('fs');
                     try {
-                        fs.default.rmSync('./admin-wa-auth', { recursive: true, force: true });
+                        fs.rmSync('./admin-wa-auth', { recursive: true, force: true });
                         console.log('🧹 Auth folder cleared.');
                         shouldReconnect = true; // Force reconnect to generate new QR
                     } catch (e) {
@@ -219,8 +219,6 @@ app.post('/admin/send-otp', async (req, res) => {
         const jid = phone_number.includes('@') ? phone_number : `${phone_number}@s.whatsapp.net`;
         await adminSocket.sendMessage(jid, { text: message });
 
-        // await adminSocket.sendMessage(jid, { text: message }); // Removed duplicate
-
         console.error('\n\n==================================================');
         console.error(`📤 OTP sent to ${phone_number}`);
         console.error(`📝 OTP Content: "${message}"`);
@@ -281,6 +279,18 @@ app.post('/admin/users/:userId/disconnect', async (req, res) => {
         // Call session manager to stop session
         await axios.post(`http://localhost:3002/sessions/stop/${userId}`);
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/admin/users/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const axios = (await import('axios')).default;
+        // Call backend to delete user
+        const response = await axios.delete(`http://localhost:8000/admin/users/${userId}`);
+        res.json(response.data);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -542,7 +552,7 @@ app.get('/', (req, res) => {
                     <!-- Active Users -->
                     <div class="section">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                            <h2>👥 Active Processing Sessions</h2>
+                            <h2>👥 Users & Sessions</h2>
                             <button class="btn btn-outline btn-small" onclick="loadUsers()">🔄 Refresh</button>
                         </div>
                         <div id="userList"></div>
@@ -779,44 +789,76 @@ app.get('/', (req, res) => {
                                 return;
                             }
                             
-                            // Show active scanners or those with PIDs
-                            // Check for PID existence to determine logic "Active"
-                            const activeUsers = data.users.filter(u => u.is_active_scanner || u.pid);
+                            // Sort: Active first, then by ID
+                            const sortedUsers = data.users.sort((a, b) => {
+                                const aActive = a.pid || a.is_active_scanner;
+                                const bActive = b.pid || b.is_active_scanner;
+                                if (aActive === bActive) return a.user_id - b.user_id;
+                                return bActive ? 1 : -1;
+                            });
                             
-                            if (activeUsers.length === 0) {
-                                userList.innerHTML = '<div class="no-users">No active sessions running</div>';
-                                return;
-                            }
-                            
-                            userList.innerHTML = activeUsers.map(user => {
+                            userList.innerHTML = sortedUsers.map(user => {
                                 const hasPid = user.pid && user.pid !== 'N/A';
-                                const statusClass = hasPid ? 'status-connected' : 'status-error';
-                                const statusText = hasPid ? 'Process Running' : 'Process Missing';
-                                const statusIcon = hasPid ? '✅' : '⚠️';
+                                const isActive = hasPid || user.is_active_scanner;
+                                const statusClass = isActive ? 'status-connected' : 'status-error';
+                                const statusText = isActive ? 'Process Running' : 'Offline';
+                                const statusIcon = isActive ? '✅' : '⚫';
                                 
                                 return \`
                                     <div class="user-card">
                                         <div class="user-info">
-                                            <div class="user-name">\${user.username || 'Unknown'}</div>
+                                            <div class="user-name">\${user.username || 'Unknown'} (ID: \${user.user_id})</div>
                                             <div class="user-phone">
-                                                <span>📞 \${user.phone_number}</span>
+                                                📞 \${user.phone_number || 'No Number'}
                                             </div>
-                                            <div class="user-pid">PID: \${user.pid || 'N/A'}</div>
+                                            \${hasPid ? \`<div class="user-pid">PID: \${user.pid}</div>\` : ''}
                                         </div>
                                         <div class="status-group">
-                                            <div class="status-badge \${statusClass}">
+                                            <span class="status-badge \${statusClass}">
                                                 \${statusIcon} \${statusText}
+                                            </span>
+                                            <div style="display:flex; gap:5px; margin-top:4px;">
+                                                <!-- Action Buttons -->
+                                                \${hasPid ? 
+                                                    \`<button class="btn btn-danger btn-small" style="font-size:12px; padding:4px 8px;" onclick="disconnectUser(\${user.user_id})">Stop</button>\` 
+                                                    : ''
+                                                }
+                                                <button class="btn btn-outline btn-small" style="border-color:#ff4444; color:#ff4444; font-size:12px; padding:4px 8px;" onclick="deleteUser(\${user.user_id})">
+                                                    🗑️
+                                                </button>
                                             </div>
-                                            \${hasPid ? \`<button class="btn btn-danger btn-small" style="font-size:12px; padding:4px 8px;" onclick="disconnectUser(\${user.id})">Disconnect</button>\` : ''}
                                         </div>
                                     </div>
                                 \`;
                             }).join('');
+                            
                         } catch (e) {
                             console.error('Failed to load users:', e);
-                            document.getElementById('userList').innerHTML = '<div class="no-users">Failed to load users</div>';
+                            document.getElementById('userList').innerHTML = '<div class="no-users">Error loading users</div>';
                         }
                     }
+
+                    // NEW: Delete User Function
+                    async function deleteUser(userId) {
+                        if(!confirm(\`⚠️ WARNING: This will PERMANENTLY delete User \${userId} and ALL their messages/groups. This cannot be undone.\\n\\nAre you sure?\`)) return;
+                        
+                        try {
+                            const res = await fetch(\`/admin/users/\${userId}\`, { method: 'DELETE' });
+                            const data = await res.json();
+                            
+                            if (data.success) {
+                                alert('✅ User deleted successfully');
+                                loadUsers(); // Refresh list
+                            } else {
+                                alert('❌ Failed: ' + (data.error || data.detail || 'Unknown error'));
+                            }
+                        } catch(e) {
+                            alert('❌ Error: ' + e.message);
+                        }
+                    }
+
+                    // Start
+                    loadAdminWhatsApp();
                 </script>
             </body>
         </html>
@@ -825,7 +867,7 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`✅ Admin Dashboard running on http://localhost:${PORT}`);
-    console.log(`🔐 Login: admin / admin123`);
+    console.log(`🔐 Login: ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`);
     console.log('');
     console.log('📱 Admin WhatsApp integrated in dashboard');
     console.log('👥 View active users');

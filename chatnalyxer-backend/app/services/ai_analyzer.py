@@ -133,11 +133,15 @@ class AIAnalyzer:
             1. Understand the message context considering the user is a {user_type}.
             2. Determine priority based on what matters to a {user_type}.
             3. Extract key info (Subject, Date, Task).
-            4. Generate a Personal "AI Interpretation" (summary field):
-                - Speak TO the user as their assistant.
-                - Example for STUDENT: "Your friend said there's an exam tomorrow! Need help preparing?"
-                - Example for CASUAL: "Your friend invited you to a function tomorrow morning! Want to set a reminder?"
-                - Keep it short, friendly, and helpful.
+            4. Generate a Personal "AI Interpretation" (summary field).
+
+            Date Extraction Rules:
+            - "Repu" (Telugu) = TOMORROW.
+            - "Ellundi" (Telugu) = Day after tomorrow.
+            - "Kal" (Hindi) = Tomorrow (usually).
+            - Use the provided Timestamp as "Today".
+            - If "Tomorrow" is mentioned, calculate the date relative to the Timestamp.
+            - Return deadline in "YYYY-MM-DD HH:MM" format. If time is not specified but date is, use "10:00" (10 AM) as default.
 
             Return ONLY a valid JSON object:
             {{

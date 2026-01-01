@@ -268,3 +268,34 @@ def admin_whatsapp_disconnect(db: Session = Depends(get_db)):
     db.commit()
     
     return {"success": True, "message": "Admin WhatsApp disconnected"}
+
+@router.delete("/users/{user_id}")
+def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a user permanently.
+    1. Stop active session if any via Session Manager.
+    2. Delete from DB (Cascade will handle related data).
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    # Check if admin (prevent self-delete through this route if needed, or allow it)
+    if user.username == ADMIN_USERNAME:
+        raise HTTPException(400, "Cannot delete admin user via this route")
+
+    # 1. Stop active session
+    try:
+        requests.post(f"{SESSION_MANAGER_URL}/sessions/stop/{user_id}", timeout=5)
+    except:
+        pass # Ignore error if session manager is down or session not active
+
+    # 2. Delete from DB
+    try:
+        db.delete(user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Database delete failed: {str(e)}")
+
+    return {"success": True, "message": f"User {user_id} deleted permanently"}

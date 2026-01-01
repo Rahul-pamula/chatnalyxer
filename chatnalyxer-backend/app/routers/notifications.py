@@ -73,7 +73,12 @@ async def get_notifications(
                     else (
                         n.related_event.event_date.isoformat() 
                         if n.related_event 
-                        else (n.scheduled_time.isoformat() if n.scheduled_time else None)
+                        else (
+                            # Fallback to message deadline if linked to message (Priority Alerts)
+                            n.related_message.deadline_extracted.isoformat()
+                            if n.related_message and n.related_message.deadline_extracted
+                            else (n.scheduled_time.isoformat() if n.scheduled_time else None)
+                        )
                     )
                 )
             }

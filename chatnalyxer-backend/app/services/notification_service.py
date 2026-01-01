@@ -142,8 +142,17 @@ async def schedule_event_reminders(event_id: int, db: Session):
         # Or just let it be created with past time so it shows up in list but might not push
         
         if reminder_time <= datetime.now():
-            # Force it to be at least now so it appears in list
-            logger.info(f"Reminder time for event {event_id} was in past, adjusting to now")
+            # If the calculated reminder time is in the past:
+            # 1. If it's less than 1 hour ago, maybe still user wants to know?
+            # 2. If it is way in the past (e.g. yesterday), DO NOT schedule it.
+            
+            time_diff = datetime.now() - reminder_time
+            if time_diff.total_seconds() > 3600: # If more than 1 hour late
+                 logger.info(f"Skipping reminder for event {event_id} as it is {time_diff} in the past.")
+                 return
+            
+            # If slightly late, adjust to immediate
+            logger.info(f"Reminder time for event {event_id} was slightly in past, adjusting to now")
             reminder_time = datetime.now() + timedelta(seconds=10)
         
         # Create notification
