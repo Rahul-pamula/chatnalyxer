@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     AZURE_SPEECH_KEY: str = ""
     AZURE_SPEECH_REGION: str = "eastus"
 
+    # AI Provider Configuration
+    AI_PROVIDER: str = "gemini"  # Options: 'gemini', 'custom'
+    DATA_COLLECTION_MODE: bool = False  # Set to True to save messages for training
+
     class Config:
         env_file = ".env"
         extra = "ignore"

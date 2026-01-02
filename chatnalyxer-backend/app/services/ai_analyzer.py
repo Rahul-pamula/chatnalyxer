@@ -31,6 +31,7 @@ except ImportError:
     logging.warning("Azure Speech SDK not available - audio transcription will be skipped")
 
 from ..config import settings
+from .training_collector import collector
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,9 @@ class AIAnalyzer:
         """
         Analyze text message using Google Gemini with user context
         """
+        if settings.AI_PROVIDER == 'custom':
+            return self._custom_model_analysis(content, created_at, user_type)
+
         if not self.gemini_model:
             return self._fallback_analysis(content, created_at)
             
@@ -188,6 +192,12 @@ class AIAnalyzer:
                 }),
                 'analysis_method': f'google_gemini_flash_{user_type.lower()}'
             }
+            
+            # 💾 DATA COLLECTION MODE
+            if settings.DATA_COLLECTION_MODE:
+                collector.save_example(content, user_type, result, "gemini-flash")
+                
+            return result
             
         except Exception as e:
             logger.error(f"Gemini analysis failed: {e}")
@@ -336,6 +346,19 @@ class AIAnalyzer:
         """Fallback to keyword-based analysis"""
         from .ml_analyzer import analyzer as keyword_analyzer
         return keyword_analyzer.analyze_message(content, created_at)
+
+    
+    def _custom_model_analysis(self, content: str, created_at: datetime, user_type: str) -> Dict:
+        """
+        Placeholder for your Custom trained model (College Version)
+        """
+        logger.info(f"🧠 using CUSTOM MODEL for: {content}")
+        
+        # PROTOTYPE: For now, we fallback to keyword, but later this calls your local LLM/BERT
+        from .ml_analyzer import analyzer as keyword_analyzer
+        result = keyword_analyzer.analyze_message(content, created_at)
+        result['analysis_method'] = 'custom_college_model_v1'
+        return result
 
 # Global analyzer instance
 ai_analyzer = AIAnalyzer()
