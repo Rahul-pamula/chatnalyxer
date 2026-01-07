@@ -349,11 +349,15 @@ Contributions are welcome! Please follow these steps:
 - [ ] Timetable upload and management
 
 ### 📋 Planned
+- [ ] **Email integration** - Extract deadlines from emails
+- [ ] **Telegram integration** - Support for Telegram group chats
 - [ ] Spaced repetition for exam preparation
 - [ ] Procrastination pattern detection
 - [ ] Team collaboration features
 - [ ] Integration with Google Calendar/Outlook
 - [ ] Web dashboard for desktop access
+- [ ] Slack integration for professional teams
+- [ ] Discord integration for study groups
 
 ---
 
