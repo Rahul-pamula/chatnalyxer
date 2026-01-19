@@ -17,10 +17,47 @@ app.use(express.json());
 const PORT = 3001;
 const logger = pino({ level: 'silent' });
 
-// Admin session storage
-const sessions = new Map();
+// Load environment variables (Backend .env has the DB URL)
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Try to load from sibling backend directory first
+dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
+// Also try local .env for overrides
+dotenv.config();
+
+// Fix for Render/Heroku protocols (postgres:// -> postgresql://)
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://")) {
+    process.env.DATABASE_URL = process.env.DATABASE_URL.replace("postgres://", "postgresql://", 1);
+}
+
+// Database Connection
+const { Pool } = await import('pg');
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer'
+});
+
+// Admin session storage (DB-based)
+// const sessions = new Map(); // REMOVED
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'admin123';
+
+// Ensure table exists
+await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+        session_id VARCHAR(64) PRIMARY KEY,
+        username VARCHAR(64) NOT NULL,
+        login_time BIGINT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+
+// Custom Auth Adapter Import
+const { usePostgresAuthState } = await import('./auth-adapter.js');
 
 // Admin WhatsApp state
 let adminSocket = null;
@@ -52,7 +89,9 @@ async function connectAdminWhatsApp() {
     try {
         console.log('📱 Connecting Admin WhatsApp...');
 
-        const { state, saveCreds } = await useMultiFileAuthState('./admin-wa-auth');
+        // Use PostgreSQL Auth
+        // const { state, saveCreds } = await useMultiFileAuthState('./admin-wa-auth');
+        const { state, saveCreds } = await usePostgresAuthState(pool, 'admin_wa_session');
         const { version } = await fetchLatestBaileysVersion();
 
         adminSocket = makeWASocket({
@@ -122,26 +161,44 @@ async function connectAdminWhatsApp() {
 // ADMIN AUTHENTICATION
 // ============================================
 
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
     const { username, password } = req.body;
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        const sessionId = Math.random().toString(36).substring(7);
-        sessions.set(sessionId, { username, loginTime: Date.now() });
-        res.json({ success: true, sessionId });
+        const sessionId = Math.random().toString(36).substring(7) + Math.random().toString(36).substring(7);
+        // sessions.set(sessionId, { username, loginTime: Date.now() });
+        try {
+            await pool.query(
+                'INSERT INTO admin_sessions (session_id, username, login_time) VALUES ($1, $2, $3)',
+                [sessionId, username, Date.now()]
+            );
+            res.json({ success: true, sessionId });
+        } catch (e) {
+            res.status(500).json({ error: 'Database error' });
+        }
     } else {
         res.status(401).json({ error: 'Invalid credentials' });
     }
 });
 
-app.post('/admin/logout', (req, res) => {
+app.post('/admin/logout', async (req, res) => {
     const { sessionId } = req.body;
-    sessions.delete(sessionId);
+    // sessions.delete(sessionId);
+    try {
+        await pool.query('DELETE FROM admin_sessions WHERE session_id = $1', [sessionId]);
+    } catch (e) { }
     res.json({ success: true });
 });
 
-app.get('/admin/check-session', (req, res) => {
+app.get('/admin/check-session', async (req, res) => {
     const sessionId = req.headers['x-session-id'];
-    res.json({ valid: sessionId && sessions.has(sessionId) });
+    let valid = false;
+    if (sessionId) {
+        try {
+            const result = await pool.query('SELECT 1 FROM admin_sessions WHERE session_id = $1', [sessionId]);
+            valid = result.rows.length > 0;
+        } catch (e) { }
+    }
+    res.json({ valid });
 });
 
 // ============================================

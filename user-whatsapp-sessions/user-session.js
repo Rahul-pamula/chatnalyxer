@@ -16,11 +16,26 @@
  */
 
 import express from 'express';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import { makeWASocket, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import QRCode from 'qrcode';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load env from backend
+dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
+dotenv.config(); // Local overrides
+
+// Fix for Render/Heroku protocols
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://")) {
+    process.env.DATABASE_URL = process.env.DATABASE_URL.replace("postgres://", "postgresql://", 1);
+}
 
 const app = express();
 app.use(express.json());
@@ -30,7 +45,7 @@ const userId = parseInt(process.argv[2]) || 1;
 const PORT = parseInt(process.argv[3]) || 3002;
 const phoneNumber = process.argv[4]; // NEW: Phone number for pairing code
 
-console.log(`🚀 Starting User WhatsApp Service for User ${userId} on Port ${PORT}`);
+console.log(`🚀 Starting User WhatsApp Service v2 for User ${userId} on Port ${PORT}`);
 if (phoneNumber) {
     console.log(`📞 Phone number: ${phoneNumber}`);
 }
@@ -53,6 +68,7 @@ let currentPairingCode = {
 const isRender = process.env.RENDER;
 
 // Auth state folder - dynamic based on user ID
+// Auth state folder - LEGACY (kept for manual cleanup only)
 const AUTH_FOLDER = isRender
     ? `/opt/render/.wwebjs-sessions-otp/baileys_auth_info_user_${userId}`
     : `./sessions/user_${userId}`;
@@ -88,7 +104,19 @@ async function connectToWhatsApp(isManualRequest = false) {
     }
 
     try {
-        const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+        // Use PostgreSQL Auth
+        const { Pool } = await import('pg');
+        const { usePostgresAuthState } = await import('./auth-adapter.js');
+
+        // Get DB connection string from env or default to localhost
+        const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+
+        const pool = new Pool({
+            connectionString,
+        });
+
+        // Use custom Postgres auth state with dynamic session ID
+        const { state, saveCreds, clearState } = await usePostgresAuthState(pool, `user_${userId}`);
         const { version } = await fetchLatestBaileysVersion();
 
         console.log(`Using WA v${version.join('.')}`);
@@ -161,10 +189,14 @@ async function connectToWhatsApp(isManualRequest = false) {
                 if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                     console.log("🚪 Logged out / Auth Invalid. Clearing session.");
                     try {
-                        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-                    } catch (e) { }
+                        await clearState();
+                        console.log("✅ Session data cleared.");
+                    } catch (e) { console.error("Error clearing state:", e); }
                     isExpired = true;
-                    return;
+
+                    // CRITICAL: Exit process so Session Manager knows we are dead
+                    console.log("💀 Process exiting due to logout.");
+                    process.exit(0);
                 }
 
                 if (statusCode === DisconnectReason.restartRequired) {
@@ -424,6 +456,64 @@ async function connectToWhatsApp(isManualRequest = false) {
                     console.error("❌ Failed to check group selection status:", e.message);
                     // On error, skip the message to be safe
                     continue;
+                }
+
+                // ============================================
+                // SMART FILTERING - Save AI Quota for Expo!
+                // ============================================
+
+                /**
+                 * Filter out unimportant messages BEFORE sending to backend
+                 * This saves 80% of AI quota by skipping "ok", "hi", emojis
+                 */
+                function shouldAnalyzeMessage(content) {
+                    const contentLower = content.toLowerCase().trim();
+
+                    // 1. Skip very short messages (< 5 chars)
+                    if (contentLower.length < 5) {
+                        console.log(`⏭️ SKIPPED (too short): "${content}"`);
+                        return false;
+                    }
+
+                    // 2. Skip emoji-only messages
+                    if (/^[\u{1F300}-\u{1F9FF}\s]+$/u.test(content)) {
+                        console.log(`⏭️ SKIPPED (emojis only): "${content}"`);
+                        return false;
+                    }
+
+                    // 3. Important keywords (works for ANY length!)
+                    const importantKeywords = /deadline|urgent|important|submit|assignment|project|meeting|exam|test|quiz|presentation|due|class|lecture|tomorrow|today|asap|critical/i;
+                    if (importantKeywords.test(content)) {
+                        console.log(`✅ ANALYZING (has keywords): "${content.substring(0, 50)}..."`);
+                        return true;
+                    }
+
+                    // 4. Questions (usually important)
+                    if (/\?|when|what|where|who|why|how|can you|could you|will there|is there/i.test(content)) {
+                        console.log(`✅ ANALYZING (question): "${content.substring(0, 50)}..."`);
+                        return true;
+                    }
+
+                    // 5. Time/Date mentions
+                    if (/\d+pm|\d+am|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d+th|\d+st|\d+nd|\d+rd|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(content)) {
+                        console.log(`✅ ANALYZING (has time/date): "${content.substring(0, 50)}..."`);
+                        return true;
+                    }
+
+                    // 6. Medium+ length messages (might have context)
+                    if (content.length >= 30) {
+                        console.log(`✅ ANALYZING (medium length): "${content.substring(0, 50)}..."`);
+                        return true;
+                    }
+
+                    // 7. Otherwise skip
+                    console.log(`⏭️ SKIPPED (casual chat): "${content}"`);
+                    return false;
+                }
+
+                // Check if message should be analyzed
+                if (!shouldAnalyzeMessage(msgBody)) {
+                    continue; // Skip this message
                 }
 
                 // Send to Backend
@@ -711,12 +801,25 @@ async function gracefulShutdown(signal) {
     }
 
     try {
-        // 3. Clean up auth folder
-        console.log(`🧹 Cleaning auth folder: ${AUTH_FOLDER}`);
+        // 3. Clean up auth folder AND DB
+        console.log(`🧹 Cleaning auth folder and DB for user ${userId}...`);
+
+        // Clean DB
+        try {
+            const { Pool } = await import('pg');
+            const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+            const pool = new Pool({ connectionString });
+            await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
+            console.log(`✅ Cleared PostgreSQL session data for user_${userId}`);
+        } catch (dbErr) {
+            console.error(`⚠️ DB Cleanup error:`, dbErr.message);
+        }
+
+        // Clean legacy folder (keep for safety)
         fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
         console.log('✅ Auth folder cleaned');
     } catch (e) {
-        console.log('⚠️ Auth cleanup error:', e.message);
+        console.log('⚠️ Cleanup error:', e.message);
     }
 
     console.log('✅ Shutdown complete');

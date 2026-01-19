@@ -50,7 +50,18 @@ async function connectAdminWhatsApp() {
     try {
         console.log('📱 Connecting Admin WhatsApp...');
 
-        const { state, saveCreds } = await useMultiFileAuthState('./admin-wa-auth');
+        // Use PostgreSQL Auth
+        const { Pool } = await import('pg');
+        const { usePostgresAuthState } = await import('./auth-adapter.js');
+
+        // Get DB connection string from env or default to localhost
+        const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+
+        const pool = new Pool({
+            connectionString,
+        });
+
+        const { state, saveCreds } = await usePostgresAuthState(pool, 'admin-wa-session');
         const { version } = await fetchLatestBaileysVersion();
 
         adminSocket = makeWASocket({
@@ -97,7 +108,7 @@ async function connectAdminWhatsApp() {
             }
         });
 
-        // Save credentials
+        // Save credentials - critical for cloud persistence
         adminSocket.ev.on('creds.update', saveCreds);
 
     } catch (error) {

@@ -14,20 +14,30 @@ export default function NotificationScheduleScreen() {
     const deadlineDate = new Date(deadline as string);
     const now = new Date();
 
+    // Check if this is an Alarm
+    const contentStr = Array.isArray(content) ? content[0] : (content || '');
+    const isAlarm = contentStr.toLowerCase().includes('alarm') ||
+        contentStr.toLowerCase().includes('wake up');
+
     // Calculate reminder times
-    const reminders = [
-        { label: '1 Day Before', ms: 24 * 60 * 60 * 1000 },
-        { label: '1 Hour Before', ms: 60 * 60 * 1000 },
-        { label: '15 Minutes Before', ms: 15 * 60 * 1000 },
-    ].map(r => {
+    // If Alarm, don't show "1 Day Before" etc. Show "At time of event"
+    const reminderConfig = isAlarm
+        ? [{ label: 'At time of event', ms: 0 }]
+        : [
+            { label: '1 Day Before', ms: 24 * 60 * 60 * 1000 },
+            { label: '1 Hour Before', ms: 60 * 60 * 1000 },
+            { label: '15 Minutes Before', ms: 15 * 60 * 1000 },
+        ];
+
+    const reminders = reminderConfig.map(r => {
         const time = new Date(deadlineDate.getTime() - r.ms);
         const isPast = now > time;
         return {
             ...r,
             time,
             status: isPast ? 'Sent' : 'Scheduled',
-            icon: isPast ? 'checkmark-circle' : 'time-outline',
-            color: isPast ? colors.success : colors.primary
+            icon: isAlarm ? 'alarm' : (isPast ? 'checkmark-circle' : 'time-outline'),
+            color: isPast ? colors.success : (isAlarm ? colors.error : colors.primary)
         };
     });
 

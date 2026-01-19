@@ -24,8 +24,23 @@ const PORT = process.env.PORT || 3001;
 
 console.log(`🚀 Starting Admin OTP Service on Port ${PORT}`);
 
-// Simple session storage (in production, use Redis or database)
-const sessions = new Map();
+// Database Connection
+const { Pool } = await import('pg');
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer'
+});
+
+// Ensure admin_sessions table exists
+await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+        session_id VARCHAR(64) PRIMARY KEY,
+        username VARCHAR(64) NOT NULL,
+        login_time BIGINT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+
+console.log('✅ Admin Session Table Ready');
 
 // Admin credentials (use environment variables in production)
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -36,31 +51,48 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 // ============================================
 
 // Login endpoint
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
     const { username, password } = req.body;
 
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        const sessionId = Math.random().toString(36).substring(7);
-        sessions.set(sessionId, { username, loginTime: Date.now() });
-        res.json({ success: true, sessionId });
+        const sessionId = Math.random().toString(36).substring(7) + Math.random().toString(36).substring(7);
+
+        try {
+            await pool.query(
+                'INSERT INTO admin_sessions (session_id, username, login_time) VALUES ($1, $2, $3)',
+                [sessionId, username, Date.now()]
+            );
+            res.json({ success: true, sessionId });
+        } catch (e) {
+            res.status(500).json({ error: 'Database error' });
+        }
     } else {
         res.status(401).json({ error: 'Invalid credentials' });
     }
 });
 
 // Logout endpoint
-app.post('/admin/logout', (req, res) => {
+app.post('/admin/logout', async (req, res) => {
     const { sessionId } = req.body;
-    sessions.delete(sessionId);
+    try {
+        await pool.query('DELETE FROM admin_sessions WHERE session_id = $1', [sessionId]);
+    } catch (e) { }
     res.json({ success: true });
 });
 
 // Check session
-app.get('/admin/check-session', (req, res) => {
+app.get('/admin/check-session', async (req, res) => {
     const sessionId = req.headers['x-session-id'];
-    if (sessionId && sessions.has(sessionId)) {
-        res.json({ valid: true });
-    } else {
+    if (!sessionId) return res.json({ valid: false });
+
+    try {
+        const result = await pool.query('SELECT * FROM admin_sessions WHERE session_id = $1', [sessionId]);
+        if (result.rows.length > 0) {
+            res.json({ valid: true });
+        } else {
+            res.json({ valid: false });
+        }
+    } catch (e) {
         res.json({ valid: false });
     }
 });

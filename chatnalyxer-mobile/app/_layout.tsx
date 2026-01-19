@@ -37,6 +37,11 @@ function InitialLayout() {
           }
         });
       });
+
+      // Setup notification action handlers (snooze/dismiss)
+      import("../src/services/notificationActions").then(({ setupNotificationActionHandlers }) => {
+        setupNotificationActionHandlers();
+      });
     }
   }, [user, token]);
 

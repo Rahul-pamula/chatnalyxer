@@ -180,11 +180,20 @@ app.post('/sessions/stop/:userId', async (req, res) => {
         const session = activeSessions.get(userId);
         console.log(`🛑 Stopping WhatsApp session for User ${userId}`);
 
-        // Try graceful shutdown first (SIGTERM will trigger graceful shutdown in user-session.js)
+        // Phase 1: Try explicit API disconnect FIRST (Reliable Logout)
+        try {
+            console.log(`📡 Sending explicit disconnect request to process on port ${session.port}...`);
+            await axios.post(`http://localhost:${session.port}/disconnect`, {}, { timeout: 3000 });
+            console.log(`✅ Explicit disconnect successful`);
+        } catch (apiErr) {
+            console.log(`⚠️ Explicit disconnect failed (process might be busy/dead): ${apiErr.message}`);
+        }
+
+        // Phase 2: Graceful Shutdown via Signal (Cleanup)
         try {
             session.process.kill('SIGTERM');
 
-            // Wait 2 seconds, then force kill if still alive
+            // Wait 10 seconds (was 2s), then force kill if still alive
             setTimeout(() => {
                 try {
                     process.kill(session.pid, 0); // Check if still alive
@@ -193,7 +202,7 @@ app.post('/sessions/stop/:userId', async (req, res) => {
                 } catch (e) {
                     // Process already dead, good!
                 }
-            }, 2000);
+            }, 10000);
         } catch (e) {
             console.log(`⚠️ Error killing process: ${e.message}`);
         }

@@ -10,14 +10,17 @@ import {
     Platform,
     ActivityIndicator,
     SafeAreaView,
-    StatusBar
+    StatusBar,
+    Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { aiService, Message } from '../src/services/aiService';
 import { VoiceService } from '../src/services/VoiceService';
 import { BASE_URL } from '../src/config';
 import { useAuth } from '../src/context/AuthContext';
+import TypingIndicator from './components/TypingIndicator';
 
 export default function AIChatScreen() {
     const router = useRouter();
@@ -88,8 +91,11 @@ export default function AIChatScreen() {
 
     const renderMessage = ({ item }: { item: Message }) => {
         const isUser = item.role === 'user';
+        const AnimatedComponent = isUser ? FadeInRight : FadeInLeft;
+
         return (
-            <View
+            <Animated.View
+                entering={AnimatedComponent.springify()}
                 style={[
                     styles.messageBubble,
                     isUser ? styles.userBubble : styles.aiBubble,
@@ -121,7 +127,7 @@ export default function AIChatScreen() {
                 <Text style={[styles.timestamp, isUser ? styles.userTimestamp : styles.aiTimestamp]}>
                     {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
-            </View>
+            </Animated.View>
         );
     };
 
@@ -170,7 +176,7 @@ export default function AIChatScreen() {
                 if (!hasPermission) {
                     const granted = await VoiceService.requestMicrophonePermission();
                     if (!granted) {
-                        alert('Microphone permission is required for voice input');
+                        Alert.alert('Permission Required', 'Microphone permission is required for voice input');
                         return;
                     }
                 }
@@ -190,49 +196,51 @@ export default function AIChatScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+        >
+            <SafeAreaView style={styles.container}>
+                <StatusBar barStyle="light-content" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#fff" />
-                </TouchableOpacity>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>AI Assistant</Text>
-                    <View style={styles.onlineBadge}>
-                        <View style={styles.onlineDot} />
-                        <Text style={styles.onlineText}>Online</Text>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.headerTitle}>AI Assistant</Text>
+                        <View style={styles.onlineBadge}>
+                            <View style={styles.onlineDot} />
+                            <Text style={styles.onlineText}>Online</Text>
+                        </View>
                     </View>
+                    <TouchableOpacity onPress={toggleVoiceOutput} style={styles.voiceToggle}>
+                        <Ionicons
+                            name={voiceEnabled ? 'volume-high' : 'volume-mute'}
+                            size={24}
+                            color={voiceEnabled ? '#10b981' : '#94a3b8'}
+                        />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => router.push('/ai-tasks')} style={styles.tasksButton}>
+                        <Ionicons name="list" size={24} color="#fff" />
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={toggleVoiceOutput} style={styles.voiceToggle}>
-                    <Ionicons
-                        name={voiceEnabled ? 'volume-high' : 'volume-mute'}
-                        size={24}
-                        color={voiceEnabled ? '#10b981' : '#94a3b8'}
-                    />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => router.push('/ai-tasks')} style={styles.tasksButton}>
-                    <Ionicons name="list" size={24} color="#fff" />
-                </TouchableOpacity>
-            </View>
 
-            {/* Chat Area */}
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.chatContainer}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-            />
+                {/* Chat Area */}
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.chatContainer}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    ListFooterComponent={loading ? <TypingIndicator /> : null}
+                />
 
-            {/* Input Area */}
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            >
+                {/* Input Area */}
                 <View style={styles.inputContainer}>
                     <TouchableOpacity
                         style={[styles.micButton, isRecording && styles.micButtonActive]}
@@ -267,8 +275,8 @@ export default function AIChatScreen() {
                         )}
                     </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+            </SafeAreaView>
+        </KeyboardAvoidingView>
     );
 }
 

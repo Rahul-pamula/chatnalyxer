@@ -10,6 +10,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../src/theme/colors';
 import PairingCodeDisplay from './components/PairingCodeDisplay';
 
+interface WhatsAppStatusResponse {
+    ready?: boolean;
+    message?: string;
+    qr_code?: string;
+    pairing_code?: string;
+    expired?: boolean;
+}
+
 export default function SetupScreen() {
     const router = useRouter();
     const { token, user } = useAuth();
@@ -57,7 +65,7 @@ export default function SetupScreen() {
                 });
                 if (response.status === 401) { setIsPolling(false); setIsGeneratingQR(false); return; }
                 if (response.ok) {
-                    const data = await response.json();
+                    const data = await response.json() as WhatsAppStatusResponse;
                     setWhatsappStatusMessage(data.message || '');
                     setIsWhatsAppConnected(data.ready || false);
                     setQrCode(data.qr_code || null);
@@ -88,7 +96,7 @@ export default function SetupScreen() {
                 headers: { 'Authorization': `Bearer ${token?.trim()}`, 'ngrok-skip-browser-warning': 'true' },
             });
             if (response.ok) {
-                const data = await response.json();
+                const data = await response.json() as WhatsAppStatusResponse;
                 setIsWhatsAppConnected(data.ready || false);
                 setWhatsappStatusMessage(data.message || '');
             }
@@ -133,11 +141,7 @@ export default function SetupScreen() {
                 setPairingCode(null);
             } catch (error) { Alert.alert('Error', 'Failed to disconnect'); }
         };
-        if (Platform.OS === 'web') {
-            if (window.confirm('Disconnect WhatsApp? This stops message analysis.')) { await confirmLogout(); }
-        } else {
-            Alert.alert('Disconnect WhatsApp', 'Are you sure?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Disconnect', style: 'destructive', onPress: confirmLogout }]);
-        }
+        Alert.alert('Disconnect WhatsApp', 'Are you sure? This stops message analysis.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Disconnect', style: 'destructive', onPress: confirmLogout }]);
     };
 
     const handleEmailClick = () => {
@@ -155,12 +159,12 @@ export default function SetupScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            <View style={{ flex: 1 }}> {/* Wrapper to ensure full height */}
+            <View style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     {/* Header */}
                     <View style={styles.header}>
-                        <View style={styles.headerContent}> {/* New Header Content Container */}
+                        <View style={styles.headerContent}>
                             <View style={styles.titleContainer}>
                                 <Text style={styles.title}>Chatnalyxer Hub</Text>
                                 <Text style={styles.subtitle}>

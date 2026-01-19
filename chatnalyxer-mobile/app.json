@@ -47,13 +47,17 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "@react-native-community/datetimepicker",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "appRoot": "app"
+      },
       "eas": {
         "projectId": "b6d7e0b5-b04b-4acb-821b-4059a54e214b"
       }

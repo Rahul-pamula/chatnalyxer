@@ -74,6 +74,27 @@ export default function Notifications() {
         }
     };
 
+    const deleteNotification = async (notificationId: number) => {
+        try {
+            const response = await fetch(`${BASE_URL}/notifications/${notificationId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (response.ok) {
+                // Remove from local state immediately
+                setNotifications(prev => prev.filter(n => n.id !== notificationId));
+                console.log('✅ Notification deleted successfully');
+            } else {
+                console.error('❌ Failed to delete notification:', response.status);
+            }
+        } catch (error) {
+            console.error('Error deleting notification:', error);
+        }
+    };
+
     const getPriorityColor = (priority: string) => {
         switch (priority) {
             case 'CRITICAL': return '#FF3B30';
@@ -187,8 +208,16 @@ export default function Notifications() {
                     </Text>
                 </View>
 
-                {/* Add Chevron to indicate clickable */}
-                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                {/* Add Delete Button */}
+                <TouchableOpacity
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(notification.id);
+                    }}
+                    style={styles.deleteButton}
+                >
+                    <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
@@ -342,6 +371,11 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         color: colors.textSecondary,
+    },
+    deleteButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 59, 48, 0.1)',
     },
     emptyState: {
         flex: 1,

@@ -38,6 +38,10 @@ try:
     # Migration 3: Add scheduled_events table
     from migrate_scheduled_events import migrate as migrate_events
     migrate_events()
+
+    # Migration 4: Isolate groups per user
+    from migrate_groups_isolation import migrate as migrate_isolation
+    migrate_isolation()
     
     print("✅ Auto-migration success!")
 except Exception as e:
@@ -48,7 +52,7 @@ except Exception as e:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # allow all for dev
-    allow_credentials=False,
+    allow_credentials=True,  # Enable credentials for mobile app
     allow_methods=["*"],
     allow_headers=["*"],
 )

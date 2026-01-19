@@ -1,0 +1,73 @@
+SCENE 1: HOOK & PROBLEM (0:00 - 0:30)
+==========================================
+"Have you ever missed an important deadline because it got buried in a WhatsApp group chat?
+
+You're not alone. Students today receive over 200 messages daily across multiple group chats. Assignment deadlines, exam schedules, project submissions - they all get lost in the noise.
+
+In fact, studies show that 70% of students admit to missing deadlines simply because they couldn't keep track of all their messages."
+
+
+SCENE 2: SOLUTION INTRODUCTION (0:30 - 0:50)
+=============================================
+"That's why we built Chatnalyxer - your AI-powered academic assistant that monitors your WhatsApp groups 24/7, so you never miss what matters.
+
+Chatnalyxer uses advanced AI to automatically detect deadlines, extract the important details, and keep you organized - all without changing how you use WhatsApp."
+
+
+SCENE 3A: MESSAGE DETECTION (0:50 - 1:20)
+=========================================
+"Let me show you how it works. Watch what happens when a deadline is posted in my class group."
+
+[Send WhatsApp message: "Assignment submission deadline is tomorrow at 5 PM"]
+
+"Our AI instantly analyzes the message and extracts the key information - the task name, the date, and the time. It even understands casual language like 'tomorrow' or 'next Friday'.
+
+The deadline is automatically added to my calendar, with all the details organized and ready."
+
+
+SCENE 3B: SMART NOTIFICATIONS (1:20 - 1:50)
+===========================================
+"But Chatnalyxer doesn't stop there. It sends me smart notifications at the right time - not too early, not too late.
+
+High-priority deadlines get alarm-style alerts that I can't accidentally dismiss. And I can mark tasks complete right from the notification."
+
+
+SCENE 3C: AI CHAT ASSISTANT (1:50 - 2:10)
+=========================================
+"Need to check what's coming up? Just ask our AI assistant. It knows all your deadlines and can answer questions in natural language."
+
+[Type: "What's due this week?"]
+
+"It's like having a personal assistant who's read every message in every group chat."
+
+
+SCENE 4: TECHNOLOGY & FEATURES (2:10 - 2:35)
+============================================
+"Chatnalyxer is powered by cutting-edge AI technology. We use Google Gemini for natural language processing, and we're integrating Azure AI services for even more capabilities.
+
+The app works with images, PDFs, and even voice messages - extracting deadlines from any format.
+
+And because we care about privacy, we only store the extracted events, never your actual messages. Your conversations stay private."
+
+
+SCENE 5: IMPACT & CALL TO ACTION (2:35 - 3:00)
+==============================================
+"We're helping students stay organized, reduce stress, and focus on what really matters - learning.
+
+With email integration, smart study schedules, and team collaboration features coming soon, Chatnalyxer is the future of student productivity.
+
+Join us in revolutionizing how students manage their academic lives. Because no one should miss an opportunity just because of a buried message.
+
+Chatnalyxer - turning WhatsApp chaos into organized productivity."
+
+
+END SCREEN (Last 3-5 seconds)
+==============================
+[Display on screen:]
+Chatnalyxer
+AI-Powered Academic Assistant
+
+GitHub: github.com/Rahul-pamula/chatnalyxer
+Email: rahulpamula123@gmail.com
+
+Built for students, by students 🎓

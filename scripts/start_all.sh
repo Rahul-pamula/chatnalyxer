@@ -13,7 +13,7 @@ sleep 2
 
 # Start Backend (Port 8000)
 echo "📦 Starting Backend API (Port 8000)..."
-cd ../chatnalyxer-backend
+cd chatnalyxer-backend
 source ../venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --reload &
 BACKEND_PID=$!
@@ -22,7 +22,7 @@ sleep 3
 
 # Start Admin Dashboard (Port 3001)
 echo "🔐 Starting Admin Dashboard (Port 3001)..."
-cd ../admin-whatsapp-otp
+cd admin-whatsapp-otp
 node admin-dashboard.js &
 ADMIN_PID=$!
 cd ../scripts
@@ -30,15 +30,17 @@ sleep 2
 
 # Start Session Manager (Port 3002)
 echo "📱 Starting WhatsApp Session Manager (Port 3002)..."
-cd ../user-whatsapp-sessions
+cd user-whatsapp-sessions
 node session-manager.js &
 SESSION_PID=$!
 cd ../scripts
 sleep 2
 
 # Start Mobile App
+
+pkill -f "expo start"
 echo "📱 Starting Mobile App (Expo)..."
-cd ../chatnalyxer-mobile
+cd chatnalyxer-mobile
 npx expo start &
 MOBILE_PID=$!
 cd ../scripts

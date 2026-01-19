@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 import { BASE_URL } from '../config';
 
@@ -29,7 +29,7 @@ export async function registerForPushNotificationsAsync() {
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#FF231F7C',
-            sound: 'default', // Change to 'custom_sound.wav' in build
+            sound: 'default',
         });
 
         // 2. Deadline Reminder Channel (Orange)
@@ -39,6 +39,38 @@ export async function registerForPushNotificationsAsync() {
             vibrationPattern: [0, 500],
             lightColor: '#FFFF9900',
         });
+
+        // 3. ALARM Channel (Critical - Red, Loud)
+        await Notifications.setNotificationChannelAsync('alarm_channel', {
+            name: 'Alarms',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FFFF0000',
+            sound: 'alarm.mp3', // Custom alarm sound (place in assets/sounds/)
+            enableVibrate: true,
+            enableLights: true,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
+    }
+
+    // Register notification action categories (iOS + Android only, not supported on web)
+    if (Platform.OS !== 'web') {
+        await Notifications.setNotificationCategoryAsync('alarm_actions', [
+            {
+                identifier: 'snooze',
+                buttonTitle: '😴 Snooze 5 min',
+                options: {
+                    opensAppToForeground: false,
+                },
+            },
+            {
+                identifier: 'dismiss',
+                buttonTitle: '✅ Dismiss',
+                options: {
+                    opensAppToForeground: false,
+                },
+            },
+        ]);
     }
 
     if (Device.isDevice) {
@@ -51,7 +83,7 @@ export async function registerForPushNotificationsAsync() {
         }
 
         if (finalStatus !== 'granted') {
-            alert('Failed to get push notification permissions!');
+            Alert.alert('Permission Denied', 'Failed to get push notification permissions!');
             return;
         }
 
@@ -66,7 +98,7 @@ export async function registerForPushNotificationsAsync() {
             return null;
         }
     } else {
-        alert('Must use physical device for Push Notifications');
+        Alert.alert('Device Required', 'Must use physical device for Push Notifications');
     }
 
     return token;

@@ -15,37 +15,71 @@ EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 # Global scheduler instance
 scheduler = None
 
-async def send_expo_push_notification(push_token: str, title: str, body: str, data: dict = None):
+async def send_expo_push_notification(
+    push_token: str, 
+    title: str, 
+    body: str, 
+    data: dict = None,
+    sound: str = "default",
+    priority: str = "high",
+    category_id: str = None,
+    android_config: dict = None
+):
     """
-    Send a push notification via Expo Push Notification service.
+    Send a push notification via Expo Push Notification service using official SDK.
     
     Args:
         push_token: Expo push token (starts with ExponentPushToken[...])
         title: Notification title
         body: Notification body/message
         data: Optional additional data
+        sound: Sound file name (default or custom like "alarm.mp3")
+        priority: Notification priority ("default", "high", "max")
+        category_id: iOS notification category for actions
+        android_config: Android-specific configuration
     """
     try:
-        payload = {
-            "to": push_token,
-            "title": title,
-            "body": body,
-            "sound": "default",
-            "priority": "high",
-            "data": data or {}
-        }
+        from exponent_server_sdk import (
+            DeviceNotRegisteredError,
+            PushClient,
+            PushMessage,
+            PushServerError,
+            PushTicketError,
+        )
+        from requests.exceptions import ConnectionError, HTTPError
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(EXPO_PUSH_URL, json=payload, timeout=10.0)
-            response.raise_for_status()
-            result = response.json()
-            
-            if result.get("data", {}).get("status") == "ok":
-                logger.info(f"Push notification sent successfully to {push_token[:20]}...")
-                return True
-            else:
-                logger.error(f"Push notification failed: {result}")
-                return False
+        # Build the message using Expo SDK
+        message_data = data or {}
+        
+        # Add Android config to data if provided
+        if android_config:
+            message_data.update(android_config)
+        
+        message = PushMessage(
+            to=push_token,
+            title=title,
+            body=body,
+            data=message_data,
+            sound=sound,
+            priority=priority,
+            category_id=category_id,
+            channel_id=android_config.get("channelId") if android_config else None
+        )
+        
+        # Send using Expo SDK (handles array format automatically)
+        response = PushClient().publish(message)
+        
+        # Check for errors
+        try:
+            response.validate_response()
+            logger.info(f"✅ Push notification sent successfully to {push_token[:20]}...")
+            return True
+        except PushTicketError as exc:
+            logger.error(f"Push ticket error: {exc.push_response._asdict()}")
+            return False
+        except DeviceNotRegisteredError:
+            logger.warning(f"Device not registered: {push_token[:20]}...")
+            return False
                 
     except Exception as e:
         logger.error(f"Failed to send push notification: {e}")
@@ -86,16 +120,54 @@ async def check_and_send_notifications(db: Session):
                     notification.sent_at = now
                     continue
                 
+                # Determine if this is an alarm
+                is_alarm = notification.notification_type == "alarm"
+                
+                # Build notification payload
+                payload = {
+                    "to": user.push_token,
+                    "title": notification.title,
+                    "body": notification.message,
+                    "sound": "default",
+                    "priority": "high",
+                    "data": {
+                        "type": notification.notification_type,
+                        "event_id": notification.related_event_id,
+                        "message_id": notification.related_message_id,
+                        "notification_id": notification.id
+                    }
+                }
+                
+                # Enhanced settings for alarms
+                if is_alarm:
+                    payload["sound"] = "alarm.mp3"  # Custom alarm sound
+                    payload["priority"] = "max"
+                    payload["channelId"] = "alarm_channel"
+                    
+                    # Add action buttons for alarms
+                    payload["categoryId"] = "alarm_actions"
+                    
+                    # iOS specific
+                    payload["_displayInForeground"] = True
+                    
+                    # Android specific
+                    payload["android"] = {
+                        "channelId": "alarm_channel",
+                        "priority": "max",
+                        "sound": "alarm.mp3",
+                        "vibrate": [0, 250, 250, 250],
+                    }
+                
                 # Send notification
                 success = await send_expo_push_notification(
                     push_token=user.push_token,
                     title=notification.title,
                     body=notification.message,
-                    data={
-                        "type": notification.notification_type,
-                        "event_id": notification.related_event_id,
-                        "message_id": notification.related_message_id
-                    }
+                    data=payload["data"],
+                    sound=payload.get("sound", "default"),
+                    priority=payload.get("priority", "high"),
+                    category_id=payload.get("categoryId"),
+                    android_config=payload.get("android")
                 )
                 
                 # Mark as sent

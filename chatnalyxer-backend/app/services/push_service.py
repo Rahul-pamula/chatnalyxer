@@ -66,13 +66,14 @@ async def send_push_notification(
             "channelId": priority,  # Android notification channel
         }
         
-        # Send to Expo Push API
+        # Send to Expo Push API (Expo expects an array of messages)
         logger.info(f"Sending push notification to user {user_id}: {title}")
+        payload = [message]  # Expo API requires array format
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 EXPO_PUSH_URL,
-                json=message,
+                json=payload,
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json"
@@ -83,12 +84,12 @@ async def send_push_notification(
         if response.status_code == 200:
             result = response.json()
             
-            # Check if there were any errors
-            if "data" in result and isinstance(result["data"], list):
-                for item in result["data"]:
-                    if item.get("status") == "error":
-                        logger.error(f"Expo Push error: {item.get('message')}")
-                        return False
+            # Expo returns an array of tickets
+            if result and isinstance(result, list) and len(result) > 0:
+                ticket = result[0]
+                if ticket.get("status") == "error":
+                    logger.error(f"Expo Push error: {ticket.get('message')}")
+                    return False
             
             # Save notification to database
             notification = Notification(

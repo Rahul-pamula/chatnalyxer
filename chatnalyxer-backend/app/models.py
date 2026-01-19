@@ -174,18 +174,22 @@ class Group(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    whatsapp_id = Column(String(255), unique=True, nullable=False)
+    whatsapp_id = Column(String(255), nullable=False) # Removed unique=True
     # 0=not selected, 1=selected
     is_selected = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)  # Track if group still exists in WhatsApp
     
-    # Direct ownership link (Added per feature request)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    # Direct ownership link
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # relationship
     messages = relationship("Message", back_populates="group")
     members = relationship("GroupMember", back_populates="group")
+    
+    # Composite unique constraint
+    from sqlalchemy import UniqueConstraint
+    __table_args__ = (UniqueConstraint('user_id', 'whatsapp_id', name='_user_group_uc'),)
 
 
 class GroupMember(Base):

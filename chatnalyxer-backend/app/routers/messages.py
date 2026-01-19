@@ -89,7 +89,19 @@ def create_whatsapp_message(
         'academic_context': '{}'
     }
 
-    if ai_analyzer:
+    # Import rate limiter
+    try:
+        from app.utils.rate_limiter import ai_rate_limiter
+        can_use_ai = ai_rate_limiter.can_proceed()
+        
+        if not can_use_ai:
+            status = ai_rate_limiter.get_status()
+            print(f"⚠️ AI quota limit reached ({status['calls_in_last_minute']}/10 calls/min)")
+            print(f"   Wait {status['seconds_until_next_slot']}s or using ML fallback...")
+    except ImportError:
+        can_use_ai = True  # If rate limiter not available, allow AI calls
+
+    if ai_analyzer and can_use_ai:
         try:
             # 🧠 Few-Shot Learning: Fetch last 5 manual overrides
             # These are messages the user corrected, which helps the AI learn.

@@ -54,8 +54,8 @@ class AIAnalyzer:
                 raise ValueError("Missing Google/Gemini API key")
                 
             genai.configure(api_key=api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-flash-latest')
-            logger.info("✅ Google Gemini optimized (gemini-flash-latest)")
+            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+            logger.info("✅ Google Gemini loaded (gemini-2.5-flash)")
         except Exception as e:
             self.gemini_model = None
             logger.warning(f"⚠️ Google Gemini disabled: {e}")

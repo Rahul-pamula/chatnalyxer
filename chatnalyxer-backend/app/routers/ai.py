@@ -92,7 +92,9 @@ def chat_with_ai(
     # Reverse to chronological order for the chat history
     for msg in reversed(recent_msgs[:15]): 
         if not msg.extracted_text: # Skip if already added as doc
-            context_parts.append(f"[Message] {msg.content}")
+            # Convert to readable string, handling timezone if present
+            ts = msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else "Unknown Time"
+            context_parts.append(f"[Message] (Sent: {ts}) {msg.content}")
             
     context_str = "\n\n".join(context_parts)
     
@@ -108,10 +110,14 @@ def chat_with_ai(
     **Instructions:**
     - You are a helpful AI study assistant.
     - **LANGUAGE RULE:** ALWAYS reply in **ENGLISH** by default.
-    - **Tools:** You have access to a tool `schedule_event`. call it if the user asks to schedule something.
-    - If the user asks to "schedule" or "remind" them about something, USE THE TOOL.
+    - **Tools:** You have access to a tool `schedule_event`. Call it if the user asks to schedule something.
+    - **Temporal Logic (CRITICAL):** 
+      - Messages have a `(Sent: <Timestamp>)` tag. CALCULATE event dates relative to that timestamp.
+      - Compare the event date to the **Current Date** provided below.
+      - **If Event Date < Current Date:** Treat it as a PAST event. Ask the user: "Did you complete the [Event]?" or "How did [Event] go?". DO NOT say "You have [Event] coming up".
+      - **If Event Date > Current Date:** Treat it as UPCOMING. Remind the user: "You have [Event] scheduled for [Date]."
     - Current Date/Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-    - Be friendly, encouraging, and concise.
+    - Be friendly, encouraging, and concise. "Real world" style conversation.
     """
     
     # Tool Definition
@@ -158,8 +164,8 @@ def chat_with_ai(
             if response.parts and response.parts[0].function_call:
                 fc = response.parts[0].function_call
                 if fc.name == 'schedule_event':
+                    # ... [Function call handling remains same] ...
                     args = fc.args
-                    
                     try:
                         # Parse deadline using dateutil for robustness
                         from dateutil import parser
@@ -185,32 +191,54 @@ def chat_with_ai(
                         db.commit()
                         db.refresh(new_event)
                         
-                        # Added: Create Notification record so it appears in the Notification Schedule
-                        # Default to 30 mins before or immediate if close
-                        reminder_time = dt - timedelta(minutes=30)
+                        # Smart Notification Logic
+                        # Detect if this is an "Alarm" or "Wake up call"
+                        lower_title = (args.get('title') or '').lower()
+                        lower_desc = (args.get('description') or '').lower()
+                        is_alarm = any(k in lower_title or k in lower_desc for k in ['alarm', 'wake up', 'wake-up', 'call me'])
                         
-                        # Use aware current time for comparison
-                        now_aware = datetime.now().astimezone()
+                        if is_alarm:
+                            # Alarms happen AT the time
+                            reminder_time = dt
+                            notif_type = "alarm"
+                            priority = "CRITICAL"
+                            ai_text = f"✅ Done! I'll send you a notification at {dt.strftime('%I:%M %p')} for '{args.get('title')}'."
+                        else:
+                            # Standard reminders: 30 mins before
+                            # But if the event is very soon (< 1 hour), do 5 mins before
+                            time_until = dt - datetime.now().astimezone() if dt.tzinfo else dt - datetime.now()
+                            
+                            if time_until.total_seconds() < 3600: # Less than 1 hour away
+                                reminder_time = dt - timedelta(minutes=5)
+                            else:
+                                reminder_time = dt - timedelta(minutes=30)
+                                
+                            notif_type = "event_reminder"
+                            priority = "HIGH"
+                            ai_text = f"✅ Okay, I've scheduled '{args.get('title')}' for {dt.strftime('%B %d at %I:%M %p')}."
+
+                        # Safety: Don't schedule in past
+                        now_aware = datetime.now().astimezone() or datetime.now()
+                        if dt.tzinfo is None: now_aware = datetime.now()
                         
                         if reminder_time < now_aware:
-                            reminder_time = now_aware + timedelta(minutes=1)
-                            
+                             # If immediate, send in 5 seconds
+                            reminder_time = now_aware + timedelta(seconds=5)
+
                         new_notification = models.Notification(
                             user_id=current_user.id,
-                            title=f"Reminder: {new_event.title}",
-                            message=f"{new_event.description or new_event.title} is coming up at {dt.strftime('%I:%M %p')}",
+                            title=f"{'⏰ Alarm' if is_alarm else '📅 Reminder'}: {new_event.title}",
+                            message=f"{new_event.description or new_event.title}",
                             scheduled_time=reminder_time,
-                            notification_type="event_reminder",
+                            notification_type=notif_type,
                             related_event_id=new_event.id,
-                            priority="HIGH",
+                            priority=priority,
                             is_read=False,
                             is_sent=False
                         )
                         db.add(new_notification)
                         db.commit()
                         db.refresh(new_notification) # Refresh to get ID
-                        
-                        ai_text = f"✅ Okay, I've scheduled '{args.get('title')}' for {dt.strftime('%B %d at %I:%M %p')}."
                         
                         # Return event data for UI button
                         return {
@@ -231,7 +259,11 @@ def chat_with_ai(
                         traceback.print_exc()
                         ai_text = f"I tried to schedule that, but encountered an error: {str(e)} (Date: {args.get('deadline')})"
             else:
-                ai_text = response.text
+                 # Check if parts present, otherwise default
+                 if response.parts:
+                    ai_text = response.text
+                 else:
+                    ai_text = "I received your request but couldn't think of a response. Please try again."
                 
         else:
             ai_text = "AI Service is currently unavailable."

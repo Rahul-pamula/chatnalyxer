@@ -102,9 +102,10 @@ def sync_groups_from_whatsapp(
         if not whatsapp_id or not name:
             continue
 
-        # Check if group already exists
+        # Check if group already exists FOR DIS USAR
         existing_group = db.query(models.Group).filter(
-            models.Group.whatsapp_id == whatsapp_id
+            models.Group.whatsapp_id == whatsapp_id,
+            models.Group.user_id == payload.user_id  # ✅ Check user specific
         ).first()
 
         if existing_group:
@@ -119,6 +120,7 @@ def sync_groups_from_whatsapp(
             group = existing_group
         else:
             # Create new group
+            print(f"creating new group {name} for user {payload.user_id}")
             new_group = models.Group(
                 name=name,
                 whatsapp_id=whatsapp_id,
@@ -132,7 +134,7 @@ def sync_groups_from_whatsapp(
             group = new_group
             created_count += 1
 
-        # Assign group to the specific user only
+        # Assign group to the specific user only (GroupMember is still used for queries)
         membership = db.query(models.GroupMember).filter(
             models.GroupMember.user_id == payload.user_id,
             models.GroupMember.group_id == group.id

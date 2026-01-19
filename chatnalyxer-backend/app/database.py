@@ -21,17 +21,23 @@ if "supabase" in DATABASE_URL:
 
 # Create engine with connection pooling settings for Supabase
 engine_kwargs = {
-    "pool_pre_ping": True,  # Test connections before using them
-    "pool_recycle": 300,    # Recycle connections after 5 minutes
-    "pool_size": 5,         # Smaller pool for development
-    "max_overflow": 10,     # Max extra connections
+    "pool_pre_ping": True,      # Test connections before using them
+    "pool_recycle": 300,        # Recycle connections after 5 minutes
+    "pool_size": 10,            # Increased pool for better handling
+    "max_overflow": 20,         # More overflow connections
+    "pool_timeout": 30,         # Timeout for getting connection from pool
+    "echo_pool": False,         # Set to True for debugging pool issues
     "connect_args": {}
 }
 
-# Add SSL context for Supabase
+# Add SSL context and timeout for Supabase
 if "supabase" in DATABASE_URL:
     engine_kwargs["connect_args"]["sslmode"] = "require"
-    engine_kwargs["connect_args"]["connect_timeout"] = 10
+    engine_kwargs["connect_args"]["connect_timeout"] = 30  # Increased from 10 to 30 seconds
+    engine_kwargs["connect_args"]["keepalives"] = 1
+    engine_kwargs["connect_args"]["keepalives_idle"] = 30
+    engine_kwargs["connect_args"]["keepalives_interval"] = 10
+    engine_kwargs["connect_args"]["keepalives_count"] = 5
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

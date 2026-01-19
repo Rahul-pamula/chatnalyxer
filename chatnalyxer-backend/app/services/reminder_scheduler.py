@@ -93,9 +93,20 @@ class ReminderScheduler:
             event_datetime = datetime.combine(event.event_date, event.event_time)
             time_until_event = event_datetime - datetime.now()
             
+            # Check if this is an "Alarm" - if so, NO pre-reminders (1 day/1 hour before)
+            # The AI already scheduled the specific "At time" notification
+            is_alarm = any(k in (event.title or '').lower() for k in ['alarm', 'wake up', 'wake-up', 'call me'])
+            
+            if is_alarm:
+                logger.info(f"⏰ Event '{event.title}' identified as Alarm. Skipping standard pre-reminders.")
+                return True
+
             # Get reminder intervals
+            # Handle missing event_type gracefully
+            e_type = getattr(event, 'event_type', 'event')
+            
             intervals = ReminderScheduler.get_reminder_intervals(
-                event.event_type or 'event',
+                e_type,
                 time_until_event
             )
             

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { colors, shadows } from '../../src/theme/colors';
 
 interface Message {
@@ -24,15 +25,6 @@ interface MessageCardProps {
 
 export default function MessageCard({ message, onPress, onDelete }: MessageCardProps) {
     const router = useRouter();
-    const getPriorityColor = () => {
-        switch (message.priority_level) {
-            case 'CRITICAL': return '#DC2626'; // Dark red for critical
-            case 'HIGH': return colors.error;
-            case 'MEDIUM': return colors.warning;
-            case 'LOW': return colors.success;
-            default: return colors.textSecondary;
-        }
-    };
 
     const getPriorityIcon = () => {
         switch (message.priority_level) {
@@ -101,116 +93,154 @@ export default function MessageCard({ message, onPress, onDelete }: MessageCardP
     };
     const deadlineStatus = message.deadline_extracted ? getDeadlineStatus(message.deadline_extracted) : null;
 
+    // Animation for press
+    const scale = useSharedValue(1);
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+    }));
+
+    const handlePressIn = () => {
+        scale.value = withSpring(0.98, { damping: 15, stiffness: 400 });
+    };
+
+    const handlePressOut = () => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+    };
+
+    // Get color for priority border
+    const getPriorityColor = (): string => {
+        switch (message.priority_level) {
+            case 'CRITICAL': return colors.error;
+            case 'HIGH': return colors.warning;
+            case 'MEDIUM': return colors.warning;
+            case 'LOW': return colors.success;
+            default: return colors.primary;
+        }
+    };
+
     return (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={onPress}
-            activeOpacity={0.9}
-        >
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.groupInfo}>
-                    <View style={styles.groupAvatar}>
-                        <Text style={styles.groupAvatarText}>
-                            {message.group_name.charAt(0).toUpperCase()}
-                        </Text>
+        <Animated.View style={animatedStyle}>
+            <TouchableOpacity
+                style={styles.cardWrapper}
+                onPress={onPress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                activeOpacity={1}
+            >
+                <View style={[styles.card, { borderLeftColor: getPriorityColor(), borderLeftWidth: 5 }]}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <View style={styles.groupInfo}>
+                            <View style={styles.groupAvatar}>
+                                <Text style={styles.groupAvatarText}>
+                                    {message.group_name.charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                            <View style={styles.groupDetails}>
+                                <Text style={styles.groupName}>{message.group_name}</Text>
+                                <Text style={styles.sender}>{message.sender_name}</Text>
+                            </View>
+                        </View>
                     </View>
-                    <View style={styles.groupDetails}>
-                        <Text style={styles.groupName}>{message.group_name}</Text>
-                        <Text style={styles.sender}>{message.sender_name}</Text>
-                    </View>
-                </View>
-            </View>
 
-            {/* Content */}
-            <Text style={styles.content} numberOfLines={2}>
-                {message.content}
-            </Text>
-
-            {/* AI Summary */}
-            {message.ai_summary && (
-                <View style={styles.aiSummary}>
-                    <Ionicons name="sparkles" size={14} color={colors.primary} />
-                    <Text style={styles.aiText} numberOfLines={2}>
-                        {message.ai_summary}
+                    {/* Content */}
+                    <Text style={styles.content} numberOfLines={2}>
+                        {message.content}
                     </Text>
+
+                    {/* AI Summary */}
+                    {message.ai_summary && (
+                        <View style={styles.aiSummary}>
+                            <Ionicons name="sparkles" size={14} color={colors.primary} />
+                            <Text style={styles.aiText} numberOfLines={2}>
+                                {message.ai_summary}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Footer */}
+                    <View style={styles.footer}>
+                        {/* Real Timestamp */}
+                        <View style={styles.timestampContainer}>
+                            <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                            <Text style={styles.timestamp}>{formatRealTimestamp(message.created_at)}</Text>
+                        </View>
+
+                        {/* Deadline - Clickable to navigate to calendar */}
+                        {message.deadline_extracted && deadlineStatus && (
+                            <TouchableOpacity
+                                style={[styles.deadlineContainer, { backgroundColor: deadlineStatus.color + '15' }]}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    const cleanIso = message.deadline_extracted!.substring(0, 19);
+                                    const deadlineDate = new Date(cleanIso).toISOString().split('T')[0];
+                                    router.push(`/calendar?date=${deadlineDate}`);
+                                }}
+                            >
+                                <Ionicons name={deadlineStatus.icon as any} size={14} color={deadlineStatus.color} />
+                                <Text style={[styles.deadline, { color: deadlineStatus.color }]}>
+                                    {deadlineStatus.label}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Notification Schedule Button - Replaces inline text */}
+                        {message.deadline_extracted && (
+                            <TouchableOpacity
+                                style={styles.notificationButton}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    const cleanIso = message.deadline_extracted!.substring(0, 19);
+                                    router.push({
+                                        pathname: `/notifications/${message.id}`,
+                                        params: {
+                                            content: message.content,
+                                            deadline: cleanIso,
+                                            group_name: message.group_name
+                                        }
+                                    } as any);
+                                }}
+                            >
+                                <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Delete button */}
+                        {onDelete && (
+                            <TouchableOpacity
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(message.id);
+                                }}
+                                style={styles.deleteButton}
+                            >
+                                <Ionicons name="trash-outline" size={16} color={colors.error} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
-            )}
-
-            {/* Footer */}
-            <View style={styles.footer}>
-                {/* Real Timestamp */}
-                <View style={styles.timestampContainer}>
-                    <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
-                    <Text style={styles.timestamp}>{formatRealTimestamp(message.created_at)}</Text>
-                </View>
-
-                {/* Deadline - Clickable to navigate to calendar */}
-                {message.deadline_extracted && deadlineStatus && (
-                    <TouchableOpacity
-                        style={[styles.deadlineContainer, { backgroundColor: deadlineStatus.color + '15' }]}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            const cleanIso = message.deadline_extracted!.substring(0, 19);
-                            const deadlineDate = new Date(cleanIso).toISOString().split('T')[0];
-                            router.push(`/calendar?date=${deadlineDate}`);
-                        }}
-                    >
-                        <Ionicons name={deadlineStatus.icon as any} size={14} color={deadlineStatus.color} />
-                        <Text style={[styles.deadline, { color: deadlineStatus.color }]}>
-                            {deadlineStatus.label}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Notification Schedule Button - Replaces inline text */}
-                {message.deadline_extracted && (
-                    <TouchableOpacity
-                        style={styles.notificationButton}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            const cleanIso = message.deadline_extracted!.substring(0, 19);
-                            router.push({
-                                pathname: `/notifications/${message.id}`,
-                                params: {
-                                    content: message.content,
-                                    deadline: cleanIso,
-                                    group_name: message.group_name
-                                }
-                            } as any);
-                        }}
-                    >
-                        <Ionicons name="notifications-outline" size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                )}
-
-                {/* Delete button */}
-                {onDelete && (
-                    <TouchableOpacity
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            onDelete(message.id);
-                        }}
-                        style={styles.deleteButton}
-                    >
-                        <Ionicons name="trash-outline" size={16} color={colors.error} />
-                    </TouchableOpacity>
-                )}
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </Animated.View>
     );
 }
 
 const styles = StyleSheet.create({
+    cardWrapper: {
+        marginHorizontal: 16,
+        marginBottom: 16,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        elevation: 8,
+    },
     card: {
         backgroundColor: colors.surface,
-        borderRadius: 16,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 12,
+        borderRadius: 20,
+        padding: 18,
         borderWidth: 1,
         borderColor: colors.border,
-        ...shadows.md,
     },
     header: {
         flexDirection: 'row',
@@ -241,31 +271,33 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     groupName: {
-        fontSize: 15,
-        fontWeight: '700',
+        fontSize: 17,
+        fontWeight: '800',
         color: colors.textPrimary,
-        marginBottom: 2,
+        marginBottom: 3,
+        letterSpacing: -0.3,
     },
     sender: {
         fontSize: 13,
         color: colors.textSecondary,
     },
     content: {
-        fontSize: 14,
+        fontSize: 15,
         color: colors.textPrimary,
-        lineHeight: 20,
-        marginBottom: 12,
+        lineHeight: 22,
+        marginBottom: 14,
+        marginLeft: 4,
     },
     aiSummary: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: colors.primary + '10',
-        borderLeftWidth: 3,
+        backgroundColor: colors.primary + '15',
+        borderLeftWidth: 4,
         borderLeftColor: colors.primary,
-        padding: 10,
-        borderRadius: 8,
-        marginBottom: 12,
-        gap: 8,
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 14,
+        gap: 10,
     },
     aiText: {
         flex: 1,

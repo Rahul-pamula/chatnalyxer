@@ -160,6 +160,20 @@ async def get_whatsapp_status(
                 
                 if response.status_code == 200:
                     session_data = response.json()
+                    
+                    # SELF-HEALING: If Session Manager says inactive, update DB!
+                    if not session_data.get("active", False):
+                        print(f"⚠️ Mismatch detected: DB says connected, Session Manager says inactive. Auto-correcting for user {current_user.id}...")
+                        current_user.whatsapp_connected = False
+                        current_user.whatsapp_session_port = None
+                        db.commit()
+                        
+                        return {
+                            "connected": False,
+                            "ready": False,
+                            "message": "Session expired. Please reconnect."
+                        }
+
                     return {
                         "ready": session_data.get("ready", False),
                         "connected": True,
@@ -168,7 +182,8 @@ async def get_whatsapp_status(
                         "status": session_data.get("status"),
                         "message": "Connected" if session_data.get("ready") else "Connecting..."
                     }
-            except:
+            except Exception as e:
+                print(f"⚠️ Status check warning: {e}")
                 pass
         
         # Not connected
@@ -318,17 +333,25 @@ async def generate_pairing_code(
         raise HTTPException(500, f"Failed to generate code: {str(e)}")
 
 
+from pydantic import BaseModel
+
+class SessionEndSchema(BaseModel):
+    user_id: int
+    exit_code: Optional[int] = None
+    reason: Optional[str] = None
+
 @router.post("/session-ended")
 async def session_ended(
-    user_id: int,
-    exit_code: Optional[int] = None,
-    reason: Optional[str] = None,
+    payload: SessionEndSchema,
     db: Session = Depends(get_db)
 ):
     """
     Called by session manager when process dies
     """
     try:
+        user_id = payload.user_id
+        reason = payload.reason
+
         user = db.query(User).filter(User.id == user_id).first()
         
         if not user:

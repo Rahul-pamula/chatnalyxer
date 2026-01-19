@@ -286,18 +286,113 @@ class MLMessageAnalyzer:
         return list(set(keywords))[:10]  # Max 10 keywords
     
     def _extract_deadline(self, content: str, created_at: datetime) -> Optional[datetime]:
-        """Extract deadline from content"""
+        """Extract deadline using advanced pattern matching - NO AI needed!"""
         content_lower = content.lower()
         
-        # Simple patterns
+        # Set timezone to IST
+        try:
+            ist = ZoneInfo('Asia/Kolkata')
+            now = created_at.replace(tzinfo=ist) if created_at.tzinfo is None else created_at.astimezone(ist)
+        except:
+            # Fallback if ZoneInfo fails
+            now = created_at
+        
+        # Pattern 1: Relative days
         if 'today' in content_lower or 'tonight' in content_lower:
-            return created_at
-        elif 'tomorrow' in content_lower:
-            return created_at + timedelta(days=1)
-        elif 'next week' in content_lower:
-            return created_at + timedelta(days=7)
+            return self._extract_time_or_default(content, now, end_of_day=True)
+        
+        if 'tomorrow' in content_lower:
+            tomorrow = now + timedelta(days=1)
+            return self._extract_time_or_default(content, tomorrow, end_of_day=True)
+        
+        if 'day after tomorrow' in content_lower or 'day after' in content_lower:
+            return now + timedelta(days=2)
+        
+        if 'next week' in content_lower:
+            return now + timedelta(days=7)
+        
+        # Pattern 2: Days of week (Monday, Tuesday, etc.)
+        days_map = {
+            'monday': 0, 'mon': 0,
+            'tuesday': 1, 'tue': 1,
+            'wednesday': 2, 'wed': 2,
+            'thursday': 3, 'thu': 3,
+            'friday': 4, 'fri': 4,
+            'saturday': 5, 'sat': 5,
+            'sunday': 6, 'sun': 6
+        }
+        
+        for day_name, day_num in days_map.items():
+            if day_name in content_lower:
+                current_day = now.weekday()
+                days_ahead = (day_num - current_day) % 7
+                if days_ahead == 0:
+                    days_ahead = 7  # Assume next week
+                target_date = now + timedelta(days=days_ahead)
+                return self._extract_time_or_default(content, target_date, end_of_day=True)
+        
+        # Pattern 3: Specific dates (15th, 21st, etc.)
+        date_pattern = r'(\d{1,2})(st|nd|rd|th)'
+        date_match = re.search(date_pattern, content_lower)
+        
+        if date_match:
+            day = int(date_match.group(1))
+            
+            # Check for month
+            months_map = {
+                'jan': 1, 'january': 1, 'feb': 2, 'february': 2,
+                'mar': 3, 'march': 3, 'apr': 4, 'april': 4,
+                'may': 5, 'jun': 6, 'june': 6,
+                'jul': 7, 'july': 7, 'aug': 8, 'august': 8,
+                'sep': 9, 'sept': 9, 'september': 9,
+                'oct': 10, 'october': 10, 'nov': 11, 'november': 11,
+                'dec': 12, 'december': 12
+            }
+            
+            month = now.month
+            for month_name, month_num in months_map.items():
+                if month_name in content_lower:
+                    month = month_num
+                    break
+            
+            try:
+                year = now.year
+                if month < now.month or (month == now.month and day < now.day):
+                    year += 1
+                
+                deadline = now.replace(year=year, month=month, day=day)
+                return self._extract_time_or_default(content, deadline, end_of_day=True)
+            except ValueError:
+                pass
         
         return None
+    
+    def _extract_time_or_default(self, content: str, base_date: datetime, end_of_day: bool = True) -> datetime:
+        """Extract time from content or use default"""
+        # Look for time patterns: 5pm, 17:00, 9:30am
+        time_pattern = r'(\d{1,2}):?(\d{2})?\s*(am|pm|AM|PM)?'
+        time_match = re.search(time_pattern, content)
+        
+        if time_match:
+            try:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2)) if time_match.group(2) else 0
+                meridiem = time_match.group(3).lower() if time_match.group(3) else None
+                
+                # Convert to 24-hour
+                if meridiem == 'pm' and hour != 12:
+                    hour += 12
+                elif meridiem == 'am' and hour == 12:
+                    hour = 0
+                
+                return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            except ValueError:
+                pass
+        
+        # No time found - default to end of day
+        if end_of_day:
+            return base_date.replace(hour=23, minute=59, second=0, microsecond=0)
+        return base_date
 
 
     def get_analytics_data(self, messages: List[Dict]) -> Dict:
