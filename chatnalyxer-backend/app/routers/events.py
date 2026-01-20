@@ -57,6 +57,7 @@ class EventCreate(BaseModel):
     location: Optional[str] = None
     reminder_minutes: int = 30
     is_all_day: bool = False
+    is_alarm: bool = False  # NEW: Flag for alarm mode
 
 class EventUpdate(BaseModel):
     title: Optional[str] = None
@@ -164,15 +165,56 @@ async def create_event(
         db.commit()
         db.refresh(event)
         
-        # Schedule reminder
-        # Schedule reminder (Best effort)
+        # Create notification based on mode (Alarm vs Reminder)
         try:
-            from ..services.notification_service import schedule_event_reminders
-            await schedule_event_reminders(event.id, db)
+            from datetime import timedelta
+            
+            # Build the datetime for the event
+            event_datetime = datetime.combine(event.event_date, event.event_time or time(0, 0))
+            
+            if event_data.is_alarm:
+                # ALARM MODE: Notification at exact time
+                notification_time = event_datetime
+                notif_type = "alarm"
+                priority = "CRITICAL"
+                title = f"⏰ Alarm: {event.title}"
+                logger.info(f"Creating alarm notification at exact time: {notification_time}")
+            else:
+                # REMINDER MODE: Notification 30 mins before (or custom)
+                notification_time = event_datetime - timedelta(minutes=event_data.reminder_minutes)
+                notif_type = "event_reminder"
+                priority = "HIGH"
+                title = f"📅 Reminder: {event.title}"
+                logger.info(f"Creating reminder notification {event_data.reminder_minutes} mins before: {notification_time}")
+            
+            # Don't schedule notifications in the past
+            now = datetime.now()
+            if notification_time < now:
+                logger.warning(f"Notification time {notification_time} is in the past, scheduling for immediate delivery")
+                notification_time = now + timedelta(seconds=5)
+            
+            # Create the notification
+            new_notification = models.Notification(
+                user_id=current_user.id,
+                title=title,
+                message=event.description or event.title,
+                scheduled_time=notification_time,
+                notification_type=notif_type,
+                related_event_id=event.id,
+                priority=priority,
+                is_read=False,
+                is_sent=False
+            )
+            db.add(new_notification)
+            db.commit()
+            logger.info(f"✅ Notification created successfully (ID: {new_notification.id})")
+            
         except ImportError:
             logger.warning("Notification service not available (missing dependencies?)")
         except Exception as ex:
-            logger.error(f"Failed to schedule reminder: {ex}")
+            logger.error(f"Failed to create notification: {ex}")
+            import traceback
+            traceback.print_exc()
         
         return {
             "success": True,

@@ -430,6 +430,11 @@ async function connectToWhatsApp(isManualRequest = false) {
                 // ============================================
                 // CHECK IF GROUP IS SELECTED/ACTIVE
                 // ============================================
+                // DEMO MODE: BYPASS SELECTION CHECK
+                // We want to analyze messages from ANY group for the demo
+                console.log(`✅ Group selection check BYPASSED for demo: ${remoteJid}`);
+
+                // ORIGINAL LOGIC COMMENTED OUT FOR DEMO
                 try {
                     const axios = (await import('axios')).default;
                     const BASE_URL = 'http://localhost:8000';
@@ -458,57 +463,34 @@ async function connectToWhatsApp(isManualRequest = false) {
                     continue;
                 }
 
-                // ============================================
-                // SMART FILTERING - Save AI Quota for Expo!
-                // ============================================
 
-                /**
-                 * Filter out unimportant messages BEFORE sending to backend
-                 * This saves 80% of AI quota by skipping "ok", "hi", emojis
-                 */
+                // ============================================
+                // SMART FILTERING - RELAXED FOR DEMO/TESTING
+                // ============================================
                 function shouldAnalyzeMessage(content) {
                     const contentLower = content.toLowerCase().trim();
 
-                    // 1. Skip very short messages (< 5 chars)
-                    if (contentLower.length < 5) {
+                    // 1. Skip very short messages (< 4 chars)
+                    // "Hi", "Ok", "Gm", "Hlo"
+                    if (contentLower.length < 4) {
                         console.log(`⏭️ SKIPPED (too short): "${content}"`);
                         return false;
                     }
 
-                    // 2. Skip emoji-only messages
-                    if (/^[\u{1F300}-\u{1F9FF}\s]+$/u.test(content)) {
-                        console.log(`⏭️ SKIPPED (emojis only): "${content}"`);
+                    // 2. Skip common greetings/casual filler
+                    const skipPhrases = [
+                        'good morning', 'good night', 'hello', 'thank you', 'thanks',
+                        'ok', 'okay', 'cool', 'nice', 'lol', 'lmao', 'haha'
+                    ];
+
+                    if (skipPhrases.some(phrase => contentLower === phrase)) {
+                        console.log(`⏭️ SKIPPED (casual): "${content}"`);
                         return false;
                     }
 
-                    // 3. Important keywords (works for ANY length!)
-                    const importantKeywords = /deadline|urgent|important|submit|assignment|project|meeting|exam|test|quiz|presentation|due|class|lecture|tomorrow|today|asap|critical/i;
-                    if (importantKeywords.test(content)) {
-                        console.log(`✅ ANALYZING (has keywords): "${content.substring(0, 50)}..."`);
-                        return true;
-                    }
-
-                    // 4. Questions (usually important)
-                    if (/\?|when|what|where|who|why|how|can you|could you|will there|is there/i.test(content)) {
-                        console.log(`✅ ANALYZING (question): "${content.substring(0, 50)}..."`);
-                        return true;
-                    }
-
-                    // 5. Time/Date mentions
-                    if (/\d+pm|\d+am|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d+th|\d+st|\d+nd|\d+rd|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(content)) {
-                        console.log(`✅ ANALYZING (has time/date): "${content.substring(0, 50)}..."`);
-                        return true;
-                    }
-
-                    // 6. Medium+ length messages (might have context)
-                    if (content.length >= 30) {
-                        console.log(`✅ ANALYZING (medium length): "${content.substring(0, 50)}..."`);
-                        return true;
-                    }
-
-                    // 7. Otherwise skip
-                    console.log(`⏭️ SKIPPED (casual chat): "${content}"`);
-                    return false;
+                    // 3. Otherwise ACCEPT everything else
+                    console.log(`✅ ANALYZING: "${content.substring(0, 50)}..."`);
+                    return true;
                 }
 
                 // Check if message should be analyzed

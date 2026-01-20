@@ -187,7 +187,7 @@ export default function ProfileScreen() {
                         )}
 
                         {(selectedType === 'STUDENT' || selectedType === 'FACULTY') &&
-                            renderField('College / Institution', collegeName, setCollegeName, 'e.g. IIT Bombay')}
+                            renderField('College / Institution', collegeName, setCollegeName, 'e.g. Parul University')}
 
                         {selectedType === 'STUDENT' &&
                             renderField('Course', course, setCourse, 'e.g. B.Tech CS')}

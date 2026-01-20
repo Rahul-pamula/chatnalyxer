@@ -89,9 +89,9 @@ async function connectAdminWhatsApp() {
     try {
         console.log('📱 Connecting Admin WhatsApp...');
 
-        // Use PostgreSQL Auth
-        // const { state, saveCreds } = await useMultiFileAuthState('./admin-wa-auth');
-        const { state, saveCreds } = await usePostgresAuthState(pool, 'admin_wa_session');
+        // Use file-based auth (more reliable for admin)
+        const { state, saveCreds } = await useMultiFileAuthState('./admin-wa-auth');
+        // const { state, saveCreds } = await usePostgresAuthState(pool, 'admin_wa_session');
         const { version } = await fetchLatestBaileysVersion();
 
         adminSocket = makeWASocket({
@@ -110,7 +110,12 @@ async function connectAdminWhatsApp() {
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                console.log('📷 Admin QR Code generated');
+                // Rate limit QR logging to avoid terminal spam
+                const now = Date.now();
+                if (!global.lastQRTime || now - global.lastQRTime > 5000) {
+                    console.log('📷 Admin QR Code generated - Scan now!');
+                    global.lastQRTime = now;
+                }
                 adminQR = await QRCode.toDataURL(qr);
                 startQRTimer();
             }
@@ -128,7 +133,7 @@ async function connectAdminWhatsApp() {
                     try {
                         fs.rmSync('./admin-wa-auth', { recursive: true, force: true });
                         console.log('🧹 Auth folder cleared.');
-                        shouldReconnect = true; // Force reconnect to generate new QR
+                        shouldReconnect = true; // Keep trying for QR
                     } catch (e) {
                         console.error('Failed to clear auth:', e);
                     }
@@ -138,9 +143,10 @@ async function connectAdminWhatsApp() {
                 adminQR = null;
                 if (qrTimer) clearInterval(qrTimer);
 
+                // Re-enabled for OTP registration (essential feature)
                 if (shouldReconnect) {
-                    console.log('🔄 Attempting to reconnect in 3s...');
-                    setTimeout(() => connectAdminWhatsApp(), 3000);
+                    console.log('🔄 Attempting to reconnect in 5s...');
+                    setTimeout(() => connectAdminWhatsApp(), 5000);
                 }
             } else if (connection === 'open') {
                 console.log('✅ Admin WhatsApp connected!');
@@ -584,7 +590,7 @@ app.get('/', (req, res) => {
                         <button class="btn btn-danger btn-small" onclick="logout()">Logout</button>
                     </div>
 
-                    <!-- Summary Stats -->
+                    <!-- Summary Stats (HIDDEN as per request)
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-number" id="totalUsers">-</div>
@@ -599,6 +605,7 @@ app.get('/', (req, res) => {
                             <div class="stat-label">Total Messages</div>
                         </div>
                     </div>
+                    -->
 
                     <!-- Admin WhatsApp -->
                     <div class="section">
@@ -828,15 +835,19 @@ app.get('/', (req, res) => {
                             const data = await res.json();
                             
                             if (data.stats) {
-                                document.getElementById('totalUsers').textContent = data.stats.total_users;
-                                document.getElementById('activeSessions').textContent = data.stats.active_sessions;
+                                const totalUsersEl = document.getElementById('totalUsers');
+                                if (totalUsersEl) totalUsersEl.textContent = data.stats.total_users;
+                                
+                                const activeSessionsEl = document.getElementById('activeSessions');
+                                if (activeSessionsEl) activeSessionsEl.textContent = data.stats.active_sessions;
                             }
                             
                             // Try total messages
                             try {
                                 const healthRes = await fetch('http://localhost:8000/admin/health');
                                 const healthData = await healthRes.json();
-                                document.getElementById('totalMessages').textContent = healthData.database?.total_messages || '-';
+                                const totalMessagesEl = document.getElementById('totalMessages');
+                                if (totalMessagesEl) totalMessagesEl.textContent = healthData.database?.total_messages || '-';
                             } catch (e) {}
                             
                             const userList = document.getElementById('userList');
@@ -856,7 +867,8 @@ app.get('/', (req, res) => {
                             
                             userList.innerHTML = sortedUsers.map(user => {
                                 const hasPid = user.pid && user.pid !== 'N/A';
-                                const isActive = hasPid || user.is_active_scanner;
+                                // Only show "Process Running" if there's an actual PID
+                                const isActive = hasPid;
                                 const statusClass = isActive ? 'status-connected' : 'status-error';
                                 const statusText = isActive ? 'Process Running' : 'Offline';
                                 const statusIcon = isActive ? '✅' : '⚫';

@@ -139,9 +139,31 @@ export default function SetupScreen() {
                 setPreviousConnectionStatus(false);
                 setQrCode(null);
                 setPairingCode(null);
-            } catch (error) { Alert.alert('Error', 'Failed to disconnect'); }
+            } catch (error) {
+                // Don't use Alert on web for errors if possible, or use simple alert
+                if (Platform.OS === 'web') {
+                    (window as any).alert('Failed to disconnect');
+                } else {
+                    Alert.alert('Error', 'Failed to disconnect');
+                }
+            }
         };
-        Alert.alert('Disconnect WhatsApp', 'Are you sure? This stops message analysis.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Disconnect', style: 'destructive', onPress: confirmLogout }]);
+
+        if (Platform.OS === 'web') {
+            const confirmed = (window as any).confirm('Are you sure you want to disconnect? This stops message analysis.');
+            if (confirmed) {
+                confirmLogout();
+            }
+        } else {
+            Alert.alert(
+                'Disconnect WhatsApp',
+                'Are you sure? This stops message analysis.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Disconnect', style: 'destructive', onPress: confirmLogout }
+                ]
+            );
+        }
     };
 
     const handleEmailClick = () => {

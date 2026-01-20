@@ -272,9 +272,10 @@ def admin_whatsapp_disconnect(db: Session = Depends(get_db)):
 @router.delete("/users/{user_id}")
 def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
     """
-    Delete a user permanently.
+    Delete a user permanently with proper cascade.
     1. Stop active session if any via Session Manager.
-    2. Delete from DB (Cascade will handle related data).
+    2. Manually delete related records that might cause foreign key issues.
+    3. Delete user (which will cascade to most other records).
     """
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -290,10 +291,38 @@ def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
     except:
         pass # Ignore error if session manager is down or session not active
 
-    # 2. Delete from DB
+    # 2. Manually delete ALL related records in correct order
     try:
+        # Delete all user-related data first to avoid foreign key constraints
+        
+        # AI & Events
+        db.query(models.UserInteraction).filter(models.UserInteraction.user_id == user_id).delete()
+        db.query(models.Notification).filter(models.Notification.user_id == user_id).delete()
+        db.query(models.Event).filter(models.Event.user_id == user_id).delete()
+        db.query(models.ScheduledEvent).filter(models.ScheduledEvent.user_id == user_id).delete()
+        db.query(models.AITask).filter(models.AITask.user_id == user_id).delete()
+        db.query(models.AnalyzedMessage).filter(models.AnalyzedMessage.user_id == user_id).delete()
+        db.query(models.AIConversation).filter(models.AIConversation.user_id == user_id).delete()
+        db.query(models.UserContext).filter(models.UserContext.user_id == user_id).delete()
+        db.query(models.EmailCredential).filter(models.EmailCredential.user_id == user_id).delete()
+        db.query(models.UserProfile).filter(models.UserProfile.user_id == user_id).delete()
+        
+        # Messages (has foreign keys to user and groups)
+        db.query(models.Message).filter(
+            (models.Message.sender_id == user_id) | 
+            (models.Message.receiver_user_id == user_id)
+        ).delete(synchronize_session=False)
+        
+        # Group members
+        db.query(models.GroupMember).filter(models.GroupMember.user_id == user_id).delete()
+        
+        # Delete user's groups
+        db.query(models.Group).filter(models.Group.user_id == user_id).delete()
+        
+        # Finally delete the user
         db.delete(user)
         db.commit()
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(500, f"Database delete failed: {str(e)}")

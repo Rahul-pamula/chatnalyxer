@@ -11,7 +11,12 @@ function InitialLayout() {
   useEffect(() => {
     if (loading) return;
 
-    if (user && !user.is_profile_complete) {
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
+
+    if (!user && !inAuthGroup) {
+      // ✅ Redirect to login if not authenticated
+      router.replace('/login');
+    } else if (user && !user.is_profile_complete) {
       // Check if already on setup screen to avoid loop
       const inSetup = segments[0] === 'profile-setup';
       const targetIsSetup = segments[0] === 'setup'; // Allow transition to setup
@@ -23,6 +28,11 @@ function InitialLayout() {
       // If profile IS complete, but we are on profile-setup, send them to dashboard
       const inSetup = segments[0] === 'profile-setup';
       if (inSetup) {
+        router.replace('/dashboard');
+      }
+      // Also if on login, go to dashboard
+      if (inAuthGroup) {
+        router.replace('/dashboard');
       }
     }
   }, [user, loading, segments]);
@@ -41,6 +51,17 @@ function InitialLayout() {
       // Setup notification action handlers (snooze/dismiss)
       import("../src/services/notificationActions").then(({ setupNotificationActionHandlers }) => {
         setupNotificationActionHandlers();
+      });
+
+      // START NOTIFICATION POLLING (checks backend every 30 secs)
+      import("../src/services/notificationPollingService").then(({ startNotificationPolling }) => {
+        startNotificationPolling(token);
+        console.log('🔔 Notification polling started');
+      });
+    } else {
+      // Stop polling when user logs out
+      import("../src/services/notificationPollingService").then(({ stopNotificationPolling }) => {
+        stopNotificationPolling();
       });
     }
   }, [user, token]);

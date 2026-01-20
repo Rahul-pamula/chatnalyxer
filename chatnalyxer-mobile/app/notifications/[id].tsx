@@ -11,7 +11,26 @@ export default function NotificationScheduleScreen() {
     // Parse params (they come as strings)
     const { id, content, deadline, group_name } = params;
 
-    const deadlineDate = new Date(deadline as string);
+    // Parse deadline with timezone fix (same as list view)
+    const parseDate = (dateString: string) => {
+        if (!dateString) return new Date();
+        const cleanDate = dateString.replace('Z', '').replace(/[+-]\d{2}:?\d{2}$/, '');
+        const parts = cleanDate.split(/[-T:.]/);
+        const date = new Date(
+            parseInt(parts[0]),
+            parseInt(parts[1]) - 1,
+            parseInt(parts[2]),
+            parseInt(parts[3] || '0'),
+            parseInt(parts[4] || '0'),
+            parseInt(parts[5] || '0')
+        );
+        // Fix: Do not manually adjust offset. The Date constructor with components already uses local time.
+        // const offset = new Date().getTimezoneOffset(); 
+        // date.setMinutes(date.getMinutes() + offset);
+        return date;
+    };
+
+    const deadlineDate = parseDate(deadline as string);
     const now = new Date();
 
     // Check if this is an Alarm

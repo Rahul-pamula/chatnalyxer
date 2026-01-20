@@ -28,6 +28,7 @@ export default function AddEventModal({ visible, onClose, onSave }: AddEventModa
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [isAllDay, setIsAllDay] = useState(false);
+    const [isAlarm, setIsAlarm] = useState(false);
 
     const handleSave = () => {
         if (!title.trim()) {
@@ -42,7 +43,8 @@ export default function AddEventModal({ visible, onClose, onSave }: AddEventModa
             event_time: isAllDay ? null : eventTime.toTimeString().slice(0, 5),
             location: location.trim() || null,
             is_all_day: isAllDay,
-            reminder_minutes: 30
+            reminder_minutes: isAlarm ? 0 : 30,
+            is_alarm: isAlarm
         };
 
         onSave(event);
@@ -54,6 +56,7 @@ export default function AddEventModal({ visible, onClose, onSave }: AddEventModa
         setEventTime(new Date());
         setLocation('');
         setIsAllDay(false);
+        setIsAlarm(false);
     };
 
     return (
@@ -160,6 +163,20 @@ export default function AddEventModal({ visible, onClose, onSave }: AddEventModa
                             <Text style={styles.label}>All Day Event</Text>
                             <View style={[styles.toggle, isAllDay && styles.toggleActive]}>
                                 {isAllDay && <View style={styles.toggleDot} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Alarm Mode Toggle */}
+                        <TouchableOpacity
+                            style={styles.toggleRow}
+                            onPress={() => setIsAlarm(!isAlarm)}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Ionicons name="alarm-outline" size={20} color={colors.primary} />
+                                <Text style={styles.label}>Alarm (notify at exact time)</Text>
+                            </View>
+                            <View style={[styles.toggle, isAlarm && styles.toggleActive]}>
+                                {isAlarm && <View style={styles.toggleDot} />}
                             </View>
                         </TouchableOpacity>
 

@@ -125,10 +125,26 @@ def create_whatsapp_message(
             
             print(f"👤 Analyzing message for {user_type} user...")
 
+            # CRITICAL FIX: Convert UTC timestamp to IST for AI Context
+            # Gemini thinks "now" is the timestamp we send. If we send UTC (4pm), 
+            # and message says "in 10 mins", Gemini sets deadline to 4:10pm.
+            # User in IST (9:30pm) sees 4:10pm deadline (past).
+            # We must send IST time to AI so it calculates 9:40pm.
+            import pytz
+            ist_tz = pytz.timezone('Asia/Kolkata')
+            
+            # Ensure created_at is timezone aware (assume UTC if naive)
+            if created_at.tzinfo is None:
+                created_at = pytz.utc.localize(created_at)
+            
+            # Convert to IST
+            created_at_ist = created_at.astimezone(ist_tz)
+            print(f"🕒 Converted AI Context Time: {created_at} (UTC) -> {created_at_ist} (IST)")
+
             # Use hybrid analysis (Text + Image + User Feedback + User Context)
             ai_results = ai_analyzer.analyze_message_with_media(
                 content=payload.content,
-                created_at=created_at,  # Now a datetime object
+                created_at=created_at_ist,  # Pass IST time
                 user_type=user_type,  # NEW: User context for priority detection
                 media_url=payload.media_url,
                 user_examples=user_examples
@@ -142,6 +158,28 @@ def create_whatsapp_message(
     elif ml_analyzer:
         # Fallback if AI analyzer not loaded
         ai_results = ml_analyzer.analyze_message(payload.content, payload.timestamp)
+
+    # =========================================================================
+    # OPTIMIZATION: SKIP STORAGE FOR "LOW" PRIORITY (CASUAL) MESSAGES
+    # =========================================================================
+    priority_level = str(ai_results.get('priority_level', 'LOW')).strip().upper()
+    print(f"🔍 Checking Priority: '{priority_level}' (Raw: {ai_results.get('priority_level')})")
+
+    if priority_level == 'LOW':
+        print(f"🗑️ Skipping DB storage for LOW priority message: {payload.content[:30]}...")
+        # Return a dummy response so frontend/script doesn't crash
+        return models.Message(
+            id=0, # Dummy ID
+            content=payload.content,
+            group_id=group.id,
+            sender_id=default_user.id,
+            sender=default_user,       # Required for Pydantic serialization
+            created_at=datetime.now(),
+            priority_level="LOW",
+            is_priority=False,
+            message_category="ignored",
+            is_manual_override=False   # Required field
+        )
 
     msg = models.Message(
         content=payload.content,
@@ -198,36 +236,59 @@ def create_whatsapp_message(
                     with open(payload.media_url, "rb") as img_file:
                         img_bytes = img_file.read()
                         img_analysis = ai_analyzer.analyze_image(image_url=None, image_data=img_bytes)
-                        extracted_text = img_analysis.get('ocr_text', '')
-
+                    extracted_text = img_analysis.get('ocr_text', '')
+            
             if extracted_text:
-                print(f"✅ Extracted {len(extracted_text)} chars for RAG.")
+                print(f"✅ Extracted text ({len(extracted_text)} chars). Updating message...")
                 msg.extracted_text = extracted_text
                 
-        except Exception as e:
-            print(f"⚠️ Failed to process media for RAG: {e}")
+                # Re-analyze with extracted text context if needed
+                # (For now we just store it)
 
+        except Exception as e:
+            print(f"⚠️ Failed to process media: {e}")
+            
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # Trigger background tasks if high priority (Notifications etc)
+    if msg.is_priority:
+        from ..services.notification_service import send_push_notification
+        background_tasks.add_task(
+            send_push_notification, 
+            payload.user_id, 
+            "Important Message", 
+            f"{payload.sender_name}: {payload.content[:50]}..."
+        )
+
+    # 4. Check for Deadlines -> Schedule Events
+    if ai_results.get('deadline_extracted'):
+        deadline_dt = ai_results['deadline_extracted']
+        print(f"📅 Auto-scheduling event for deadline: {deadline_dt}")
+        
+        # Create ScheduledEvent
+        new_event = models.ScheduledEvent(
+            user_id=payload.user_id,
+            message_id=msg.id,
+            title=f"Deadline: {ai_results.get('message_category', 'Task')}",
+            description=payload.content,
+            deadline=deadline_dt,
+            is_completed=False
+        )
+        db.add(new_event)
+        db.commit()
     
-    # Auto-create scheduled event if deadline was extracted
-    if msg.deadline_extracted:
-        try:
-            event = models.ScheduledEvent(
-                user_id=payload.user_id,
-                message_id=msg.id,
-                title=msg.ai_summary[:500] if msg.ai_summary else msg.content[:500],
-                description=msg.content,
-                deadline=msg.deadline_extracted
-            )
-            db.add(event)
-            db.commit()
-            print(f"📅 Auto-created event for message {msg.id} with deadline: {msg.deadline_extracted}")
-        except Exception as e:
-            print(f"⚠️ Failed to create event: {e}")
-            # Don't fail the message creation if event creation fails
+    return msg
     
+    
+@router.get("/", response_model=list[schemas.MessageOut])
+def get_messages(
+    current_user: models.User = Depends(get_current_user),
+    limit: int = 50,
+    skip: int = 0,
+    db: Session = Depends(get_db)
+):
     # 🤖 Generate AI Summary for extracted content (NEW - Phase 1)
     if payload.extracted_content and ai_analyzer:
         try:

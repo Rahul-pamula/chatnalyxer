@@ -147,7 +147,7 @@ export default function OnboardingScreen() {
                             <Text style={styles.label}>College / Institution Name</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="e.g. IIT Bombay"
+                                placeholder="e.g. Parul University"
                                 value={collegeName}
                                 onChangeText={setCollegeName}
                             />
@@ -160,7 +160,7 @@ export default function OnboardingScreen() {
                                 <Text style={styles.label}>Course / Degree</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="e.g. B.Tech Computer Science"
+                                    placeholder="e.g. B.Tech Computer Engineering"
                                     value={course}
                                     onChangeText={setCourse}
                                 />

@@ -114,20 +114,29 @@ export default function Notifications() {
     };
 
     const parseDate = (dateString: string) => {
-        // Fix for naive ISO strings being parsed as UTC in some engines
-        // If the string looks like "YYYY-MM-DDTHH:MM:SS" without Z or offset, parse as local
-        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(dateString) && !/Z|[+-]\d{2}:?\d{2}$/.test(dateString)) {
-            const parts = dateString.split(/[-T:.]/);
-            return new Date(
-                parseInt(parts[0]),
-                parseInt(parts[1]) - 1, // Month is 0-indexed
-                parseInt(parts[2]),
-                parseInt(parts[3]),
-                parseInt(parts[4]),
-                parseInt(parts[5] || '0')
-            );
-        }
-        return new Date(dateString);
+        // ERROR FIX: Backend interprets local time input as naive UTC
+        // So we get "16:00Z" which converts to "21:30 IST" (5.5h ahead)
+        // We must treat the string as LOCAL TIME regardless of 'Z'
+
+        // Strip 'Z' or timezone offsets
+        const cleanDate = dateString.replace('Z', '').replace(/[+-]\d{2}:?\d{2}$/, '');
+
+        const parts = cleanDate.split(/[-T:.]/);
+        const date = new Date(
+            parseInt(parts[0]),
+            parseInt(parts[1]) - 1, // Month is 0-indexed
+            parseInt(parts[2]),
+            parseInt(parts[3] || '0'),
+            parseInt(parts[4] || '0'),
+            parseInt(parts[5] || '0')
+        );
+
+        // Adjust for device timezone offset (same fix as polling service)
+        // Backend stored local time as UTC, so we shift it back to match real UTC
+        const offset = new Date().getTimezoneOffset();
+        date.setMinutes(date.getMinutes() + offset);
+
+        return date;
     };
 
     const formatScheduledTime = (dateString: string) => {
