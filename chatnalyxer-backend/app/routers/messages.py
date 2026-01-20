@@ -41,15 +41,23 @@ def create_whatsapp_message(
     api_key_check: str = Depends(get_api_key)
 ):
     # NEW: Check if user is connected
-    user = db.query(models.User).filter(models.User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail=f"User {payload.user_id} not found")
-    
-    if not user.whatsapp_connected:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"User {payload.user_id} WhatsApp not connected. Messages will not be processed."
-        )
+    try:
+        user = db.query(models.User).filter(models.User.id == payload.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {payload.user_id} not found")
+        
+        if not user.whatsapp_connected:
+            raise HTTPException(
+                status_code=400, 
+                detail="User WhatsApp is not connected"
+            )
+
+        # 1. Create Message in DB
+        # ... rest of the function ...
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise e
     
     # Find the group by WhatsApp ID
     group = db.query(models.Group).filter(
@@ -254,9 +262,9 @@ def create_whatsapp_message(
 
     # Trigger background tasks if high priority (Notifications etc)
     if msg.is_priority:
-        from ..services.notification_service import send_push_notification
+        from ..services.notification_service import send_expo_push_notification
         background_tasks.add_task(
-            send_push_notification, 
+            send_expo_push_notification, 
             payload.user_id, 
             "Important Message", 
             f"{payload.sender_name}: {payload.content[:50]}..."
@@ -264,20 +272,61 @@ def create_whatsapp_message(
 
     # 4. Check for Deadlines -> Schedule Events
     if ai_results.get('deadline_extracted'):
-        deadline_dt = ai_results['deadline_extracted']
-        print(f"📅 Auto-scheduling event for deadline: {deadline_dt}")
-        
-        # Create ScheduledEvent
-        new_event = models.ScheduledEvent(
-            user_id=payload.user_id,
-            message_id=msg.id,
-            title=f"Deadline: {ai_results.get('message_category', 'Task')}",
-            description=payload.content,
-            deadline=deadline_dt,
-            is_completed=False
-        )
-        db.add(new_event)
-        db.commit()
+        try:
+            deadline_dt = ai_results['deadline_extracted']
+            print(f"📅 Auto-scheduling event for deadline: {deadline_dt}")
+            
+            # Create Event (Unified Model) instead of ScheduledEvent
+            # This fixes the Foreign Key error (Notification -> Event) and ensures it shows in calendar
+            new_event = models.Event(
+                user_id=payload.user_id,
+                title=f"Deadline: {ai_results.get('message_category', 'Task')}",
+                description=payload.content,
+                event_date=deadline_dt.date(),
+                event_time=deadline_dt.time(),
+                source="ai_detected",
+                source_message_id=msg.id,
+                reminder_minutes=60, # Default to 1 hour reminder
+                is_all_day=False
+            )
+            db.add(new_event)
+            db.flush() # Generate ID for new_event
+            
+            # 🔔 NEW: Create a Notification record so it appears in "Notifications" tab immediately
+            # Schedule reminder for 1 hour before deadline
+            from datetime import timedelta
+            import pytz
+            
+            # Ensure deadline_dt is timezone aware (IST)
+            if deadline_dt.tzinfo is None:
+                ist = pytz.timezone('Asia/Kolkata')
+                deadline_dt = ist.localize(deadline_dt)
+                
+            reminder_time = deadline_dt - timedelta(hours=1)
+            
+            # If deadline is very close (less than 1 hour), schedule for now
+            if reminder_time < get_ist_now():
+                 reminder_time = get_ist_now()
+                 
+            new_reminder = models.Notification(
+                 user_id=payload.user_id,
+                 title=f"Reminder: {new_event.title}",
+                 message=payload.content[:200], # Full context
+                 scheduled_time=reminder_time,
+                 notification_type="event_reminder",
+                 related_event_id=new_event.id,
+                 priority="HIGH",
+                 is_read=False,
+                 is_sent=False
+            )
+            db.add(new_reminder)
+            db.commit()
+            print(f"🔔 Notification record created for event {new_event.id} (Scheduled: {reminder_time})")
+        except Exception as e:
+            print(f"❌ Error scheduling event/notification: {e}")
+            import traceback
+            traceback.print_exc()
+            # Do not raise here, allow message processing to complete even if scheduling fails
     
     return msg
     

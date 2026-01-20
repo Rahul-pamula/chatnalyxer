@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     AZURE_SPEECH_KEY: str = ""
     AZURE_SPEECH_REGION: str = "eastus"
 
+    # Groq API
+    GROQ_API_KEY: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"

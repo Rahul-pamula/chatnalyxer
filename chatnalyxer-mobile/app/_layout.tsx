@@ -11,7 +11,7 @@ function InitialLayout() {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'signup';
 
     if (!user && !inAuthGroup) {
       // ✅ Redirect to login if not authenticated
@@ -71,6 +71,7 @@ function InitialLayout() {
       <Stack initialRouteName="login">
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
         <Stack.Screen name="setup" options={{ headerShown: false }} />
         <Stack.Screen name="groups" options={{ title: "Select Groups" }} />

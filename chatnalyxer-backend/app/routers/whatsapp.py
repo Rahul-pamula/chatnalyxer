@@ -372,20 +372,31 @@ async def session_ended(
         raise HTTPException(500, str(e))
 
 
+
+class StatusUpdateSchema(BaseModel):
+    user_id: int
+    ready: bool
+    message: Optional[str] = None
+    qr_code: Optional[str] = None
+    pairing_code: Optional[str] = None
+    expired: bool = False
+
 @router.post("/update-status")
 async def update_whatsapp_status(
-    user_id: int,
-    ready: bool,
-    message: Optional[str] = None,
-    qr_code: Optional[str] = None,
-    pairing_code: Optional[str] = None,
-    expired: bool = False,
+    payload: StatusUpdateSchema,
     db: Session = Depends(get_db)
 ):
     """
     Called by user WhatsApp services to update status
     """
     try:
+        user_id = payload.user_id
+        ready = payload.ready
+        message = payload.message
+        qr_code = payload.qr_code
+        pairing_code = payload.pairing_code
+        expired = payload.expired
+
         user = db.query(User).filter(User.id == user_id).first()
         
         if not user:
@@ -406,6 +417,29 @@ async def update_whatsapp_status(
             user.whatsapp_pairing_code = None
         
         db.commit()
+        
+        # 🔔 NEW: Send Push Notification if disconnected
+        if (ready is False or expired is True) and user.push_token:
+            from ..services.notification_service import send_expo_push_notification
+            
+            # Determine suitable message
+            alert_title = "WhatsApp Disconnected ⚠️"
+            alert_body = "Connection lost. Tap to reconnect and resume analysis."
+            
+            if expired:
+                alert_title = "WhatsApp Session Expired 🛑"
+                alert_body = "Your session has expired. Please re-scan the QR code."
+
+            # We use BackgroundTasks usually, but here we can just await it since this is async
+            # Better to not block the session manager response too long, but it's fine for now
+            await send_expo_push_notification(
+                push_token=user.push_token,
+                title=alert_title,
+                body=alert_body,
+                priority="high",
+                data={"type": "whatsapp_disconnect", "action": "reconnect"}
+            )
+            print(f"🔔 Sent disconnection alert to User {user.id}")
         
         return {"success": True}
         

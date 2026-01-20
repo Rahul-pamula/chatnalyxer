@@ -21,12 +21,25 @@ interface MessageCardProps {
     message: Message;
     onPress: () => void;
     onDelete?: (messageId: number) => void;
+    onLongPress?: () => void;
+    selectionMode?: boolean;
+    isSelected?: boolean;
 }
 
-export default function MessageCard({ message, onPress, onDelete }: MessageCardProps) {
+export default function MessageCard({
+    message,
+    onPress,
+    onDelete,
+    onLongPress,
+    selectionMode = false,
+    isSelected = false
+}: MessageCardProps) {
     const router = useRouter();
 
+    // ... (keep helpers same) ...
+
     const getPriorityIcon = () => {
+        // ... (existing code) ...
         switch (message.priority_level) {
             case 'CRITICAL': return 'alert';
             case 'HIGH': return 'alert-circle';
@@ -67,23 +80,17 @@ export default function MessageCard({ message, onPress, onDelete }: MessageCardP
         if (!deadline) return null;
 
         // SUPER ROBUST FIX:
-        // 1. Take only the "YYYY-MM-DDTHH:MM:SS" part (first 19 chars)
-        // 2. This removes 'Z', '+05:30', etc.
-        // 3. new Date() on this "clean" string forces Local Time interpretation everywhere
         const cleanIso = deadline.substring(0, 19);
         const deadlineDate = new Date(cleanIso);
         const now = new Date();
 
-        // Calculate difference
         const diff = deadlineDate.getTime() - now.getTime();
-
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const days = Math.floor(hours / 24);
 
         if (diff < 0) return { label: 'Overdue', color: '#FF453A', icon: 'alert-circle' };
 
-        // Show minutes if less than 60 mins
         if (hours < 1) {
             return { label: `Due in ${minutes + 1}m`, color: '#FF453A', icon: 'alarm' };
         }
@@ -121,21 +128,36 @@ export default function MessageCard({ message, onPress, onDelete }: MessageCardP
     return (
         <Animated.View style={animatedStyle}>
             <TouchableOpacity
-                style={styles.cardWrapper}
+                style={[
+                    styles.cardWrapper,
+                    isSelected && { backgroundColor: colors.primary + '20', borderColor: colors.primary, borderWidth: 2 }
+                ]}
                 onPress={onPress}
+                onLongPress={onLongPress}
                 onPressIn={handlePressIn}
                 onPressOut={handlePressOut}
                 activeOpacity={1}
+                delayLongPress={300}
             >
-                <View style={[styles.card, { borderLeftColor: getPriorityColor(), borderLeftWidth: 5 }]}>
+                <View style={[
+                    styles.card,
+                    { borderLeftColor: getPriorityColor(), borderLeftWidth: 5 },
+                    isSelected && { backgroundColor: colors.surface }
+                ]}>
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={styles.groupInfo}>
-                            <View style={styles.groupAvatar}>
-                                <Text style={styles.groupAvatarText}>
-                                    {message.group_name.charAt(0).toUpperCase()}
-                                </Text>
-                            </View>
+                            {selectionMode ? (
+                                <View style={[styles.checkbox, isSelected && styles.checkedCheckbox]}>
+                                    {isSelected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                </View>
+                            ) : (
+                                <View style={styles.groupAvatar}>
+                                    <Text style={styles.groupAvatarText}>
+                                        {message.group_name?.charAt(0).toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
                             <View style={styles.groupDetails}>
                                 <Text style={styles.groupName}>{message.group_name}</Text>
                                 <Text style={styles.sender}>{message.sender_name}</Text>
@@ -185,7 +207,7 @@ export default function MessageCard({ message, onPress, onDelete }: MessageCardP
                         )}
 
                         {/* Notification Schedule Button - Replaces inline text */}
-                        {message.deadline_extracted && (
+                        {message.deadline_extracted && !selectionMode && (
                             <TouchableOpacity
                                 style={styles.notificationButton}
                                 onPress={(e) => {
@@ -205,8 +227,8 @@ export default function MessageCard({ message, onPress, onDelete }: MessageCardP
                             </TouchableOpacity>
                         )}
 
-                        {/* Delete button */}
-                        {onDelete && (
+                        {/* Delete button (Only show if NOT in selection mode) */}
+                        {onDelete && !selectionMode && (
                             <TouchableOpacity
                                 onPress={(e) => {
                                     e.stopPropagation();
@@ -261,6 +283,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: colors.textSecondary,
+        marginRight: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    checkedCheckbox: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
     },
     groupAvatarText: {
         fontSize: 16,

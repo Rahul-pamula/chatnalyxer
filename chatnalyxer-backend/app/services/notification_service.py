@@ -62,7 +62,7 @@ async def send_expo_push_notification(
             data=message_data,
             sound=sound,
             priority=priority,
-            category_id=category_id,
+            category=category_id,
             channel_id=android_config.get("channelId") if android_config else None
         )
         

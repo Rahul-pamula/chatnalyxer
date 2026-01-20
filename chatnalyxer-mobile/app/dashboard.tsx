@@ -44,9 +44,77 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<number>>(new Set());
 
-  // ... (keep useEffects and handlers same) ...
+  // ... (keep useEffects same) ...
+
+  const toggleSelection = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const selectAll = () => {
+    const allIds = new Set(messages.map(m => m.id));
+    setSelectedIds(allIds);
+  };
+
+  const invertSelection = () => {
+    const newSelected = new Set<number>();
+    messages.forEach(m => {
+      if (!selectedIds.has(m.id)) {
+        newSelected.add(m.id);
+      }
+    });
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    const idsToDelete = Array.from(selectedIds);
+    if (idsToDelete.length === 0) return;
+
+    Alert.alert(
+      'Delete Messages',
+      `Are you sure you want to delete ${idsToDelete.length} messages?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Optimistic update
+              setMessages(prev => prev.filter(m => !selectedIds.has(m.id)));
+              setSelectedIds(new Set());
+
+              // Send delete requests in parallel
+              await Promise.all(idsToDelete.map(id =>
+                fetch(`${BASE_URL}/messages/${id}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+              ));
+              console.log('✅ Bulk delete complete');
+            } catch (error) {
+              console.error('❌ Error in bulk delete:', error);
+              Alert.alert('Error', 'Failed to delete some messages');
+              onRefresh(); // Re-fetch to sync state
+            }
+          }
+        }
+      ]
+    );
+  };
+
   useEffect(() => {
     AsyncStorage.getItem('notifiedMessages').then(json => {
       if (json) {
@@ -62,7 +130,7 @@ export default function Dashboard() {
     // Use native confirmation for web, Alert for mobile
     let confirmed = false;
     if (Platform.OS === 'web') {
-      confirmed = confirm('Move this message to trash?');
+      confirmed = (window as any).confirm('Move this message to trash?');
     } else {
       confirmed = await new Promise<boolean>((resolve) => {
         Alert.alert(
@@ -89,7 +157,7 @@ export default function Dashboard() {
       } else {
         const errorText = await response.text();
         if (Platform.OS === 'web') {
-          alert(`Failed to delete: ${errorText}`);
+          (window as any).alert(`Failed to delete: ${errorText}`);
         } else {
           Alert.alert('Error', `Failed to delete: ${errorText}`);
         }
@@ -97,7 +165,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('❌ Error deleting message:', error);
       if (Platform.OS === 'web') {
-        alert('Failed to delete message');
+        (window as any).alert('Failed to delete message');
       } else {
         Alert.alert('Error', 'Failed to delete message');
       }
@@ -105,7 +173,6 @@ export default function Dashboard() {
   };
 
   const fetchData = async () => {
-    // ... (keep fetchData logic exactly as is) ...
     try {
       setLoading(true);
 
@@ -182,14 +249,9 @@ export default function Dashboard() {
   };
 
   const handleMessagePress = (message: any) => {
-    router.push(`/message/${message.id}` as any);
+    // router.push(`/message/${message.id}` as any);
+    console.log('Message pressed:', message.id);
   };
-
-  // Calculate stats
-  const totalMessages = messages.length;
-  const criticalMessages = messages.filter((m: any) => m.priority_level === 'CRITICAL' || m.priority_level === 'HIGH').length;
-  const withDeadlines = messages.filter((m: any) => m.deadline_extracted).length;
-  const activeGroups = groups.length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -198,56 +260,50 @@ export default function Dashboard() {
 
       {/* Header */}
       <View style={styles.gradientHeader}>
-        <View style={styles.dashboardHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.dashboardTitle}>Dashboard</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={onRefresh} style={styles.headerIconBtn}>
-              <Ionicons name="refresh-outline" size={22} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/trash' as any)} style={styles.headerIconBtn}>
-              <Ionicons name="trash-outline" size={22} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerIconBtn}>
-              <Ionicons name="notifications-outline" size={22} color="#fff" />
-            </TouchableOpacity>
+        {selectedIds.size > 0 ? (
+          // SELECTION MODE HEADER
+          <View style={styles.dashboardHeader}>
+            <View style={styles.selectionLeft}>
+              <TouchableOpacity onPress={clearSelection}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.selectionCount}>{selectedIds.size} Selected</Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={selectAll} style={styles.headerIconBtn}>
+                <Ionicons name="checkmark-done" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={invertSelection} style={styles.headerIconBtn}>
+                <Ionicons name="swap-horizontal" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleBulkDelete} style={styles.headerIconBtn}>
+                <Ionicons name="trash" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-
-        {/* Stats Cards - Hidden for cleaner look */}
-        {/* <View style={styles.statsContainer}>
-          <StatCard
-            icon="chatbubbles"
-            label="Messages"
-            value={totalMessages}
-            color="#3b82f6"
-            delay={0}
-          />
-          <StatCard
-            icon="alert-circle"
-            label="Urgent"
-            value={criticalMessages}
-            color="#f43f5e"
-            delay={100}
-          />
-          <StatCard
-            icon="calendar"
-            label="Deadlines"
-            value={withDeadlines}
-            color="#f59e0b"
-            delay={200}
-          />
-          <StatCard
-            icon="people"
-            label="Groups"
-            value={activeGroups}
-            color="#10b981"
-            delay={300}
-          />
-        </View> */}
+        ) : (
+          // NORMAL HEADER
+          <View style={styles.dashboardHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.dashboardTitle}>Dashboard</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={onRefresh} style={styles.headerIconBtn}>
+                <Ionicons name="refresh-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/trash' as any)} style={styles.headerIconBtn}>
+                <Ionicons name="trash-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerIconBtn}>
+                <Ionicons name="notifications-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
+
+
 
       {/* Active Groups */}
       <GroupStories
@@ -299,8 +355,17 @@ export default function Dashboard() {
               >
                 <MessageCard
                   message={message}
-                  onPress={() => handleMessagePress(message)}
+                  onPress={() => {
+                    if (selectedIds.size > 0) {
+                      toggleSelection(message.id);
+                    } else {
+                      handleMessagePress(message);
+                    }
+                  }}
+                  onLongPress={() => toggleSelection(message.id)}
                   onDelete={handleDeleteMessage}
+                  selectionMode={selectedIds.size > 0}
+                  isSelected={selectedIds.has(message.id)}
                 />
               </Animated.View>
             ))}
@@ -318,7 +383,7 @@ export default function Dashboard() {
         visible={isChatOpen}
         onClose={() => setIsChatOpen(false)}
       />
-    </SafeAreaView>
+    </SafeAreaView >
   );
 }
 
@@ -345,6 +410,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
+  },
+  selectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  selectionCount: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
   backButton: {
     padding: 4,

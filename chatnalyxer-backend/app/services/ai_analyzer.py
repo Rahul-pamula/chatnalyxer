@@ -59,6 +59,20 @@ class AIAnalyzer:
         except Exception as e:
             self.gemini_model = None
             logger.warning(f"⚠️ Google Gemini disabled: {e}")
+
+        # 1.5 Groq AI (The Speedster) - PRIMARY FOR EXPO
+        try:
+            from groq import Groq
+            if settings.GROQ_API_KEY:
+                self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
+                self.groq_model = "llama-3.3-70b-versatile" # Fast & Smart
+                logger.info(f"✅ Groq AI loaded ({self.groq_model}) - PRIMARY ENGINE")
+            else:
+                self.groq_client = None
+                logger.warning("⚠️ Groq API Key missing - falling back to Gemini")
+        except Exception as e:
+            self.groq_client = None
+            logger.warning(f"⚠️ Groq client initialization failed: {e}")
         
         # 2. Azure AI Vision (The Eyes)
         try:
@@ -90,83 +104,118 @@ class AIAnalyzer:
         
     def analyze_text_message(self, content: str, created_at: datetime, user_type: str = "STUDENT") -> Dict:
         """
-        Analyze text message using Google Gemini with user context
+        Analyze text message using Groq (Primary) -> Gemini (Fallback) -> Keyword (Last Resort)
         """
-        if not self.gemini_model:
-            return self._fallback_analysis(content, created_at)
+        # PRIORITY 1: Try Groq
+        if self.groq_client:
+            try:
+                return self._analyze_with_groq(content, created_at, user_type)
+            except Exception as e:
+                logger.error(f"❌ Groq analysis failed: {e}. Falling back to Gemini...")
+        
+        # PRIORITY 2: Try Gemini
+        if self.gemini_model:
+            return self._analyze_with_gemini(content, created_at, user_type)
             
+        # PRIORITY 3: Fallback logic
+        return self._fallback_analysis(content, created_at)
+
+    def _analyze_with_groq(self, content: str, created_at: datetime, user_type: str) -> Dict:
+        """Internal method for Groq analysis"""
+        system_prompt = self._get_system_prompt(user_type, created_at)
+        
+        completion = self.groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Message: \"{content}\"\nTimestamp: {created_at.isoformat()}"}
+            ],
+            model=self.groq_model,
+            temperature=0.3, # Low temp for structured JSON
+            response_format={"type": "json_object"} # Force JSON mode
+        )
+        
+        response_text = completion.choices[0].message.content
+        return self._parse_ai_response(response_text, "groq_llama3")
+
+    def _analyze_with_gemini(self, content: str, created_at: datetime, user_type: str) -> Dict:
+        """Internal method for Gemini analysis"""
         try:
-            # User-specific priority guidelines
-            priority_context = {
-                "STUDENT": """
-                HIGH Priority: Exams, assignments, deadlines, class cancellations, professor announcements
-                MEDIUM Priority: Study groups, project meetings, academic events
-                LOW Priority: Social events, parties, general chit-chat
-                """,
-                "CASUAL": """
-                HIGH Priority: Family events, friend gatherings, important personal plans, time-sensitive social commitments
-                MEDIUM Priority: General social updates, casual meetups
-                LOW Priority: Work/study related (unless urgent), news/updates
-                """,
-                "PROFESSIONAL": """
-                HIGH Priority: Work deadlines, client meetings, project updates, professional networking
-                MEDIUM Priority: Team updates, general work communication
-                LOW Priority: Social chit-chat, non-work related
-                """
-            }
+            prompt = self._get_system_prompt(user_type, created_at) + f"\n\nAnalyze this Message: \"{content}\"\nTimestamp: {created_at.isoformat()}"
             
-            context = priority_context.get(user_type, priority_context["STUDENT"])
-            
-            # Prompt for Gemini
-            prompt = f"""
-            You are "Chatnalyxer", an AI assistant for a {user_type} user.
-            
-            USER PROFILE: {user_type}
-            {context}
-            
-            Analyze this WhatsApp message (in ANY language: English, Hindi, Hinglish, Telugu, etc.).
-
-            Message: "{content}"
-            Timestamp: {created_at.isoformat()}
-
-            Your Goal:
-            1. Understand the message context considering the user is a {user_type}.
-            2. Determine priority based on what matters to a {user_type}.
-            3. Extract key info (Subject, Date, Task).
-            4. Generate a Personal "AI Interpretation" (summary field).
-
-            Date Extraction Rules:
-            - "Repu" (Telugu) = TOMORROW.
-            - "Ellundi" (Telugu) = Day after tomorrow.
-            - "Kal" (Hindi) = Tomorrow (usually).
-            - Use the provided Timestamp as "Today".
-            - If "Tomorrow" is mentioned, calculate the date relative to the Timestamp.
-            - Return deadline in "YYYY-MM-DD HH:MM" format. If time is not specified but date is, use "10:00" (10 AM) as default.
-
-            Return ONLY a valid JSON object:
-            {{
-                "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-                "category": "class_related" | "exam_related" | "submission_deadline" | "college_admin" | "urgent_alert" | "social_event" | "work_related" | "general",
-                "urgency_score": 0.0 to 1.0,
-                "keywords": ["keywords", "in", "english"],
-                "deadline": "YYYY-MM-DD HH:MM" (or null),
-                "tasks": [{{"title": "Task (in English)", "deadline": "YYYY-MM-DD"}}] (or empty),
-                "summary": "Your friendly, personal interpretation considering user is {user_type}."
-            }}
-
-            Guidelines:
-            - Understand mixed languages (e.g. "Kal exam hai", "Repu function undhi").
-            - CRITICAL: Immediate action needed (cancelled class, urgent deadline).
-            - HIGH: Important to THIS user type.
-            - MEDIUM: Somewhat relevant.
-            - LOW: Not important to THIS user type.
-            """
-            
-            # Call Gemini
             response = self.gemini_model.generate_content(prompt)
-            
-            # Extract JSON from potential markdown blocks
-            text_response = response.text
+            return self._parse_ai_response(response.text, "google_gemini_flash")
+        except Exception as e:
+            logger.error(f"Gemini error: {e}")
+            raise e
+
+    def _get_system_prompt(self, user_type: str, created_at: datetime) -> str:
+        """Centralized prompt generation"""
+        priority_context = {
+            "STUDENT": """
+            HIGH Priority: Exams, assignments, deadlines, class cancellations, professor announcements
+            MEDIUM Priority: Study groups, project meetings, academic events
+            LOW Priority: Social events, parties, general chit-chat
+            """,
+            "CASUAL": """
+            HIGH Priority: Family events, friend gatherings, important personal plans, time-sensitive social commitments
+            MEDIUM Priority: General social updates, casual meetups
+            LOW Priority: Work/study related (unless urgent), news/updates
+            """,
+            "PROFESSIONAL": """
+            HIGH Priority: Work deadlines, client meetings, project updates, professional networking
+            MEDIUM Priority: Team updates, general work communication
+            LOW Priority: Social chit-chat, non-work related
+            """
+        }
+        
+        context = priority_context.get(user_type, priority_context["STUDENT"])
+        
+        return f"""
+        You are "Chatnalyxer", an AI assistant for a {user_type} user.
+        
+        USER PROFILE: {user_type}
+        {context}
+        
+        Analyze the user's message (in ANY language: English, Hindi, Telugu, etc.).
+
+        Your Goal:
+        1. Contextualize for {user_type}.
+        2. Determine priority.
+        3. Extract Deadlines.
+        4. Generate a short personal summary.
+
+        Date Rules:
+        - "Repu" (Telugu)/"Kal" (Hindi) = TOMORROW.
+        - "Ellundi" = Day after tomorrow.
+        - Reference Timestamp: {created_at.isoformat()}
+        - Return 'deadline' in "YYYY-MM-DD HH:MM". Default to 10:00 AM if time missing.
+
+        STRICT RESPONSE FORMAT (JSON ONLY):
+        {{
+            "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+            "category": "class_related" | "exam_related" | "submission_deadline" | "college_admin" | "urgent_alert" | "social_event" | "work_related" | "general",
+            "urgency_score": 0.0 to 1.0,
+            "keywords": ["tag1", "tag2"],
+            "deadline": "YYYY-MM-DD HH:MM" or null,
+            "tasks": [{{"title": "Task Name", "deadline": "YYYY-MM-DD"}}],
+            "summary": "Short interpretation."
+        }}
+
+        STRICT FILTERING (LOW PRIORITY):
+        - QUESTIONS about schedules ("Is there exam?", "Repu exam undha?", "Kal chutti hai kya?") -> LOW.
+        - "Guys have u completed?" provided NO subject -> LOW.
+        - "Bro/Macha/Guys" start -> LOW/MEDIUM.
+        - Casual checks -> LOW.
+        
+        CRITICAL DISTINCTION:
+        - "Exam tomorrow" (Statement/Fact) -> HIGH/CRITICAL.
+        - "Is there exam tomorrow?" (Question/Doubt) -> LOW.
+        """
+
+    def _parse_ai_response(self, text_response: str, method_name: str) -> Dict:
+        """Helper to parse JSON from AI response"""
+        try:
+            # Clean markdown
             if "```json" in text_response:
                 text_response = text_response.split("```json")[1].split("```")[0]
             elif "```" in text_response:
@@ -174,7 +223,6 @@ class AIAnalyzer:
                 
             analysis = json.loads(text_response.strip())
             
-            # Convert to database format
             return {
                 'priority_level': analysis.get('priority', 'LOW'),
                 'urgency_score': float(analysis.get('urgency_score', 0.0)),
@@ -186,12 +234,12 @@ class AIAnalyzer:
                     'summary': analysis.get('summary', ''),
                     'tasks': analysis.get('tasks', [])
                 }),
-                'analysis_method': f'google_gemini_flash_{user_type.lower()}'
+                'analysis_method': method_name
             }
-            
         except Exception as e:
-            logger.error(f"Gemini analysis failed: {e}")
-            return self._fallback_analysis(content, created_at)
+            logger.error(f"Failed to parse AI response: {e}")
+            raise e
+
     
     def analyze_image(self, image_url: str, image_data: bytes = None) -> Dict:
         """

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert, ScrollView, Platform } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator, Alert, ScrollView, Platform, KeyboardAvoidingView } from "react-native";
 import { useAuth } from "../src/context/AuthContext";
 import { registerAndRequestOTP } from "../src/services/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -117,8 +117,8 @@ export default function Signup() {
 
             // Success! Redirect to login page
             if (Platform.OS === 'web') {
-                // For web, use window.alert and navigate directly
-                window.alert('Account Created! 🎉\n\nYour account has been created successfully. Please sign in to continue.');
+                // For web, use browser alert and navigate
+                (window as any).alert('Account Created! 🎉\n\nYour account has been created successfully. Please sign in to continue.');
                 router.replace("/login");
             } else {
                 // For mobile, use Alert.alert
@@ -137,177 +137,190 @@ export default function Signup() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.brandSection}>
-                <Image source={require("../assets/images/chatnalyxer-logo.jpg")} style={styles.logo} resizeMode="contain" />
-                <Text style={styles.title}>Create Account</Text>
-                <Text style={styles.subtitle}>Sign up to start managing your chats</Text>
-            </View>
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+                <View style={styles.brandSection}>
+                    <Image source={require("../assets/images/chatnalyxer-logo.jpg")} style={styles.logo} resizeMode="contain" />
+                    <Text style={styles.title}>Create Account</Text>
+                    <Text style={styles.subtitle}>Sign up to start managing your chats</Text>
+                </View>
 
-            <View style={styles.card}>
-                {step === 'details' ? (
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        {/* Full Name */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Full Name</Text>
-                            <View style={styles.inputWrapper}>
-                                <Ionicons name="person-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Your full name"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={username}
-                                    onChangeText={setUsername}
-                                    autoCapitalize="words"
-                                />
-                            </View>
-                        </View>
-
-                        {/* Email (Optional) */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email (Optional)</Text>
-                            <View style={styles.inputWrapper}>
-                                <Ionicons name="mail-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Your email address"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                        </View>
-
-                        {/* Phone Number (Compulsory) */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Phone Number</Text>
-                            <View style={styles.inputWrapper}>
-                                <View style={styles.countryBadge}>
-                                    <Text style={styles.countryCode}>+91</Text>
+                <View style={styles.card}>
+                    {step === 'details' ? (
+                        <View>
+                            {/* Full Name */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Full Name</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="person-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Your full name"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={username}
+                                        onChangeText={setUsername}
+                                        autoCapitalize="words"
+                                    />
                                 </View>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="98765 43210"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={phoneNumber}
-                                    onChangeText={(t) => setPhoneNumber(formatPhoneNumber(t))}
-                                    keyboardType="phone-pad"
-                                    maxLength={10}
-                                />
                             </View>
-                        </View>
 
-                        {/* Password */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
-                            <View style={styles.inputWrapper}>
-                                <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Create a password"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry={!showPassword}
-                                />
-                                <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
-                                    <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />
+                            {/* Email (Optional) */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Email (Optional)</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="mail-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Your email address"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Phone Number (Compulsory) */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Phone Number</Text>
+                                <View style={styles.inputWrapper}>
+                                    <View style={styles.countryBadge}>
+                                        <Text style={styles.countryCode}>+91</Text>
+                                    </View>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="98765 43210"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={phoneNumber}
+                                        onChangeText={(t) => setPhoneNumber(formatPhoneNumber(t))}
+                                        keyboardType="phone-pad"
+                                        maxLength={10}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Password */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Password</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Create a password"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry={!showPassword}
+                                    />
+                                    <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
+                                        <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />
+                                    </Pressable>
+                                </View>
+                            </View>
+
+                            {/* Confirm Password */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Confirm Password</Text>
+                                <View style={styles.inputWrapper}>
+                                    <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Confirm your password"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        secureTextEntry={!showPassword}
+                                    />
+                                </View>
+                            </View>
+
+                            {err ? (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={16} color={colors.error} />
+                                    <Text style={styles.err}>{err}</Text>
+                                </View>
+                            ) : null}
+
+                            <Pressable
+                                style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
+                                onPress={handleRegister}
+                                disabled={loading}
+                            >
+                                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send Verification Code</Text>}
+                            </Pressable>
+
+                            <View style={styles.footerRow}>
+                                <Text style={styles.footerText}>Already have an account? </Text>
+                                <Pressable onPress={() => router.push('/login')}>
+                                    <Text style={styles.linkText}>Sign in</Text>
                                 </Pressable>
                             </View>
                         </View>
-
-                        {/* Confirm Password */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Confirm Password</Text>
-                            <View style={styles.inputWrapper}>
-                                <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Confirm your password"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={confirmPassword}
-                                    onChangeText={setConfirmPassword}
-                                    secureTextEntry={!showPassword}
-                                />
+                    ) : (
+                        <View>
+                            {/* OTP Verification Step Same as Login */}
+                            <View style={styles.otpHeader}>
+                                <View style={styles.iconCircle}>
+                                    <Ionicons name="chatbox-ellipses-outline" size={24} color={colors.primary} />
+                                </View>
+                                <Text style={styles.otpSentText}>Enter OTP sent to +91 {phoneNumber}</Text>
                             </View>
-                        </View>
 
-                        {err ? (
-                            <View style={styles.errorContainer}>
-                                <Ionicons name="alert-circle" size={16} color={colors.error} />
-                                <Text style={styles.err}>{err}</Text>
-                            </View>
-                        ) : null}
+                            <TextInput
+                                style={styles.otpInput}
+                                placeholder="••••••"
+                                placeholderTextColor={colors.textTertiary}
+                                value={otp}
+                                onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
+                                keyboardType="number-pad"
+                                maxLength={6}
+                                autoFocus
+                            />
 
-                        <Pressable
-                            style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
-                            onPress={handleRegister}
-                            disabled={loading}
-                        >
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send Verification Code</Text>}
-                        </Pressable>
+                            {err ? (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={16} color={colors.error} />
+                                    <Text style={styles.err}>{err}</Text>
+                                </View>
+                            ) : null}
 
-                        <View style={styles.footerRow}>
-                            <Text style={styles.footerText}>Already have an account? </Text>
-                            <Pressable onPress={() => router.push('/login')}>
-                                <Text style={styles.linkText}>Sign in</Text>
+                            <Pressable
+                                style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
+                                onPress={handleVerifyOTP}
+                                disabled={loading}
+                            >
+                                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Verify & Create Account</Text>}
+                            </Pressable>
+
+                            <Pressable style={styles.backLink} onPress={() => setStep('details')}>
+                                <Text style={styles.linkText}>Change Details</Text>
                             </Pressable>
                         </View>
-                    </ScrollView>
-                ) : (
-                    <>
-                        {/* OTP Verification Step Same as Login */}
-                        <View style={styles.otpHeader}>
-                            <View style={styles.iconCircle}>
-                                <Ionicons name="chatbox-ellipses-outline" size={24} color={colors.primary} />
-                            </View>
-                            <Text style={styles.otpSentText}>Enter OTP sent to +91 {phoneNumber}</Text>
-                        </View>
-
-                        <TextInput
-                            style={styles.otpInput}
-                            placeholder="••••••"
-                            placeholderTextColor={colors.textTertiary}
-                            value={otp}
-                            onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
-                            keyboardType="number-pad"
-                            maxLength={6}
-                            autoFocus
-                        />
-
-                        {err ? (
-                            <View style={styles.errorContainer}>
-                                <Ionicons name="alert-circle" size={16} color={colors.error} />
-                                <Text style={styles.err}>{err}</Text>
-                            </View>
-                        ) : null}
-
-                        <Pressable
-                            style={({ pressed }) => [styles.primaryBtn, loading && styles.btnDisabled, pressed && styles.btnPressed]}
-                            onPress={handleVerifyOTP}
-                            disabled={loading}
-                        >
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Verify & Create Account</Text>}
-                        </Pressable>
-
-                        <Pressable style={styles.backLink} onPress={() => setStep('details')}>
-                            <Text style={styles.linkText}>Change Details</Text>
-                        </Pressable>
-                    </>
-                )}
-            </View>
-        </View>
+                    )}
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
+    // Changed container to not center align items vertically by default, handled by scrollview
     container: {
         flex: 1,
+        backgroundColor: colors.background,
+    },
+    // New scroll content style
+    scrollContent: {
+        flexGrow: 1,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: colors.background,
+        paddingVertical: 40,
+        paddingHorizontal: 20
     },
     brandSection: { alignItems: "center", marginBottom: 24 },
     logo: { width: 50, height: 50, marginBottom: 16, borderRadius: 12 },
@@ -315,12 +328,11 @@ const styles = StyleSheet.create({
     subtitle: { fontSize: 14, color: colors.textSecondary },
 
     card: {
-        width: '85%',
+        width: '100%',
         maxWidth: 400,
         backgroundColor: colors.surface,
         borderRadius: 4,
         padding: 24,
-        // maxHeight: '80%', // To ensure it doesn't overflow on small screens
         ...shadows.lg,
     },
 

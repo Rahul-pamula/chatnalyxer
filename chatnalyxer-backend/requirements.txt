@@ -42,6 +42,9 @@ openai==1.54.5
 azure-ai-vision-imageanalysis==1.0.0b2
 azure-core==1.29.5
 
+# Groq AI (High Speed Alternative)
+groq==0.5.0
+
 # Azure AI Services (NEW - for ephemeral media processing)
 azure-ai-documentintelligence==1.0.0b1
 azure-ai-vision==0.15.1b1
@@ -49,6 +52,9 @@ azure-cognitiveservices-speech==1.40.0
 azure-core==1.32.0
 azure-identity==1.19.0
 pymupdf==1.25.1
+
+# Notifications
+exponent_server_sdk==2.0.0
 
 # Supporting Libraries
 python-dateutil==2.8.2

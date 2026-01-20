@@ -12,15 +12,30 @@ export function setupNotificationActionHandlers() {
 
         console.log('📲 Notification action received:', actionIdentifier);
 
+        // Handle Action Buttons
         if (actionIdentifier === 'snooze') {
-            // Snooze for 5 minutes
             await handleSnooze(notificationData);
         } else if (actionIdentifier === 'dismiss') {
-            // Dismiss the alarm
             await handleDismiss(notificationData);
+        }
+
+        // Handle Default Tap (Body of notification)
+        else if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+            console.log('🔔 Default notification tap:', notificationData);
+
+            if (notificationData.type === 'whatsapp_disconnect') {
+                // Navigate to setup screen to reconnect
+                import('expo-router').then(({ router }) => {
+                    // Short delay to ensure app is ready
+                    setTimeout(() => {
+                        router.push('/setup');
+                    }, 500);
+                });
+            }
         }
     });
 }
+
 
 /**
  * Snooze alarm for 5 minutes

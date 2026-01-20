@@ -213,13 +213,16 @@ async function connectToWhatsApp(isManualRequest = false) {
                     try {
                         const axios = (await import('axios')).default;
                         const BASE_URL = 'http://localhost:8000';
-                        await axios.post(`${BASE_URL}/whatsapp/status`, {
-                            user_id: process.argv[2] || 1,
+                        await axios.post(`${BASE_URL}/whatsapp/update-status`, {
+                            user_id: userId,
                             ready: false,
                             message: "Connection Failed/Expired",
                             expired: true
                         });
-                    } catch (e) { console.error("Failed to report status:", e.message); }
+                    } catch (e) {
+                        console.error("Failed to report status:", e.message);
+                        if (e.response) console.error("Details:", JSON.stringify(e.response.data));
+                    }
 
                     return;
                 }
@@ -232,13 +235,16 @@ async function connectToWhatsApp(isManualRequest = false) {
                     try {
                         const axios = (await import('axios')).default;
                         const BASE_URL = 'http://localhost:8000';
-                        await axios.post(`${BASE_URL}/whatsapp/status`, {
-                            user_id: process.argv[2] || 1,
+                        await axios.post(`${BASE_URL}/whatsapp/update-status`, {
+                            user_id: userId,
                             ready: false,
                             message: "Reconnecting...",
                             expired: false
                         });
-                    } catch (e) { }
+                    } catch (e) {
+                        console.error("Failed to report reconnecting:", e.message);
+                        if (e.response) console.error("Details:", JSON.stringify(e.response.data));
+                    }
                 }
 
             } else if (connection === 'open') {
@@ -782,27 +788,26 @@ async function gracefulShutdown(signal) {
         console.log('⚠️ Socket close error:', e.message);
     }
 
+    // 3. Clean up auth folder AND DB
+    // MODIFIED: Do NOT delete session on simple shutdown. Only on explicit logout.
+    console.log(`ℹ️ Preserving session data for user ${userId} (Use /disconnect to clear)`);
+
+    /* 
     try {
-        // 3. Clean up auth folder AND DB
-        console.log(`🧹 Cleaning auth folder and DB for user ${userId}...`);
-
         // Clean DB
-        try {
-            const { Pool } = await import('pg');
-            const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
-            const pool = new Pool({ connectionString });
-            await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
-            console.log(`✅ Cleared PostgreSQL session data for user_${userId}`);
-        } catch (dbErr) {
-            console.error(`⚠️ DB Cleanup error:`, dbErr.message);
-        }
-
+        const { Pool } = await import('pg');
+        const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+        const pool = new Pool({ connectionString });
+        await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
+        console.log(`✅ Cleared PostgreSQL session data for user_${userId}`);
+        
         // Clean legacy folder (keep for safety)
         fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
         console.log('✅ Auth folder cleaned');
     } catch (e) {
         console.log('⚠️ Cleanup error:', e.message);
     }
+    */
 
     console.log('✅ Shutdown complete');
     process.exit(0);
