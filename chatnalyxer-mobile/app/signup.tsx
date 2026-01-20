@@ -7,6 +7,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, shadows } from "../src/theme/colors";
 import { BASE_URL } from "../src/config";
 
+// Fix for web globals
+declare const window: any;
+
 export default function Signup() {
     const router = useRouter();
     const { signInWithOTP } = useAuth(); // Use this for step 2 verification
@@ -111,7 +114,7 @@ export default function Signup() {
             });
 
             if (!response.ok) {
-                const error = await response.json();
+                const error: any = await response.json();
                 throw new Error(error.detail || 'OTP verification failed');
             }
 

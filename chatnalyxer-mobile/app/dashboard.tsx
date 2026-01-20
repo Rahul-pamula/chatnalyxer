@@ -7,6 +7,9 @@ import { colors, shadows } from '../src/theme/colors';
 import { useAuth } from '../src/context/AuthContext';
 import { BASE_URL } from '../src/config';
 
+// Fix for web globals
+declare const window: any;
+
 interface Message {
   id: number;
   content: string;
