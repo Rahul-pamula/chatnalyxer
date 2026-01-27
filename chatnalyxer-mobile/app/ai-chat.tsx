@@ -20,7 +20,7 @@ import { aiService, Message } from '../src/services/aiService';
 import { VoiceService } from '../src/services/VoiceService';
 import { BASE_URL } from '../src/config';
 import { useAuth } from '../src/context/AuthContext';
-import TypingIndicator from './components/TypingIndicator';
+import TypingIndicator from './_components/TypingIndicator';
 
 export default function AIChatScreen() {
     const router = useRouter();

@@ -109,11 +109,24 @@ async function connectToWhatsApp(isManualRequest = false) {
         const { usePostgresAuthState } = await import('./auth-adapter.js');
 
         // Get DB connection string from env or default to localhost
-        const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+        let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
 
-        const pool = new Pool({
+        // Fix: Force IPv4 (127.0.0.1) instead of localhost to avoid Node.js 17+ IPv6 resolution issues on macOS
+        if (connectionString.includes('localhost')) {
+            console.log("🔧 Replacing 'localhost' with '127.0.0.1' in DB connection string to prevent IPv6 errors");
+            connectionString = connectionString.replace('localhost', '127.0.0.1');
+        }
+
+        // Use custom Postgres auth state with dynamic session ID
+        // Fix: Add SSL config for cloud databases (Render/Azure)
+        const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+        const poolConfig = {
             connectionString,
-        });
+            // Only enable SSL for remote databases, and allow self-signed certs (needed for many cloud providers)
+            ssl: isLocal ? false : { rejectUnauthorized: false }
+        };
+
+        const pool = new Pool(poolConfig);
 
         // Use custom Postgres auth state with dynamic session ID
         const { state, saveCreds, clearState } = await usePostgresAuthState(pool, `user_${userId}`);
@@ -150,7 +163,8 @@ async function connectToWhatsApp(isManualRequest = false) {
 
 
             // NEW: Handle pairing code request (when connecting)
-            if (connection === 'connecting' && phoneNumber && !pairingCodeRequested && !sock.authState.creds.registered) {
+            // STRICT CHECK: Only if NOT ready and NOT registered
+            if (connection === 'connecting' && phoneNumber && !pairingCodeRequested && !sock.authState.creds.registered && !isClientReady) {
                 pairingCodeRequested = true;
                 console.log(`⏰ Phone number provided: ${phoneNumber}`);
 
@@ -202,6 +216,20 @@ async function connectToWhatsApp(isManualRequest = false) {
                 if (statusCode === DisconnectReason.restartRequired) {
                     console.log("🔄 Restart Required (515). Reconnecting...");
                     setTimeout(() => connectToWhatsApp(false), 1000);
+                    return;
+                }
+
+                // NEW: Handle Timeout (408) - Just Retry, don't expire!
+                if (statusCode === DisconnectReason.timedOut || statusCode === 408) {
+                    console.log("⏳ Connection Timed Out (408). Retrying...");
+                    setTimeout(() => connectToWhatsApp(false), 2000);
+                    return;
+                }
+
+                // NEW: Handle Service Unavailable (503) - Retry!
+                if (statusCode === 503) {
+                    console.log("⚠️ Service Unavailable (503). Retrying...");
+                    setTimeout(() => connectToWhatsApp(false), 2000);
                     return;
                 }
 
@@ -269,31 +297,38 @@ async function connectToWhatsApp(isManualRequest = false) {
                     console.error('❌ Failed to report status to session manager:', e.message);
                 }
 
-                // Sync WhatsApp groups to backend
-                try {
-                    const axios = (await import('axios')).default;
-                    const userId = parseInt(process.argv[2]) || 1;
+                // Sync WhatsApp groups to backend (with delay to ensure fetch)
+                setTimeout(async () => {
+                    try {
+                        const axios = (await import('axios')).default;
+                        const userId = parseInt(process.argv[2]) || 1;
 
-                    console.log('📋 Fetching WhatsApp groups...');
-                    const groups = await sock.groupFetchAllParticipating();
-                    const groupsList = Object.values(groups).map(group => ({
-                        whatsapp_id: group.id,
-                        name: group.subject || 'Unknown Group'
-                    }));
+                        console.log('📋 Fetching WhatsApp groups...');
+                        const groups = await sock.groupFetchAllParticipating();
+                        const groupsList = Object.values(groups).map(group => ({
+                            whatsapp_id: group.id,
+                            name: group.subject || 'Unknown Group'
+                        }));
 
-                    console.log(`📤 Syncing ${groupsList.length} groups to backend...`);
-                    await axios.post('http://localhost:8000/groups/sync-from-whatsapp', {
-                        user_id: userId,
-                        groups: groupsList
-                    }, {
-                        headers: {
-                            'X-API-Key': 'b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4'
+                        if (groupsList.length === 0) {
+                            console.log("⚠️ No groups found to sync. Skipping to protect existing data.");
+                            return;
                         }
-                    });
-                    console.log(`✅ Synced ${groupsList.length} groups successfully!`);
-                } catch (e) {
-                    console.error('❌ Failed to sync groups:', e.message);
-                }
+
+                        console.log(`📤 Syncing ${groupsList.length} groups to backend...`);
+                        await axios.post('http://localhost:8000/groups/sync-from-whatsapp', {
+                            user_id: userId,
+                            groups: groupsList
+                        }, {
+                            headers: {
+                                'X-API-Key': 'b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4'
+                            }
+                        });
+                        console.log(`✅ Synced ${groupsList.length} groups successfully!`);
+                    } catch (e) {
+                        console.error('❌ Failed to sync groups:', e.message);
+                    }
+                }, 3000); // Wait 3 seconds for groups to populate
             }
         });
 
@@ -309,8 +344,14 @@ async function connectToWhatsApp(isManualRequest = false) {
                 const remoteJid = msg.key.remoteJid;
                 const isGroup = remoteJid.endsWith('@g.us');
 
-                // Only process group messages
-                if (!isGroup) continue;
+                // Log EVERY message received
+                // Log ONLY Group messages (Silence DMs completely)
+                if (isGroup) {
+                    console.log(`📨 Received message from: ${remoteJid} (Group: ${isGroup})`);
+                }
+
+                // ALLOW DMs for Casual/Faculty use cases
+                // if (!isGroup) continue;
 
                 const senderName = msg.pushName || 'Unknown';
                 let msgBody = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
@@ -438,35 +479,48 @@ async function connectToWhatsApp(isManualRequest = false) {
                 // ============================================
                 // DEMO MODE: BYPASS SELECTION CHECK
                 // We want to analyze messages from ANY group for the demo
-                console.log(`✅ Group selection check BYPASSED for demo: ${remoteJid}`);
+                // console.log(`✅ Group selection check BYPASSED for demo: ${remoteJid}`);
 
-                // ORIGINAL LOGIC COMMENTED OUT FOR DEMO
-                try {
-                    const axios = (await import('axios')).default;
-                    const BASE_URL = 'http://localhost:8000';
-                    const API_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4";
+                // Check Selection ONLY if it is a group
+                // Check Selection ONLY if it is a group
+                if (isGroup) {
+                    try {
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+                        const API_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4";
 
-                    // Fetch selected groups for this user
-                    const selectedGroupsResponse = await axios.get(
-                        `${BASE_URL}/groups/selected/${userId}`,
-                        {
-                            headers: { 'X-API-Key': API_KEY }
+                        // Fetch selected groups for this user
+                        const selectedGroupsResponse = await axios.get(
+                            `${BASE_URL}/groups/selected/${userId}`,
+                            {
+                                headers: { 'X-API-Key': API_KEY }
+                            }
+                        );
+
+                        const selectedGroups = selectedGroupsResponse.data;
+                        console.log(`🔍 Checking selection for ${remoteJid}. User has ${selectedGroups.length} selected groups.`);
+
+                        // DEBUG: Log first few selected groups to verify format
+                        if (selectedGroups.length > 0) {
+                            console.log(`🔍 Expecting one of: ${selectedGroups.slice(0, 3).map(g => g.whatsapp_id).join(', ')}...`);
                         }
-                    );
 
-                    const selectedGroups = selectedGroupsResponse.data;
-                    const isGroupSelected = selectedGroups.some(g => g.whatsapp_id === remoteJid);
+                        const isGroupSelected = selectedGroups.some(g => g.whatsapp_id === remoteJid);
 
-                    if (!isGroupSelected) {
-                        console.log(`⏭️  Skipping message from non-selected group: ${remoteJid}`);
-                        continue; // Skip this message
+                        if (!isGroupSelected) {
+                            console.log(`⏭️  Skipping message from non-selected group: ${remoteJid}`);
+                            continue; // Skip this message
+                        }
+
+                        console.log(`✅ Group is selected, processing message...`);
+                    } catch (e) {
+                        console.error("❌ Failed to check group selection status:", e.message);
+                        // On error, skip the message to be safe
+                        continue;
                     }
-
-                    console.log(`✅ Group is selected, processing message...`);
-                } catch (e) {
-                    console.error("❌ Failed to check group selection status:", e.message);
-                    // On error, skip the message to be safe
-                    continue;
+                } else {
+                    // console.log(`⛔ Direct Message blocked (User Privacy Rule): ${remoteJid}`);
+                    continue; // STRICT BLOCK FOR DMs
                 }
 
 
@@ -677,6 +731,82 @@ app.get('/status', (req, res) => {
         ready: isClientReady,
         expired: isExpired,
         message: isClientReady ? 'WhatsApp service is ready' : 'WhatsApp service is not ready'
+    });
+});
+
+/**
+ * Validate Session & Force Clear
+ * - Detects "Zombie" sessions (Registered in DB but not connected)
+ * - Allows forced clearing of DB state to reset QR code
+ */
+app.post('/validate-session', async (req, res) => {
+    const { force_clear } = req.body;
+
+    // Check internal state
+    const isRegistered = sock?.authState?.creds?.registered || false;
+    const isConnected = isClientReady; // true only if connection is 'open'
+
+    // Determining status
+    let status = 'unknown';
+    if (isConnected) {
+        status = 'connected';
+    } else if (isRegistered) {
+        status = 'zombie'; // Registered but not connected (The Issue!)
+    } else if (currentQR) {
+        status = 'qr_ready';
+    } else {
+        status = 'initializing';
+    }
+
+    // Force Clear Logic
+    if (force_clear) {
+        console.log("🧨 FORCE CLEAR requested via API");
+
+        try {
+            // 1. Clear DB State
+            if (sock && sock.authState && sock.authState.clearState) {
+                await sock.authState.clearState();
+            } else {
+                // Fallback manual DB clear if sock isn't ready
+                const { Pool } = await import('pg');
+                const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+                // Fix: Add SSL config for cloud databases (Render/Azure)
+                const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+                const poolConfig = {
+                    connectionString,
+                    ssl: isLocal ? false : { rejectUnauthorized: false }
+                };
+                const pool = new Pool(poolConfig);
+                await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
+            }
+            console.log("✅ DB Session cleared");
+
+            // 2. Logout/Disconnect
+            if (sock) {
+                try { await sock.logout(); } catch (e) { }
+                try { sock.end(undefined); } catch (e) { }
+            }
+
+            // 3. Restart Process (Exit so Manager restarts it)
+            console.log("💀 Exiting process to trigger fresh restart...");
+            setTimeout(() => process.exit(0), 500);
+
+            return res.json({ success: true, message: "Session cleared. Process restarting..." });
+
+        } catch (e) {
+            console.error("❌ Force clear failed:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
+    // Return current status
+    res.json({
+        status,
+        ready: isConnected,
+        registered: isRegistered,
+        qr: !!currentQR,
+        pid: process.pid,
+        uptime: process.uptime()
     });
 });
 

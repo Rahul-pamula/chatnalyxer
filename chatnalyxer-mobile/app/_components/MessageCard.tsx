@@ -160,24 +160,45 @@ export default function MessageCard({
                             )}
                             <View style={styles.groupDetails}>
                                 <Text style={styles.groupName}>{message.group_name}</Text>
-                                <Text style={styles.sender}>{message.sender_name}</Text>
+                                <Text style={styles.sender}>
+                                    {message.sender_name === 'whatsapp_user' ? '📱 From WhatsApp' : message.sender_name}
+                                </Text>
                             </View>
                         </View>
                     </View>
 
                     {/* Content */}
-                    <Text style={styles.content} numberOfLines={2}>
-                        {message.content}
-                    </Text>
-
-                    {/* AI Summary */}
-                    {message.ai_summary && (
-                        <View style={styles.aiSummary}>
-                            <Ionicons name="sparkles" size={14} color={colors.primary} />
-                            <Text style={styles.aiText} numberOfLines={2}>
-                                {message.ai_summary}
-                            </Text>
+                    {/* Content - Smart Rendering for AI Summary (clickable links) */}
+                    {message.ai_summary ? (
+                        <View style={{ marginBottom: 14 }}>
+                            {message.ai_summary.split('\n').map((line, index) => {
+                                const isLink = line.trim().startsWith('http');
+                                return (
+                                    <Text
+                                        key={index}
+                                        style={[
+                                            styles.content,
+                                            { marginBottom: 4, fontWeight: index === 0 ? '600' : '400' },
+                                            isLink && { color: colors.primary, textDecorationLine: 'underline' }
+                                        ]}
+                                        numberOfLines={1}
+                                        selectable={true}
+                                        onPress={() => {
+                                            if (isLink) {
+                                                const { Linking } = require('react-native');
+                                                Linking.openURL(line.trim());
+                                            }
+                                        }}
+                                    >
+                                        {line}
+                                    </Text>
+                                );
+                            })}
                         </View>
+                    ) : (
+                        <Text style={styles.content} numberOfLines={2} selectable={true}>
+                            {message.content}
+                        </Text>
                     )}
 
                     {/* Footer */}

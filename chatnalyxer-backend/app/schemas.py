@@ -178,6 +178,23 @@ class MessageOut(BaseModel):
     # Display fields for mobile app
     group_name: Optional[str] = None
     sender_name: Optional[str] = None
+    
+    # AI Fields
+    ai_summary: Optional[str] = None
+    academic_context: Optional[str] = None
+
+    @model_validator(mode='after')
+    def extract_summary_if_missing(self):
+        """Fallback: Parse summary from academic_context if ai_summary is missing"""
+        if not self.ai_summary and self.academic_context:
+            try:
+                import json
+                context = json.loads(self.academic_context)
+                if isinstance(context, dict):
+                    self.ai_summary = context.get('summary')
+            except:
+                pass
+        return self
 
     class Config:
         from_attributes = True

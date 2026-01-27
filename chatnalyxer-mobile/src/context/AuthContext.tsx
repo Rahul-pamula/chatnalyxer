@@ -11,6 +11,7 @@ type User = {
   user_type?: 'STUDENT' | 'FACULTY' | 'CASUAL';
   profile_data?: any;
   is_profile_complete?: boolean;
+  email?: string | null;
 } | null;
 type AuthContextType = {
   token: string | null;

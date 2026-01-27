@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
 import { colors } from '../src/theme/colors';
-import BottomNav from './components/BottomNav';
+import BottomNav from './_components/BottomNav';
 
 export default function Create() {
     return (

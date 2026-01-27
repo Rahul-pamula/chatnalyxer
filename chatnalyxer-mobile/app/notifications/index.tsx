@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, StatusBar, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { colors } from '../../src/theme/colors';
-import BottomNav from '../components/BottomNav';
+import BottomNav from '../_components/BottomNav';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { BASE_URL } from '../../src/config';

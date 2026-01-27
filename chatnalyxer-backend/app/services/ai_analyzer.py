@@ -152,9 +152,19 @@ class AIAnalyzer:
         """Centralized prompt generation"""
         priority_context = {
             "STUDENT": """
-            HIGH Priority: Exams, assignments, deadlines, class cancellations, professor announcements
-            MEDIUM Priority: Study groups, project meetings, academic events
-            LOW Priority: Social events, parties, general chit-chat
+            HIGH Priority: ALL exams, assignments, due dates, quizzes, labs, class cancellations
+            MEDIUM Priority: Study groups, clubs, workshops, guest lectures
+            LOW Priority: Social events, lost & found, general chit-chat
+
+            SPECIAL RULE FOR MEETINGS (Formatting 'summary'):
+            If message is a meeting/webinar with a link, format 'summary' field EXACTLY like this (Max 2 lines):
+            "<Title> · <Day> <Time>\n<Link>"
+
+            Rules for Summary:
+            1. Title: Short & Specific (No "Dear students", No "Please find").
+            2. Line 2: RAW LINK ONLY (No "Join", "via", arrows, or emojis).
+            3. NO greetings or filler words.
+            4. Do NOT hallucinate links.
             """,
             "CASUAL": """
             HIGH Priority: Family events, friend gatherings, important personal plans, time-sensitive social commitments
@@ -171,45 +181,38 @@ class AIAnalyzer:
         context = priority_context.get(user_type, priority_context["STUDENT"])
         
         return f"""
-        You are "Chatnalyxer", an AI assistant for a {user_type} user.
+        You are "Chatnalyxer", an AI assistant. Context: {user_type}
         
-        USER PROFILE: {user_type}
         {context}
         
         Analyze the user's message (in ANY language: English, Hindi, Telugu, etc.).
 
-        Your Goal:
+        GOAL:
         1. Contextualize for {user_type}.
-        2. Determine priority.
-        3. Extract Deadlines.
+        2. Determine priority (CRITICAL/HIGH/MEDIUM/LOW).
+        3. Extract Deadlines (YYYY-MM-DD HH:MM).
         4. Generate a short personal summary.
 
-        Date Rules:
-        - "Repu" (Telugu)/"Kal" (Hindi) = TOMORROW.
-        - "Ellundi" = Day after tomorrow.
+        DATE RULES:
+        - "Repu"/"Kal" = TOMORROW. "Ellundi" = Day after.
         - Reference Timestamp: {created_at.isoformat()}
-        - Return 'deadline' in "YYYY-MM-DD HH:MM". Default to 10:00 AM if time missing.
+        - Default time: 10:00 AM if missing.
 
         STRICT RESPONSE FORMAT (JSON ONLY):
         {{
             "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-            "category": "class_related" | "exam_related" | "submission_deadline" | "college_admin" | "urgent_alert" | "social_event" | "work_related" | "general",
-            "urgency_score": 0.0 to 1.0,
+            "category": "class_related" | "exam_related" | "submission_deadline" | "meeting" | "general",
+            "urgency_score": 0.0-1.0,
             "keywords": ["tag1", "tag2"],
             "deadline": "YYYY-MM-DD HH:MM" or null,
-            "tasks": [{{"title": "Task Name", "deadline": "YYYY-MM-DD"}}],
-            "summary": "Short interpretation."
+            "tasks": [{{"title": "Task Name", "deadline": "YYYY-MM-DD HH:MM"}}],
+            "summary": "Short interpretation (max 1 sentence)."
         }}
 
-        STRICT FILTERING (LOW PRIORITY):
-        - QUESTIONS about schedules ("Is there exam?", "Repu exam undha?", "Kal chutti hai kya?") -> LOW.
-        - "Guys have u completed?" provided NO subject -> LOW.
-        - "Bro/Macha/Guys" start -> LOW/MEDIUM.
-        - Casual checks -> LOW.
-        
-        CRITICAL DISTINCTION:
-        - "Exam tomorrow" (Statement/Fact) -> HIGH/CRITICAL.
-        - "Is there exam tomorrow?" (Question/Doubt) -> LOW.
+        STRICT FILTERING:
+        - Questions ("Is there exam?") -> LOW.
+        - Small talk -> LOW.
+        - "Exam tomorrow" (Fact) -> HIGH.
         """
 
     def _parse_ai_response(self, text_response: str, method_name: str) -> Dict:
@@ -234,6 +237,7 @@ class AIAnalyzer:
                     'summary': analysis.get('summary', ''),
                     'tasks': analysis.get('tasks', [])
                 }),
+                'ai_summary': analysis.get('summary', ''),  # NEW: Top level summary
                 'analysis_method': method_name
             }
         except Exception as e:

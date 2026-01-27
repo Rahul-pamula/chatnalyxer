@@ -24,14 +24,14 @@ interface Group {
   name: string;
   [key: string]: any;
 }
-import BottomNav from './components/BottomNav';
-import GroupStories from './components/GroupStories';
-import MessageCard from './components/MessageCard';
-import { ChatWindow } from './components/ChatWindow';
-import StatCard from './components/StatCard';
-import SkeletonLoader from './components/SkeletonLoader';
+import BottomNav from './_components/BottomNav';
+import GroupStories from './_components/GroupStories';
+import MessageCard from './_components/MessageCard';
+import { ChatWindow } from './_components/ChatWindow';
+import StatCard from './_components/StatCard';
+import SkeletonLoader from './_components/SkeletonLoader';
 import { scheduleLocalNotification, scheduleDeadlineReminders } from '../src/services/notifications';
-import { SoundManager } from './components/SoundManager';
+import { SoundManager } from './_components/SoundManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -49,6 +49,10 @@ export default function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<number>>(new Set());
+
+  // NEW: WhatsApp Status State
+  const [whatsappStatus, setWhatsappStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'CHECKING'>('CHECKING');
+  const [isFocused, setIsFocused] = useState(true); // Simple focus tracking for now
 
   // ... (keep useEffects same) ...
 
@@ -242,6 +246,42 @@ export default function Dashboard() {
     }
   }, [token]);
 
+  // NEW: Check WhatsApp Status on Mount & Focus logic
+  const checkWhatsAppStatus = async () => {
+    if (!token) return;
+    try {
+      // setWhatsappStatus('CHECKING'); // Don't flicker status
+      const response = await fetch(`${BASE_URL}/whatsapp/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data: any = await response.json();
+        setWhatsappStatus(data.ready ? 'CONNECTED' : 'DISCONNECTED');
+      } else {
+        setWhatsappStatus('DISCONNECTED');
+      }
+    } catch (e) {
+      console.log('Failed to check WA status', e);
+      setWhatsappStatus('DISCONNECTED');
+    }
+  };
+
+  // Run initial check
+  useEffect(() => {
+    checkWhatsAppStatus();
+
+    // Re-check every time screen gains focus (using navigation listener if available, 
+    // or just polling alongside data fetch for now since we have a polling interval)
+  }, [token]);
+
+  // Hook into existing polling interval to keep status fresh
+  useEffect(() => {
+    if (token) {
+      const interval = setInterval(checkWhatsAppStatus, 5000); // Check every 5s
+      return () => clearInterval(interval);
+    }
+  }, [token]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
@@ -290,7 +330,15 @@ export default function Dashboard() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.dashboardTitle}>Dashboard</Text>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.dashboardTitle}>Dashboard</Text>
+              {whatsappStatus === 'CONNECTED' && (
+                <View style={styles.statusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.dashboardSubtitle}>WhatsApp Live • Auto-detecting tasks</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={onRefresh} style={styles.headerIconBtn}>
                 <Ionicons name="refresh-outline" size={22} color="#fff" />
@@ -305,6 +353,34 @@ export default function Dashboard() {
           </View>
         )}
       </View>
+
+      {/* NEW: Connect WhatsApp Card - Only if DISCONNECTED */}
+      {whatsappStatus === 'DISCONNECTED' && (
+        <Animated.View
+          entering={FadeInDown.delay(200).springify()}
+          layout={Layout.springify()}
+          style={styles.connectCard}
+        >
+          <View style={styles.connectCardContent}>
+            <View style={styles.connectIconContainer}>
+              <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+            </View>
+            <View style={styles.connectTextContainer}>
+              <Text style={styles.connectTitle}>WhatsApp not connected</Text>
+              <Text style={styles.connectSubtitle}>
+                Auto-detect exams & deadlines from group messages
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.connectButton}
+            onPress={() => router.push('/setup')}
+          >
+            <Text style={styles.connectButtonText}>Connect WhatsApp</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
 
 
@@ -336,17 +412,29 @@ export default function Dashboard() {
           <SkeletonLoader count={4} />
         ) : messages.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>
-              Link your WhatsApp to start receiving messages
-            </Text>
-            <TouchableOpacity
-              style={styles.setupButton}
-              onPress={() => router.push('/setup' as any)}
-            >
-              <Text style={styles.setupButtonText}>Setup WhatsApp</Text>
-            </TouchableOpacity>
+            {whatsappStatus === 'CONNECTED' ? (
+              <>
+                <Text style={{ fontSize: 40, marginBottom: 16 }}>✨</Text>
+                <Text style={styles.emptyText}>You're all caught up</Text>
+                <Text style={styles.emptySubtext}>
+                  We'll notify you when something important appears.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>No messages yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Link your WhatsApp to start receiving messages
+                </Text>
+                <TouchableOpacity
+                  style={styles.setupButton}
+                  onPress={() => router.push('/setup' as any)}
+                >
+                  <Text style={styles.setupButtonText}>Setup WhatsApp</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         ) : (
           <View style={styles.messagesList}>
@@ -428,12 +516,32 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   dashboardTitle: {
-    flex: 1,
     fontSize: 28,
     fontWeight: '900',
     color: '#fff',
-    marginLeft: 12,
     letterSpacing: -0.5,
+  },
+  dashboardSubtitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ade80', // bright green
+    marginRight: 6,
   },
   headerActions: {
     flexDirection: 'row',
@@ -490,6 +598,64 @@ const styles = StyleSheet.create({
   setupButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  connectCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 16,
+    // Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.2)', // Subtle green border
+  },
+  connectCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  connectIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#25D366', // WhatsApp Green
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectTextContainer: {
+    flex: 1,
+  },
+  connectTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  connectSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  connectButton: {
+    backgroundColor: '#25D366', // WhatsApp Green
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  connectButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600',
   },
 });

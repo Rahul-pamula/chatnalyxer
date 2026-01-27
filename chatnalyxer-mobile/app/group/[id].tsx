@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '../../src/theme/colors';
 import { useAuth } from '../../src/context/AuthContext';
 import { BASE_URL } from '../../src/config';
-import MessageCard from '../components/MessageCard';
+import MessageCard from '../_components/MessageCard';
 
 export default function GroupDetails() {
     const { id } = useLocalSearchParams(); // Group ID

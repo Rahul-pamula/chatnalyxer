@@ -1,14 +1,15 @@
-import { StyleSheet, Platform } from 'react-native';
-import { colors } from '../src/theme/colors';
+import { StyleSheet, Platform, Dimensions } from 'react-native';
+import { colors, shadows } from '../src/theme/colors';
 
-// ... (imports)
+const { width } = Dimensions.get('window');
+
 export const setupStyles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f7fa',
+        backgroundColor: colors.background,
     },
     scrollContent: {
-        padding: 24,
+        padding: 20,
         paddingBottom: 40,
     },
     centered: {
@@ -16,6 +17,8 @@ export const setupStyles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
+
+    // Header
     header: {
         marginBottom: 24,
         marginTop: 10,
@@ -23,324 +26,327 @@ export const setupStyles = StyleSheet.create({
     headerContent: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'center',
     },
     titleContainer: {
         flex: 1,
         paddingRight: 16,
     },
     profileButton: {
-        padding: 4,
+        padding: 8,
+        backgroundColor: colors.surface,
+        borderRadius: 50,
+        ...shadows.sm,
     },
     title: {
         fontSize: 28,
         fontWeight: '800',
-        color: '#1a1a1a',
-        marginBottom: 8,
-        textAlign: 'left',
+        color: colors.textPrimary,
+        marginBottom: 4,
+        letterSpacing: -0.5,
     },
     subtitle: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'left',
-        lineHeight: 22,
+        fontSize: 15,
+        color: colors.textSecondary,
+        lineHeight: 20,
     },
+
+    // Card Common
     card: {
-        backgroundColor: '#ffffff',
-        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderRadius: 20,
         padding: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
-        marginBottom: 24,
+        marginBottom: 20,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.02)',
+        borderColor: colors.border,
+        ...shadows.md,
     },
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 20,
     },
     cardTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#2c3e50',
+        color: colors.textPrimary,
+        marginLeft: 10,
     },
-    instructionText: {
-        fontSize: 15,
-        color: '#555',
-        lineHeight: 22,
-        marginBottom: 24,
-    },
-    // QR Code Specific
-    qrContainer: {
+
+    // WhatsApp Connected State
+    connectedContainer: {
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#eee',
-        marginBottom: 20,
+        paddingVertical: 10,
     },
-    codeDisplay: {
-        backgroundColor: '#f8f9fa',
-        padding: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
-        width: '100%',
+    operationalBadge: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
-    },
-    codeText: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-        letterSpacing: 6,
-        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    // Status Indicators
-    statusBadge: {
-        alignSelf: 'center',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)', // Green tint
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#e8f5e9',
+        borderRadius: 100,
+        marginBottom: 16,
         borderWidth: 1,
-        borderColor: '#c8e6c9',
-        marginBottom: 24,
+        borderColor: 'rgba(16, 185, 129, 0.2)',
+    },
+    badgeDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.success,
+        marginRight: 8,
     },
     statusText: {
-        color: '#2e7d32',
+        color: colors.success,
         fontWeight: '600',
         fontSize: 14,
+        letterSpacing: 0.5,
     },
-    // Buttons
+    connectionDetails: {
+        fontSize: 16,
+        color: colors.textPrimary,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    connectionSubtext: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        marginBottom: 24,
+    },
+
+    // Actions
     buttonPrimary: {
-        backgroundColor: '#007AFF', // iOS Blue
-        borderRadius: 12,
-        paddingVertical: 14,
+        backgroundColor: colors.primary,
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        width: '100%',
         alignItems: 'center',
-        shadowColor: '#007AFF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    buttonSecondary: {
-        backgroundColor: '#f0f0f0',
-        borderRadius: 12,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    buttonDestructive: {
-        backgroundColor: '#ffebee',
-        borderRadius: 12,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 12,
+        marginBottom: 12,
+        ...shadows.primaryGlow,
     },
     buttonTextPrimary: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
+    },
+    secondaryActionsRow: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 12,
+    },
+    buttonSecondary: {
+        flex: 1,
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        paddingVertical: 14,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     buttonTextSecondary: {
-        color: '#555',
-        fontSize: 16,
+        color: colors.textPrimary,
+        fontSize: 15,
         fontWeight: '600',
+    },
+    buttonDestructive: {
+        flex: 1,
+        backgroundColor: '#fee2e2', // Light red
+        borderRadius: 16,
+        paddingVertical: 14,
+        alignItems: 'center',
     },
     buttonTextDestructive: {
-        color: '#d32f2f',
-        fontSize: 16,
+        color: colors.error,
+        fontSize: 15,
         fontWeight: '600',
     },
-    // Email Section specific
-    emailSection: {
-        marginTop: 8,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-        opacity: 0.9,
-    },
-    emailHeader: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#34495e',
-        marginBottom: 8,
-    },
-    // "Coming Soon" - Top Right of Card
-    comingSoonBadgeInline: {
-        backgroundColor: '#FFF8E1', // Very light yellow background
-        borderColor: '#FFC107',     // Amber border
-        borderWidth: 1,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-        marginLeft: 8,
-    },
-    comingSoonTextInline: {
-        color: '#B00020', // Dark contrast color (Dark Red)
-        fontSize: 10,
-        fontWeight: '700',
-        letterSpacing: 0.5,
-    },
 
-    methodButtonContent: {
-        flexDirection: 'column', // Changed to column to stack icon/text
+    // Calendar & Events Shortcut
+    calendarCard: {
+        backgroundColor: 'rgba(99, 102, 241, 0.05)', // Primary tint
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(99, 102, 241, 0.1)',
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center', // Center content
-        gap: 8,
-        width: '100%',
+        justifyContent: 'space-between',
     },
-    // The Pairing Code Badge (Absolute Positioned)
-    comingSoonBadgeAbsolute: {
-        position: 'absolute',
-        top: -8,
-        right: -8,
-        backgroundColor: '#FF5252', // Red background for high visibility
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 4,
-        zIndex: 10,
-        elevation: 2,
-    },
-    comingSoonTextSmall: {
-        color: '#fff', // White text on Red bg
-        fontSize: 9,
-        fontWeight: '700',
-        letterSpacing: 0.3,
-    },
-    methodButtonDisabled: {
-        opacity: 0.6,
-        backgroundColor: '#f9f9f9',
-    },
-    emailDesc: {
-        fontSize: 14,
-        color: '#7f8c8d',
-        marginBottom: 16,
-        lineHeight: 20,
-    },
-    footer: {
-        marginTop: 32,
+    calendarLeft: {
+        flexDirection: 'row',
         alignItems: 'center',
+        gap: 16,
     },
-    loadingText: {
-        marginTop: 16,
+    calendarIconBox: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: colors.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...shadows.sm,
+    },
+    calendarTitle: {
         fontSize: 16,
-        color: '#666',
-        fontWeight: '500',
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 2,
     },
-    expiryWarning: {
-        marginTop: 12,
+    calendarSubtitle: {
         fontSize: 13,
-        color: '#e74c3c',
-        fontWeight: '600',
-        textAlign: 'center',
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#e0e0e0',
-        marginVertical: 20,
+        color: colors.textSecondary,
     },
 
-    // Pairing Code UI Styles
+    // Disconnected / Setup State
     whatsappContent: {
-        marginTop: 12,
+        marginTop: 0,
     },
     whatsappDesc: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 20,
-        lineHeight: 20,
+        fontSize: 15,
+        color: colors.textSecondary,
+        marginBottom: 24,
+        lineHeight: 22,
     },
     methodTitle: {
         fontSize: 14,
         fontWeight: '600',
+        color: colors.textSecondary,
         marginBottom: 12,
-        color: '#333'
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     methodsContainer: {
         flexDirection: 'row',
         gap: 12,
-        height: 100, // Fixed height for consistency
+        marginBottom: 24,
     },
     methodButton: {
         flex: 1,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#e0e0e0',
-        backgroundColor: '#fff',
-        padding: 4,
-        justifyContent: 'center',
+        backgroundColor: colors.surface,
+        borderRadius: 16,
+        padding: 16,
         alignItems: 'center',
-        position: 'relative', // For absolute badge
+        borderWidth: 1,
+        borderColor: colors.border,
+        height: 110,
+        justifyContent: 'center',
+        ...shadows.sm,
     },
     methodButtonActive: {
         borderColor: colors.primary,
-        backgroundColor: colors.primaryLight + '10',
+        backgroundColor: 'rgba(99, 102, 241, 0.05)',
+        borderWidth: 2,
+    },
+    methodButtonContent: {
+        alignItems: 'center',
+        gap: 12,
     },
     methodButtonText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#666',
-        textAlign: 'center',
+        color: colors.textSecondary,
     },
     methodButtonTextActive: {
         color: colors.primary,
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
+    methodButtonDisabled: {
+        opacity: 0.5,
+        backgroundColor: colors.surfaceHighlight,
     },
-    modalContent: {
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+
+    // QR Code
+    qrContainer: {
+        alignItems: 'center',
         padding: 24,
-        maxHeight: '80%',
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        backgroundColor: colors.surface,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: colors.border,
         marginBottom: 20,
+        ...shadows.sm,
     },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    calendarButton: {
-        backgroundColor: colors.primary + '20',
-        padding: 12,
-        borderRadius: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 16
-    },
-    calendarButtonText: {
-        color: colors.primary,
+    expiryWarning: {
+        marginTop: 16,
+        fontSize: 14,
+        color: colors.warning,
         fontWeight: '600',
-        fontSize: 14
     },
-    generatingText: {
+    generatingText: { // Re-added this
         marginTop: 16,
         fontSize: 16,
         fontWeight: '600',
         color: colors.primary
     },
-    waitText: {
+    waitText: { // Re-added this
         marginTop: 8,
         fontSize: 14,
-        color: '#666',
+        color: colors.textSecondary,
         textAlign: 'center'
-    }
+    },
+
+    // Email Section
+    emailSection: {
+        opacity: 0.8,
+    },
+    emailDesc: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        marginBottom: 20,
+        lineHeight: 22,
+    },
+    comingSoonBadgeInline: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginLeft: 12,
+        alignSelf: 'flex-start',
+    },
+    comingSoonTextInline: {
+        color: '#D97706',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+
+    // Badges
+    comingSoonBadgeAbsolute: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: colors.error,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        zIndex: 10,
+    },
+    comingSoonTextSmall: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: colors.surface,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        padding: 24,
+        minHeight: '50%',
+        ...shadows.xl,
+    },
+
+    // Misc
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: colors.textSecondary,
+        fontWeight: '500',
+    },
 });

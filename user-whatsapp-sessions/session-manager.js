@@ -326,6 +326,39 @@ app.post('/sessions/pairing/:userId', async (req, res) => {
     }
 });
 
+
+/**
+ * Validate/Force Clear Session
+ * Proxy to user service's /validate-session
+ */
+app.post('/sessions/validate/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+
+    if (!isSessionAlive(userId)) {
+        return res.status(404).json({
+            error: 'No active session. Start session first.'
+        });
+    }
+
+    const session = activeSessions.get(userId);
+
+    try {
+        // Forward request to user's WhatsApp service
+        const response = await axios.post(`http://localhost:${session.port}/validate-session`, req.body);
+        res.json(response.data);
+    } catch (error) {
+        // Did the process die during the request? (Expected for force_clear)
+        if (req.body.force_clear && error.code === 'ECONNRESET') {
+            return res.json({ success: true, message: 'Process restarting (Connection reset expected)' });
+        }
+
+        res.status(500).json({
+            error: 'Failed to validate session',
+            message: error.message
+        });
+    }
+});
+
 // Get groups for a user session
 app.get('/sessions/:userId/groups', async (req, res) => {
     const userId = parseInt(req.params.userId);

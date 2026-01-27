@@ -163,7 +163,31 @@ async def get_whatsapp_status(
                     
                     # SELF-HEALING: If Session Manager says inactive, update DB!
                     if not session_data.get("active", False):
-                        print(f"⚠️ Mismatch detected: DB says connected, Session Manager says inactive. Auto-correcting for user {current_user.id}...")
+                        print(f"⚠️ Mismatch detected: DB says connected, Session Manager says inactive. Attempting AUTO-RECOVERY for user {current_user.id}...")
+                        
+                        # ATTEMPT RECOVERY: Try to start session assuming creds exist on disk
+                        try:
+                            # Clean phone number (remove + and spaces)
+                            clean_phone = current_user.phone_number.replace('+', '').replace(' ', '').replace('-', '') if current_user.phone_number else None
+                            
+                            start_res = requests.post(
+                                f"{SESSION_MANAGER_URL}/sessions/start/{current_user.id}",
+                                json={"phone_number": clean_phone},
+                                timeout=5
+                            )
+                            
+                            if start_res.status_code == 200:
+                                print(f"✅ Auto-recovery successful! Session restarting on port {start_res.json().get('port')}")
+                                return {
+                                    "connected": True,
+                                    "ready": False,
+                                    "status": "initializing",
+                                    "message": "Resuming connection..."
+                                }
+                        except Exception as rec_err:
+                            print(f"❌ Recovery failed: {rec_err}")
+
+                        # If recovery failed, THEN mark as disconnected
                         current_user.whatsapp_connected = False
                         current_user.whatsapp_session_port = None
                         db.commit()

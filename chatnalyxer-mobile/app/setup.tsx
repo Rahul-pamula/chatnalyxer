@@ -8,7 +8,10 @@ import { BASE_URL } from '../src/config';
 import { setupStyles as styles } from './setup-styles';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../src/theme/colors';
-import PairingCodeDisplay from './components/PairingCodeDisplay';
+import PairingCodeDisplay from './_components/PairingCodeDisplay';
+
+// Fix for web globals
+declare const window: any;
 
 interface WhatsAppStatusResponse {
     ready?: boolean;
@@ -190,16 +193,15 @@ export default function SetupScreen() {
                             <View style={styles.titleContainer}>
                                 <Text style={styles.title}>Chatnalyxer Hub</Text>
                                 <Text style={styles.subtitle}>
-                                    Central command for your academic AI assistants.
+                                    Command center for your AI assistants.
                                 </Text>
                             </View>
 
-                            {/* Profile Icon - Relative Positioning via Flexbox */}
                             <TouchableOpacity
                                 onPress={() => router.push('/profile')}
                                 style={styles.profileButton}
                             >
-                                <Ionicons name="person-circle-outline" size={36} color={colors.primary} />
+                                <Ionicons name="person" size={24} color={colors.primary} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -208,39 +210,46 @@ export default function SetupScreen() {
                     <View style={styles.card}>
                         <View style={styles.cardHeader}>
                             <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
-                            <Text style={styles.cardTitle}>  WhatsApp Integration</Text>
+                            <Text style={styles.cardTitle}>WhatsApp Integration</Text>
                         </View>
 
-                        {/* Calendar Quick Access */}
-                        <TouchableOpacity
-                            style={styles.calendarButton}
-                            onPress={() => router.push('/calendar')}
-                        >
-                            <Ionicons name="calendar" size={20} color={colors.primary} />
-                            <Text style={styles.calendarButtonText}>
-                                View Calendar & Events
-                            </Text>
-                        </TouchableOpacity>
-
                         {isWhatsAppConnected ? (
-                            <View>
-                                <View style={styles.statusBadge}>
-                                    <Text style={styles.statusText}>✅ Connected & Analyzing</Text>
+                            <View style={styles.connectedContainer}>
+                                {/* Operational Badge */}
+                                <View style={styles.operationalBadge}>
+                                    <View style={styles.badgeDot} />
+                                    <Text style={styles.statusText}>System Operational</Text>
                                 </View>
-                                <Text style={styles.instructionText}>
-                                    WhatsApp is live. Click below to view your personalized dashboard.
+
+                                {/* Connection Details */}
+                                <Text style={styles.connectionDetails}>
+                                    Connected via {user?.phone_number || 'WhatsApp'}
                                 </Text>
+                                <Text style={styles.connectionSubtext}>
+                                    Message analysis is active and running.
+                                </Text>
+
+                                {/* Use Primary Action for Dashboard */}
                                 <TouchableOpacity
-                                    style={[styles.buttonPrimary, { marginBottom: 12 }]}
+                                    style={styles.buttonPrimary}
                                     onPress={() => router.push('/dashboard')}
                                 >
-                                    <Text style={styles.buttonTextPrimary}>Open WhatsApp Dashboard</Text>
+                                    <Text style={styles.buttonTextPrimary}>Go to Dashboard</Text>
                                 </TouchableOpacity>
-                                <View style={{ flexDirection: 'row', gap: 10 }}>
-                                    <TouchableOpacity style={[styles.buttonSecondary, { flex: 1 }]} onPress={() => router.push('/groups')}>
+
+                                {/* Secondary Actions Row */}
+                                <View style={styles.secondaryActionsRow}>
+                                    <TouchableOpacity
+                                        style={styles.buttonSecondary}
+                                        onPress={() => router.push('/groups')}
+                                    >
                                         <Text style={styles.buttonTextSecondary}>Manage Groups</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={[styles.buttonDestructive, { flex: 1 }]} onPress={handleLogout}>
+
+                                    <TouchableOpacity
+                                        style={styles.buttonDestructive}
+                                        onPress={handleLogout}
+                                    >
                                         <Text style={styles.buttonTextDestructive}>Disconnect</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -248,12 +257,12 @@ export default function SetupScreen() {
                         ) : (
                             <View style={styles.whatsappContent}>
                                 <Text style={styles.whatsappDesc}>
-                                    Link your WhatsApp to analyze group messages with AI
+                                    Link your WhatsApp to enable AI analysis for your academic groups.
                                 </Text>
 
                                 {!isWhatsAppConnected && !qrCode && !pairingCode && (
-                                    <View style={{ marginBottom: 20 }}>
-                                        <Text style={styles.methodTitle}>Choose linking method:</Text>
+                                    <View style={{ marginBottom: 0 }}>
+                                        <Text style={styles.methodTitle}>Connect via</Text>
                                         <View style={styles.methodsContainer}>
                                             {/* QR Code Button */}
                                             <TouchableOpacity
@@ -272,10 +281,10 @@ export default function SetupScreen() {
                                                     {isGeneratingQR ? (
                                                         <ActivityIndicator size="small" color={colors.primary} />
                                                     ) : (
-                                                        <Ionicons name="qr-code" size={24} color={linkMethod === 'qr' ? colors.primary : '#666'} />
+                                                        <Ionicons name="qr-code-outline" size={28} color={linkMethod === 'qr' ? colors.primary : colors.textSecondary} />
                                                     )}
                                                     <Text style={[styles.methodButtonText, linkMethod === 'qr' && styles.methodButtonTextActive]}>
-                                                        {isGeneratingQR ? 'Generating...' : 'QR Code'}
+                                                        {isGeneratingQR ? 'Generating...' : 'Scan QR Code'}
                                                     </Text>
                                                 </View>
                                             </TouchableOpacity>
@@ -286,14 +295,10 @@ export default function SetupScreen() {
                                                 disabled={true}
                                             >
                                                 <View style={styles.methodButtonContent}>
-                                                    <Ionicons name="keypad" size={24} color="#999" />
-                                                    <View>
-                                                        <Text style={[styles.methodButtonText, { color: '#999' }]}>Pairing Code</Text>
-                                                    </View>
-
-                                                    {/* Absolute Positioned Badge */}
+                                                    <Ionicons name="keypad-outline" size={28} color={colors.textTertiary} />
+                                                    <Text style={[styles.methodButtonText, { color: colors.textTertiary }]}>Pairing Code</Text>
                                                     <View style={styles.comingSoonBadgeAbsolute}>
-                                                        <Text style={styles.comingSoonTextSmall}>Coming Soon</Text>
+                                                        <Text style={styles.comingSoonTextSmall}>SOON</Text>
                                                     </View>
                                                 </View>
                                             </TouchableOpacity>
@@ -303,19 +308,19 @@ export default function SetupScreen() {
 
                                 {/* Loading State */}
                                 {isGeneratingQR && !qrCode && (
-                                    <View style={{ alignItems: 'center', marginVertical: 30 }}>
+                                    <View style={{ alignItems: 'center', marginVertical: 20 }}>
                                         <ActivityIndicator size="large" color={colors.primary} />
-                                        <Text style={styles.generatingText}>🔄 Generating QR Code...</Text>
-                                        <Text style={styles.waitText}>Please wait, this will only take a few seconds</Text>
+                                        <Text style={styles.generatingText}>Generating Session...</Text>
+                                        <Text style={styles.waitText}>Please wait a moment</Text>
                                     </View>
                                 )}
 
                                 {/* QR Code Display */}
                                 {qrCode && linkMethod === 'qr' && !isExpired && (
                                     <View style={styles.qrContainer}>
-                                        <Text style={{ marginBottom: 10, fontWeight: '600' }}>Scan with WhatsApp:</Text>
+                                        <Text style={{ marginBottom: 16, fontWeight: '600', color: colors.textPrimary }}>Scan with WhatsApp Linked Devices:</Text>
                                         <Image source={{ uri: qrCode }} style={{ width: 220, height: 220 }} resizeMode="contain" />
-                                        <Text style={styles.expiryWarning}>QR expires in {countdown}s</Text>
+                                        <Text style={styles.expiryWarning}>Code expires in {countdown}s</Text>
                                     </View>
                                 )}
 
@@ -331,27 +336,50 @@ export default function SetupScreen() {
                                         <Text style={styles.buttonTextSecondary}>Regenerate Code</Text>
                                     </TouchableOpacity>
                                 )}
+
+                                {/* Skip to Dashboard Button */}
+                                <TouchableOpacity
+                                    style={{ alignSelf: 'center', marginTop: 20, padding: 8 }}
+                                    onPress={() => router.push('/dashboard')}
+                                >
+                                    <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>
+                                        View Dashboard (Read Only)
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                         )}
                     </View>
 
+                    {/* Calendar Shortcut Card */}
+                    <TouchableOpacity
+                        style={styles.calendarCard}
+                        onPress={() => router.push('/calendar')}
+                    >
+                        <View style={styles.calendarLeft}>
+                            <View style={styles.calendarIconBox}>
+                                <Ionicons name="calendar" size={24} color={colors.primary} />
+                            </View>
+                            <View>
+                                <Text style={styles.calendarTitle}>Calendar & Events</Text>
+                                <Text style={styles.calendarSubtitle}>View your academic schedule</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+
                     {/* Email Section */}
                     <View style={[styles.card, styles.emailSection]}>
                         <View style={styles.cardHeader}>
-                            <Ionicons name="mail" size={24} color="#34495e" />
-                            <Text style={styles.cardTitle}>  Email Integration</Text>
+                            <Ionicons name="mail-outline" size={24} color="#34495e" />
+                            <Text style={styles.cardTitle}>Email Integration</Text>
                             <View style={styles.comingSoonBadgeInline}>
-                                <Text style={styles.comingSoonTextInline}>Coming Soon</Text>
+                                <Text style={styles.comingSoonTextInline}>COMING SOON</Text>
                             </View>
                         </View>
 
                         <Text style={styles.emailDesc}>
-                            Connect your Student Email (Gmail/Outlook) to catch important announcements directly from your inbox.
+                            Connect your Student Email to catch important announcements directly from your inbox.
                         </Text>
-
-                        <TouchableOpacity style={[styles.buttonSecondary, { opacity: 0.7 }]} onPress={handleEmailClick}>
-                            <Text style={styles.buttonTextSecondary}>Connect Email</Text>
-                        </TouchableOpacity>
                     </View>
 
                 </ScrollView>

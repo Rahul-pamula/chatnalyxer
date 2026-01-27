@@ -210,7 +210,7 @@ def create_whatsapp_message(
         
         # AI Memory System (NEW - Phase 1)
         extracted_content=payload.extracted_content,  # Full text from Azure AI
-        ai_summary=None  # Will be generated below if extracted_content exists
+        ai_summary=ai_results.get('ai_summary')  # From AI Analysis
     )
     
     # 📄 RAG Ingestion: Extract text from PDF/Images if present
