@@ -169,10 +169,6 @@ export default function SetupScreen() {
         }
     };
 
-    const handleEmailClick = () => {
-        Alert.alert("Coming Soon 🚀", "Email integration is under development!", [{ text: "Can't wait!" }]);
-    };
-
     if (isCheckingConnection) {
         return (
             <View style={[styles.container, styles.centered]}>
@@ -319,7 +315,11 @@ export default function SetupScreen() {
                                 {qrCode && linkMethod === 'qr' && !isExpired && (
                                     <View style={styles.qrContainer}>
                                         <Text style={{ marginBottom: 16, fontWeight: '600', color: colors.textPrimary }}>Scan with WhatsApp Linked Devices:</Text>
-                                        <Image source={{ uri: qrCode }} style={{ width: 220, height: 220 }} resizeMode="contain" />
+                                        {typeof qrCode === 'string' && qrCode.startsWith('data:image') ? (
+                                            <Image source={{ uri: qrCode }} style={{ width: 220, height: 220 }} resizeMode="contain" />
+                                        ) : (
+                                            <QRCode value={qrCode} size={220} />
+                                        )}
                                         <Text style={styles.expiryWarning}>Code expires in {countdown}s</Text>
                                     </View>
                                 )}
@@ -368,19 +368,20 @@ export default function SetupScreen() {
                     </TouchableOpacity>
 
                     {/* Email Section */}
-                    <View style={[styles.card, styles.emailSection]}>
+                    <TouchableOpacity
+                        style={[styles.card, styles.emailSection]}
+                        onPress={() => router.push('/connect-email')}
+                        activeOpacity={0.85}
+                    >
                         <View style={styles.cardHeader}>
                             <Ionicons name="mail-outline" size={24} color="#34495e" />
                             <Text style={styles.cardTitle}>Email Integration</Text>
-                            <View style={styles.comingSoonBadgeInline}>
-                                <Text style={styles.comingSoonTextInline}>COMING SOON</Text>
-                            </View>
                         </View>
 
                         <Text style={styles.emailDesc}>
                             Connect your Student Email to catch important announcements directly from your inbox.
                         </Text>
-                    </View>
+                    </TouchableOpacity>
 
                 </ScrollView>
             </View>

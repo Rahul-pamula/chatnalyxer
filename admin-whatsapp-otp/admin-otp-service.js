@@ -22,6 +22,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const SESSION_MANAGER_URL = process.env.SESSION_MANAGER_URL || 'http://localhost:3002';
+const ADMIN_WHATSAPP_URL = process.env.ADMIN_WHATSAPP_URL || 'http://localhost:3003';
+
 console.log(`🚀 Starting Admin OTP Service on Port ${PORT}`);
 
 // Database Connection
@@ -105,7 +109,7 @@ app.get('/admin/check-session', async (req, res) => {
 app.get('/admin/users', async (req, res) => {
     try {
         const axios = (await import('axios')).default;
-        const response = await axios.get('http://localhost:8000/admin/dashboard');
+        const response = await axios.get(`${BACKEND_URL}/admin/dashboard`);
         res.json(response.data);
     } catch (e) {
         res.status(500).json({ error: 'Failed to fetch users' });
@@ -116,7 +120,7 @@ app.get('/admin/users', async (req, res) => {
 app.post('/admin/stop-user/:userId', async (req, res) => {
     try {
         const axios = (await import('axios')).default;
-        await axios.post(`http://localhost:8000/admin/stop-user/${req.params.userId}`);
+        await axios.post(`${BACKEND_URL}/admin/stop-user/${req.params.userId}`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to stop user' });
@@ -138,7 +142,7 @@ app.post('/send-otp', async (req, res) => {
 
         // Proxy to user WhatsApp service (port 3002)
         const axios = (await import('axios')).default;
-        const response = await axios.post('http://localhost:3002/send-otp', {
+        const response = await axios.post(`${SESSION_MANAGER_URL}/send-otp`, {
             phone_number,
             message
         });
@@ -454,7 +458,7 @@ app.get('/', (req, res) => {
 
                     async function loadAdminWhatsApp() {
                         try {
-                            const res = await fetch('http://localhost:3003/status');
+                            const res = await fetch('${ADMIN_WHATSAPP_URL}/status');
                             const data = await res.json();
                             const section = document.getElementById('adminWhatsAppSection');
                             
@@ -495,7 +499,7 @@ app.get('/', (req, res) => {
 
                     async function connectAdminWhatsApp() {
                         try {
-                            await fetch('http://localhost:3003/connect', { method: 'POST' });
+                            await fetch('${ADMIN_WHATSAPP_URL}/connect', { method: 'POST' });
                             setTimeout(loadAdminWhatsApp, 1000);
                         } catch (e) {
                             alert('Failed to connect admin WhatsApp. Make sure admin-whatsapp-service.js is running on port 3003');
@@ -505,17 +509,17 @@ app.get('/', (req, res) => {
                     async function disconnectAdminWhatsApp() {
                         if (!confirm('Disconnect admin WhatsApp?')) return;
                         try {
-                            await fetch('http://localhost:3003/disconnect', { method: 'POST' });
+                            await fetch('${ADMIN_WHATSAPP_URL}/disconnect', { method: 'POST' });
                             stopQRTimer();
                             loadAdminWhatsApp();
                         } catch (e) {
-                            alert('Failed to disconnect admin WhatsApp');
+                            alert('Failed to disconnect admin WhatsApp. Make sure admin-whatsapp-service.js is running on port 3003');
                         }
                     }
 
                     async function reconnectAdminWhatsApp() {
                         try {
-                            await fetch('http://localhost:3003/reconnect', { method: 'POST' });
+                            await fetch('${ADMIN_WHATSAPP_URL}/reconnect', { method: 'POST' });
                             setTimeout(loadAdminWhatsApp, 2000);
                         } catch (e) {
                             alert('Failed to reconnect admin WhatsApp');

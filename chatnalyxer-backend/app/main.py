@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app import models
 from app.database import engine
 from app.routers import (
-    auth, messages, users, groups, ai, dashboard, whatsapp, admin, email, pdf, notifications, events, media, debug, speech
+    auth, messages, users, groups, ai, dashboard, whatsapp, admin, email, pdf, notifications, events, media, debug, speech, consent
 )
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -42,6 +42,10 @@ try:
     # Migration 4: Isolate groups per user
     from migrate_groups_isolation import migrate as migrate_isolation
     migrate_isolation()
+
+    # Migration 5: Add consent fields
+    from migrate_user_consent import migrate as migrate_user_consent
+    migrate_user_consent()
     
     print("✅ Auto-migration success!")
 except Exception as e:
@@ -97,6 +101,7 @@ app.include_router(dashboard.router)
 app.include_router(whatsapp.router)
 app.include_router(admin.router)
 app.include_router(email.router)
+app.include_router(consent.router)
 app.include_router(pdf.router)
 app.include_router(notifications.router)
 app.include_router(events.router)

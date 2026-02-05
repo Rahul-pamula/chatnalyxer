@@ -14,8 +14,12 @@ import fs from 'fs';
 const app = express();
 app.use(express.json());
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const logger = pino({ level: 'silent' });
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+const SESSION_MANAGER_URL = process.env.SESSION_MANAGER_URL || 'http://localhost:3002';
+const ADMIN_WHATSAPP_URL = process.env.ADMIN_WHATSAPP_URL || 'http://localhost:3003';
 
 // Load environment variables (Backend .env has the DB URL)
 import dotenv from 'dotenv';
@@ -324,10 +328,10 @@ app.post('/send-otp', async (req, res) => {
 app.get('/admin/users', async (req, res) => {
     try {
         const axios = (await import('axios')).default;
-        const response = await axios.get('http://localhost:8000/admin/dashboard');
+        const response = await axios.get(`${BACKEND_URL}/admin/dashboard`);
         res.json(response.data);
     } catch (e) {
-        res.status(500).json({ error: 'Failed to fetch users' });
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -340,7 +344,7 @@ app.post('/admin/users/:userId/disconnect', async (req, res) => {
         const { userId } = req.params;
         const axios = (await import('axios')).default;
         // Call session manager to stop session
-        await axios.post(`http://localhost:3002/sessions/stop/${userId}`);
+        await axios.post(`${SESSION_MANAGER_URL}/sessions/stop/${userId}`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -352,7 +356,7 @@ app.delete('/admin/users/:userId', async (req, res) => {
         const { userId } = req.params;
         const axios = (await import('axios')).default;
         // Call backend to delete user
-        const response = await axios.delete(`http://localhost:8000/admin/users/${userId}`);
+        const response = await axios.delete(`${BACKEND_URL}/admin/users/${userId}`);
         res.json(response.data);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -712,7 +716,7 @@ app.get('/', (req, res) => {
 
                     async function loadAdminWhatsApp() {
                         try {
-                            const res = await fetch('/admin/whatsapp/status');
+                            const res = await fetch(ADMIN_WHATSAPP_URL + '/status');
                             const data = await res.json();
                             const section = document.getElementById('adminWhatsApp');
                             
@@ -721,9 +725,9 @@ app.get('/', (req, res) => {
                                 isConnecting = false;
                                 section.innerHTML = \`
                                     <div style="text-align:center; padding: 20px;">
-                                        <div style="font-size:18px; color:#4caf50; margin-bottom:12px; font-weight:600;">✅ System Connected</div>
+                                        <div style="font-size:18px; color:#4caf50; margin-bottom:12px; font-weight:600;"> System Connected</div>
                                         <div style="color:#666; margin-bottom:20px;">
-                                            Phone: <strong>+\${data.phone_number || 'N/A'}</strong>
+                                            Phone: <strong>\${data.phone_number || 'N/A'}</strong>
                                         </div>
                                         <button class="btn btn-danger btn-small" onclick="disconnectWhatsApp()">Disconnect & Reset</button>
                                     </div>\`;
@@ -734,7 +738,7 @@ app.get('/', (req, res) => {
                                     qrTimer = setInterval(() => { 
                                         qrCountdown--; 
                                         const display = document.getElementById('qr-countdown-display');
-                                        if (display) display.textContent = '⏱️ Refreshing in ' + qrCountdown + 's';
+                                        if (display) display.textContent = ' Refreshing in ' + qrCountdown + 's';
                                         
                                         if (qrCountdown <= 0) {
                                             clearInterval(qrTimer);
@@ -752,7 +756,7 @@ app.get('/', (req, res) => {
                                             <div class="scan-line"></div>
                                         </div>
                                         <div id="qr-countdown-display" style="font-size:16px; font-weight:600; color:\${qrCountdown <= 10 ? '#f44336' : '#667eea'}; margin-top:16px;">
-                                            ⏱️ Refreshing in \${qrCountdown}s
+                                            Refreshing in \${qrCountdown}s
                                         </div>
                                     </div>\`;
                             } else if (data.qr_code && data.countdown <= 0) {
@@ -760,7 +764,7 @@ app.get('/', (req, res) => {
                                 if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }
                                 section.innerHTML = \`
                                     <div style="text-align:center; padding: 20px;">
-                                        <div style="font-size:16px; color:#f44336; margin-bottom:12px;">⏰ OR Code Expired</div>
+                                        <div style="font-size:16px; color:#f44336; margin-bottom:12px;"> OR Code Expired</div>
                                         <button class="btn btn-success" onclick="reconnectWhatsApp()">Generate New QR Code</button>
                                     </div>\`;
                             } else {
@@ -789,7 +793,7 @@ app.get('/', (req, res) => {
                         isConnecting = true;
                         loadAdminWhatsApp(); // Show loader immediately
                         try {
-                            const res = await fetch('/admin/whatsapp/connect', { method: 'POST' });
+                            const res = await fetch(ADMIN_WHATSAPP_URL + '/connect', { method: 'POST' });
                             const data = await res.json();
                             if(!data.success) throw new Error(data.message);
                             setTimeout(loadAdminWhatsApp, 1500);
@@ -802,24 +806,24 @@ app.get('/', (req, res) => {
 
                     async function disconnectWhatsApp() {
                         if (!confirm('Are you sure you want to disconnect the admin WhatsApp?')) return;
-                        await fetch('/admin/whatsapp/disconnect', { method: 'POST' });
+                        await fetch(ADMIN_WHATSAPP_URL + '/disconnect', { method: 'POST' });
                         loadAdminWhatsApp();
                     }
 
                     async function reconnectWhatsApp() {
                         isConnecting = true;
                         loadAdminWhatsApp();
-                        await fetch('/admin/whatsapp/reconnect', { method: 'POST' });
+                        await fetch(ADMIN_WHATSAPP_URL + '/reconnect', { method: 'POST' });
                         setTimeout(loadAdminWhatsApp, 2000);
                     }
 
                     // User Management
                     async function disconnectUser(userId) {
-                        if(!confirm(\`Disconnect and stop processing for User ID \${userId}?\`)) return;
-                        try {
-                            const res = await fetch(\`/admin/users/\${userId}/disconnect\`, { method: 'POST' });
-                            const data = await res.json();
-                            if (data.success) {
+                        if(!confirm('Disconnect and stop processing for User ID ' + userId + '?')) return;
+                         try {
+                             const res = await fetch(BACKEND_URL + '/admin/users/' + userId + '/disconnect', { method: 'POST' });
+                             const data = await res.json();
+                             if (data.success) {
                                 loadUsers(); // Refresh list
                             } else {
                                 alert('Failed: ' + data.error);
@@ -831,7 +835,7 @@ app.get('/', (req, res) => {
 
                     async function loadUsers() {
                         try {
-                            const res = await fetch('/admin/users');
+                            const res = await fetch(BACKEND_URL + '/admin/users');
                             const data = await res.json();
                             
                             if (data.stats) {
@@ -844,7 +848,7 @@ app.get('/', (req, res) => {
                             
                             // Try total messages
                             try {
-                                const healthRes = await fetch('http://localhost:8000/admin/health');
+                                const healthRes = await fetch(BACKEND_URL + '/admin/health');
                                 const healthData = await healthRes.json();
                                 const totalMessagesEl = document.getElementById('totalMessages');
                                 if (totalMessagesEl) totalMessagesEl.textContent = healthData.database?.total_messages || '-';

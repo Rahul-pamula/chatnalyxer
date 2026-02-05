@@ -31,6 +31,13 @@ class User(Base):
     whatsapp_qr_code = Column(Text, nullable=True)
     whatsapp_pairing_code = Column(String(8), nullable=True)
 
+    # Terms / Privacy / Data permissions
+    consent_accepted = Column(Boolean, default=False, nullable=False)
+    consent_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    consent_version = Column(String(50), default="v1", nullable=False)
+    consent_whatsapp = Column(Boolean, default=False, nullable=False)
+    consent_email = Column(Boolean, default=False, nullable=False)
+
     # relationship - specify foreign_keys to avoid ambiguity with receiver_user_id
     messages = relationship("Message", back_populates="sender", foreign_keys="Message.sender_id")
     groups = relationship("GroupMember", back_populates="user")

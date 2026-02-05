@@ -12,6 +12,7 @@ from datetime import datetime
 from ..database import get_db
 from ..models import User
 from ..deps import get_current_user
+from .consent import require_consent_for_whatsapp
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
@@ -30,6 +31,8 @@ async def connect_whatsapp(
     - Updates user.whatsapp_connected = True
     """
     try:
+        require_consent_for_whatsapp(current_user)
+
         # ALWAYS stop any existing session first to get a fresh QR code
         # This prevents the "1/3, 2/3, 3/3" QR limit issue
         if current_user.whatsapp_connected:
@@ -88,6 +91,8 @@ async def disconnect_whatsapp(
     Stop WhatsApp session and clean up all state
     """
     try:
+        require_consent_for_whatsapp(current_user)
+
         if not current_user.whatsapp_connected:
             return {"success": True, "message": "Already disconnected"}
 
@@ -123,12 +128,15 @@ async def disconnect_whatsapp(
 
 @router.get("/status")
 async def get_whatsapp_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Get WhatsApp connection status and QR code if available
     """
     try:
+        require_consent_for_whatsapp(current_user)
+
         # Always try to get QR code if user has whatsapp_connected = True
         if current_user.whatsapp_connected:
             # Try to get QR code directly

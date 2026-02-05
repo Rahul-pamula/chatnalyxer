@@ -25,6 +25,14 @@ function InitialLayout() {
         router.replace('/profile-setup');
       }
     } else if (user && user.is_profile_complete) {
+      const consentAccepted = (user as any)?.consent_accepted === true;
+      const inConsent = segments[0] === 'consent';
+
+      if (!consentAccepted && !inConsent && !inAuthGroup) {
+        router.replace('/consent');
+        return;
+      }
+
       // If profile IS complete, but we are on profile-setup, send them to dashboard
       const inSetup = segments[0] === 'profile-setup';
       if (inSetup) {
@@ -73,6 +81,7 @@ function InitialLayout() {
         <Stack.Screen name="register" options={{ headerShown: false }} />
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+        <Stack.Screen name="consent" options={{ headerShown: false }} />
         <Stack.Screen name="setup" options={{ headerShown: false }} />
         <Stack.Screen name="groups" options={{ title: "Select Groups" }} />
         <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />

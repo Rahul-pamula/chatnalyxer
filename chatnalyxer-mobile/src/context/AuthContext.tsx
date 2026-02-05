@@ -12,6 +12,11 @@ type User = {
   profile_data?: any;
   is_profile_complete?: boolean;
   email?: string | null;
+  consent_accepted?: boolean;
+  consent_accepted_at?: string | null;
+  consent_version?: string;
+  consent_whatsapp?: boolean;
+  consent_email?: boolean;
 } | null;
 type AuthContextType = {
   token: string | null;
@@ -37,11 +42,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
+        const userData: any = await response.json();
+        setUser(userData as any);
         await AsyncStorage.setItem("user", JSON.stringify(userData));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to refresh user:", error);
     }
   };
@@ -61,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               headers: { "Authorization": `Bearer ${saved}` }
             });
             if (response.ok) {
-              const userData = await response.json();
-              setUser(userData);
+              const userData: any = await response.json();
+              setUser(userData as any);
               await AsyncStorage.setItem("user", JSON.stringify(userData));
             } else if (savedUser) {
               setUser(JSON.parse(savedUser));
@@ -112,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error: any = await response.json();
       throw new Error(error.detail || "OTP verification failed");
     }
 
@@ -128,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error: any = await response.json();
       throw new Error(error.detail || "Login failed");
     }
 

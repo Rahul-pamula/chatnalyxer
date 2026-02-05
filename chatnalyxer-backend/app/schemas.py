@@ -27,6 +27,23 @@ class UserCreate(UserBase):
     email: Optional[EmailStr] = None
 
 
+# ----- Consent / Terms -----
+
+
+class ConsentStatus(BaseModel):
+    consent_accepted: bool
+    consent_accepted_at: Optional[datetime] = None
+    consent_version: str
+    consent_whatsapp: bool
+    consent_email: bool
+
+
+class ConsentAcceptRequest(BaseModel):
+    consent_version: str = "v1"
+    consent_whatsapp: bool = True
+    consent_email: bool = True
+
+
 class UserLogin(UserBase):
     pass  # Only phone_number needed for OTP login
 
@@ -41,6 +58,12 @@ class UserOut(BaseModel):
     profile_data: Optional[Dict[str, Any]] = {}
     is_profile_complete: bool = False  # New field to track onboarding status
 
+    consent_accepted: bool = False
+    consent_accepted_at: Optional[datetime] = None
+    consent_version: str = "v1"
+    consent_whatsapp: bool = False
+    consent_email: bool = False
+
     @classmethod
     def from_orm(cls, obj):
         # Populate user_type and profile_data from user_profile relationship
@@ -52,7 +75,13 @@ class UserOut(BaseModel):
             "email": obj.email,
             "user_type": "CASUAL",
             "profile_data": {},
-            "is_profile_complete": False
+            "is_profile_complete": False,
+
+            "consent_accepted": bool(getattr(obj, 'consent_accepted', False)),
+            "consent_accepted_at": getattr(obj, 'consent_accepted_at', None),
+            "consent_version": getattr(obj, 'consent_version', 'v1') or 'v1',
+            "consent_whatsapp": bool(getattr(obj, 'consent_whatsapp', False)),
+            "consent_email": bool(getattr(obj, 'consent_email', False)),
         }
         
         # Get data from user_profile relationship if it exists
