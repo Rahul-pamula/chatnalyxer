@@ -1,11 +1,12 @@
-import * as Notifications from 'expo-notifications';
+// import * as Notifications from 'expo-notifications'; // ❌ Removed to avoid SDK 53 side-effects
 import { BASE_URL } from '../config';
 
 /**
  * Handle notification action responses (Snooze/Dismiss)
  */
-export function setupNotificationActionHandlers() {
+export async function setupNotificationActionHandlers() {
     // Listen for notification responses (when user taps action buttons)
+    const Notifications = await import('expo-notifications');
     Notifications.addNotificationResponseReceivedListener(async (response) => {
         const { actionIdentifier, notification } = response;
         const notificationData = notification.request.content.data;
@@ -15,7 +16,7 @@ export function setupNotificationActionHandlers() {
         // Handle Action Buttons
         if (actionIdentifier === 'snooze') {
             await handleSnooze(notificationData);
-        } else if (actionIdentifier === 'dismiss') {
+        } else if (actionIdentifier === 'dismiss' || actionIdentifier === 'stop') {
             await handleDismiss(notificationData);
         }
 
@@ -38,21 +39,30 @@ export function setupNotificationActionHandlers() {
 
 
 /**
- * Snooze alarm for 5 minutes
+ * Snooze alarm for 5 minutes (Max 3 times)
  */
 async function handleSnooze(data: any) {
     try {
         const { notification_id, event_id } = data;
+        let snoozeCount = data.snoozeCount || 0;
 
-        console.log('😴 Snoozing alarm for 5 minutes...');
+        if (snoozeCount >= 3) {
+            console.log('🛑 Max snooze limit reached! Stopping alarm.');
+            await handleDismiss(data);
+            return;
+        }
+
+        snoozeCount++;
+        console.log(`😴 Snoozing alarm for 5 minutes... (Snooze # ${snoozeCount}/3)`);
 
         // Schedule a new notification in 5 minutes
+        const Notifications = await import('expo-notifications');
         await Notifications.scheduleNotificationAsync({
             content: {
                 title: '⏰ Alarm (Snoozed)',
-                body: 'Your snoozed alarm is ringing!',
+                body: `Your alarm will ring again in 5 minutes. (${3 - snoozeCount} snoozes left)`,
                 sound: 'alarm.mp3',
-                data: data,
+                data: { ...data, snoozeCount },
                 categoryIdentifier: 'alarm_actions',
             },
             trigger: {

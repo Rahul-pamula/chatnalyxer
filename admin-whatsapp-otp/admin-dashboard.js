@@ -29,10 +29,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Try to load from sibling backend directory first
-dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
-// Also try local .env for overrides
+// Load local .env first (so it takes precedence)
 dotenv.config();
+// Then load from sibling backend directory, but don't override existing vars
+dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
 
 // Fix for Render/Heroku protocols (postgres:// -> postgresql://)
 if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://")) {
@@ -42,7 +42,8 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://
 // Database Connection
 const { Pool } = await import('pg');
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer'
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer',
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('supabase') ? { rejectUnauthorized: false } : false
 });
 
 // Admin session storage (DB-based)
@@ -716,7 +717,7 @@ app.get('/', (req, res) => {
 
                     async function loadAdminWhatsApp() {
                         try {
-                            const res = await fetch(ADMIN_WHATSAPP_URL + '/status');
+                            const res = await fetch('/admin/whatsapp/status');
                             const data = await res.json();
                             const section = document.getElementById('adminWhatsApp');
                             
@@ -793,7 +794,7 @@ app.get('/', (req, res) => {
                         isConnecting = true;
                         loadAdminWhatsApp(); // Show loader immediately
                         try {
-                            const res = await fetch(ADMIN_WHATSAPP_URL + '/connect', { method: 'POST' });
+                            const res = await fetch('/admin/whatsapp/connect', { method: 'POST' });
                             const data = await res.json();
                             if(!data.success) throw new Error(data.message);
                             setTimeout(loadAdminWhatsApp, 1500);
@@ -806,14 +807,14 @@ app.get('/', (req, res) => {
 
                     async function disconnectWhatsApp() {
                         if (!confirm('Are you sure you want to disconnect the admin WhatsApp?')) return;
-                        await fetch(ADMIN_WHATSAPP_URL + '/disconnect', { method: 'POST' });
+                        await fetch('/admin/whatsapp/disconnect', { method: 'POST' });
                         loadAdminWhatsApp();
                     }
 
                     async function reconnectWhatsApp() {
                         isConnecting = true;
                         loadAdminWhatsApp();
-                        await fetch(ADMIN_WHATSAPP_URL + '/reconnect', { method: 'POST' });
+                        await fetch('/admin/whatsapp/reconnect', { method: 'POST' });
                         setTimeout(loadAdminWhatsApp, 2000);
                     }
 
@@ -821,7 +822,7 @@ app.get('/', (req, res) => {
                     async function disconnectUser(userId) {
                         if(!confirm('Disconnect and stop processing for User ID ' + userId + '?')) return;
                          try {
-                             const res = await fetch(BACKEND_URL + '/admin/users/' + userId + '/disconnect', { method: 'POST' });
+                             const res = await fetch('/admin/users/' + userId + '/disconnect', { method: 'POST' });
                              const data = await res.json();
                              if (data.success) {
                                 loadUsers(); // Refresh list
@@ -835,7 +836,7 @@ app.get('/', (req, res) => {
 
                     async function loadUsers() {
                         try {
-                            const res = await fetch(BACKEND_URL + '/admin/users');
+                            const res = await fetch('/admin/users');
                             const data = await res.json();
                             
                             if (data.stats) {
@@ -848,7 +849,7 @@ app.get('/', (req, res) => {
                             
                             // Try total messages
                             try {
-                                const healthRes = await fetch(BACKEND_URL + '/admin/health');
+                                const healthRes = await fetch('/admin/health');
                                 const healthData = await healthRes.json();
                                 const totalMessagesEl = document.getElementById('totalMessages');
                                 if (totalMessagesEl) totalMessagesEl.textContent = healthData.database?.total_messages || '-';

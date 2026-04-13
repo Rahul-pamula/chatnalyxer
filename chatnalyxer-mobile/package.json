@@ -66,5 +66,8 @@
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
   },
+  "overrides": {
+    "@types/react": "~18.2.79"
+  },
   "private": true
 }

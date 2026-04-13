@@ -2,13 +2,25 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
+import { AlarmProvider, useAlarm } from "../src/context/AlarmContext";
+import { AlarmModal } from "../src/components/AlarmModal";
+// import * as Notifications from 'expo-notifications'; // ❌ Removed to avoid SDK 53 side-effects
+
+// Fix for web globals
+declare const window: any;
 
 function InitialLayout() {
   const { user, loading, token } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const { triggerAlarm } = useAlarm();
 
   useEffect(() => {
+    // Bind to window for manual testing from other screens
+    if (typeof window !== 'undefined') {
+      (window as any).triggerAlarm = triggerAlarm;
+    }
+
     if (loading) return;
 
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'signup';
@@ -47,31 +59,60 @@ function InitialLayout() {
 
   // Register for push notifications when user is logged in
   useEffect(() => {
+    let bgSubscription: any = null;
+
     if (user && token) {
-      import("../src/services/notifications").then(({ registerForPushNotificationsAsync, savePushToken }) => {
+      // 1. Initial configuration
+      import("../src/services/notifications").then(({ registerForPushNotificationsAsync, savePushToken, isExpoGo, setupNotificationHandler }) => {
+        setupNotificationHandler();
+
+        // Always call registration to get Permissions and Setup Channels,
+        // token registration will handle Expo Go internally.
         registerForPushNotificationsAsync().then(pushToken => {
-          if (pushToken) {
+          if (pushToken && !isExpoGo()) {
             savePushToken(pushToken, token);
           }
         });
       });
 
-      // Setup notification action handlers (snooze/dismiss)
+      // 2. Setup action handlers
       import("../src/services/notificationActions").then(({ setupNotificationActionHandlers }) => {
         setupNotificationActionHandlers();
       });
 
-      // START NOTIFICATION POLLING (checks backend every 30 secs)
+      // 3. Start polling
       import("../src/services/notificationPollingService").then(({ startNotificationPolling }) => {
         startNotificationPolling(token);
         console.log('🔔 Notification polling started');
       });
+
+      // 4. Foreground listener
+      import('expo-notifications').then(Notifications => {
+        import("../src/services/notifications").then(({ isExpoGo }) => {
+          // We NEED the listener even in Expo Go for foreground alarms!
+          bgSubscription = Notifications.addNotificationReceivedListener(notification => {
+            const title = String(notification.request.content.title || '').toLowerCase();
+            const body = String(notification.request.content.body || '').toLowerCase();
+            
+            const is15Min = (title.includes('15') && (title.includes('min') || title.includes('m '))) ||
+                            (body.includes('15') && (body.includes('min') || body.includes('m ')));
+
+            if (is15Min) {
+              console.log('🚨 FOREGROUND ALARM TRIGGERED 🚨');
+              triggerAlarm(notification.request.content.title || 'Urgent Reminder');
+            }
+          });
+        });
+      });
     } else {
-      // Stop polling when user logs out
       import("../src/services/notificationPollingService").then(({ stopNotificationPolling }) => {
         stopNotificationPolling();
       });
     }
+
+    return () => {
+      if (bgSubscription) bgSubscription.remove();
+    };
   }, [user, token]);
 
   return (
@@ -91,6 +132,7 @@ function InitialLayout() {
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="trash" options={{ headerShown: false }} />
       </Stack>
+      <AlarmModal />
     </View>
   );
 }
@@ -98,7 +140,9 @@ function InitialLayout() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <InitialLayout />
+      <AlarmProvider>
+        <InitialLayout />
+      </AlarmProvider>
     </AuthProvider>
   );
 }

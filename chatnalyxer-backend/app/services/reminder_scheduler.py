@@ -61,6 +61,8 @@ class ReminderScheduler:
                 reminders.append({'hours_before': 6, 'label': '6 hours before'})
             if total_hours > 1:
                 reminders.append({'hours_before': 1, 'label': '1 hour before'})
+            if total_hours > 0.25:
+                reminders.append({'hours_before': 0.25, 'label': '15 minutes before'})
         
         # For meetings - just-in-time
         elif event_type == 'meeting':

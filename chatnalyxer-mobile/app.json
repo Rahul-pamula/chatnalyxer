@@ -27,7 +27,9 @@
       "versionCode": 1,
       "permissions": [
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "edgeToEdgeEnabled": true
     },
@@ -49,7 +51,17 @@
       ],
       "expo-audio",
       "@react-native-community/datetimepicker",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/chatnalyxer-logo.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/sounds/alarm.mp3"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -59,9 +71,8 @@
         "appRoot": "app"
       },
       "eas": {
-        "projectId": "b6d7e0b5-b04b-4acb-821b-4059a54e214b"
+        "projectId": "db2028e9-9e10-4807-80b2-34b05256c7d1"
       }
-    },
-    "owner": "rahul_pamula"
+    }
   }
 }

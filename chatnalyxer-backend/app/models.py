@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float, func, Boolean, Date, Time
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from .database import Base
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
@@ -18,7 +18,7 @@ class User(Base):
     
     # Multi-Persona Fields
     user_type = Column(String(50), default="CASUAL", nullable=False) # STUDENT, FACULTY, CASUAL
-    profile_data = Column(JSONB, default={}, nullable=True) # Dynamic profile details
+    profile_data = Column(JSON, default={}, nullable=True) # Dynamic profile details
     
     # Push Notifications
     push_token = Column(String(255), nullable=True) # Expo push token
@@ -61,7 +61,7 @@ class UserProfile(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     user_type = Column(String(50), default="CASUAL", nullable=False)
-    profile_data = Column(JSONB, default={}, nullable=True)
+    profile_data = Column(JSON, default={}, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -134,7 +134,7 @@ class UserInteraction(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     interaction_type = Column(String(50), nullable=False)  # notification_opened, time_confirmed, app_opened, etc.
-    interaction_data = Column(JSONB, default={})  # Additional context
+    interaction_data = Column(JSON, default={})  # Additional context
     
     # Related entities
     notification_id = Column(Integer, ForeignKey("notifications.id", ondelete="SET NULL"), nullable=True)
@@ -302,9 +302,9 @@ class UserContext(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    context_data = Column(JSONB, default={})
-    preferences = Column(JSONB, default={})
-    important_contacts = Column(JSONB, default=[])
+    context_data = Column(JSON, default={})
+    preferences = Column(JSON, default={})
+    important_contacts = Column(JSON, default=[])
     last_updated = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -324,7 +324,7 @@ class AnalyzedMessage(Base):
     ai_summary = Column(Text)
     priority = Column(String(20)) # high, medium, low
     category = Column(String(50)) # work, personal, urgent, etc
-    action_items = Column(JSONB, default=[])
+    action_items = Column(JSON, default=[])
     deadline = Column(DateTime(timezone=True), nullable=True)
     is_important = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -358,7 +358,7 @@ class AIConversation(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     user_message = Column(Text, nullable=False)
     ai_response = Column(Text, nullable=False)
-    context_used = Column(JSONB, default={})
+    context_used = Column(JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="ai_conversations")

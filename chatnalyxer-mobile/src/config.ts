@@ -7,8 +7,7 @@ const isWeb = Platform.OS === 'web';
 
 export const BASE_URL = isWeb
     ? 'http://localhost:8000'  // For web testing
-    : 'http://172.21.224.32:8000';  // For mobile device
-
+    : 'http://localhost:8000';// For USB debugging (already handled by adb reverse)
 export const OTP_URL = `${BASE_URL}/auth/send-otp`;
 export const QR_URL = `${BASE_URL}/qr`;
 

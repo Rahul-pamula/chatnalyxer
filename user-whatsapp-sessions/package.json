@@ -4,7 +4,7 @@
     "main": "otp-service.js",
     "type": "module",
     "scripts": {
-        "start": "node otp-service.js",
+        "start": "node session-manager.js",
         "start-user": "node index.cjs"
     },
     "dependencies": {

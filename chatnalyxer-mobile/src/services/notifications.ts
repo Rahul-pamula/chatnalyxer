@@ -1,25 +1,44 @@
-import * as Notifications from 'expo-notifications';
+// import * as Notifications from 'expo-notifications'; // ❌ Removed to avoid SDK 53 side-effects
 import * as Device from 'expo-device';
 import { Platform, Alert } from 'react-native';
 import Constants from 'expo-constants';
 import { BASE_URL } from '../config';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-    }),
-});
+// Internal helper to get Notifications library without triggering auto-registration
+async function getNotifications() {
+    return await import('expo-notifications');
+}
+
+/**
+ * Configure notification behavior dynamically
+ */
+export async function setupNotificationHandler() {
+    // No longer skipping in Expo Go - we need the handler for local alarms
+    const Notifications = await getNotifications();
+    Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+        }),
+    });
+}
+
+/**
+ * Check if running in Expo Go
+ */
+export function isExpoGo() {
+    return Constants.appOwnership === 'expo';
+}
 
 /**
  * Register for push notifications and get Expo push token
  */
 export async function registerForPushNotificationsAsync() {
+    const Notifications = await getNotifications();
     let token;
 
     if (Platform.OS === 'android') {
@@ -55,17 +74,18 @@ export async function registerForPushNotificationsAsync() {
 
     // Register notification action categories (iOS + Android only, not supported on web)
     if (Platform.OS !== 'web') {
+        const Notifications = await getNotifications();
         await Notifications.setNotificationCategoryAsync('alarm_actions', [
             {
-                identifier: 'snooze',
-                buttonTitle: '😴 Snooze 5 min',
+                identifier: 'stop',
+                buttonTitle: '⏹️ Stop',
                 options: {
                     opensAppToForeground: false,
                 },
             },
             {
-                identifier: 'dismiss',
-                buttonTitle: '✅ Dismiss',
+                identifier: 'snooze',
+                buttonTitle: '😴 Snooze 5 min',
                 options: {
                     opensAppToForeground: false,
                 },
@@ -74,6 +94,7 @@ export async function registerForPushNotificationsAsync() {
     }
 
     if (Device.isDevice) {
+        const Notifications = await getNotifications();
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
 
@@ -132,6 +153,7 @@ export async function savePushToken(token: string, userToken: string) {
  * Schedule a local notification (for testing or immediate alert)
  */
 export async function scheduleLocalNotification(title: string, body: string, seconds: number = 2, channelId: string = 'high_priority') {
+    const Notifications = await getNotifications();
     await Notifications.scheduleNotificationAsync({
         content: {
             title,
@@ -164,6 +186,7 @@ export async function scheduleDeadlineReminders(deadline: Date, title: string) {
         { label: '1d Before', ms: 24 * 60 * 60 * 1000 }
     ];
 
+    const Notifications = await getNotifications();
     for (const interval of intervals) {
         const triggerTime = deadline.getTime() - interval.ms;
         const triggerDate = new Date(triggerTime);

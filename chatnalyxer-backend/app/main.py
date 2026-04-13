@@ -113,6 +113,27 @@ app.include_router(speech.router) # NEW: Voice assistant endpoints
 from app.routers import test_events
 app.include_router(test_events.router)
 
+from app.database import get_db
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends
+from app.models import User
+from app.services.notification_service import send_expo_push_notification
+
+@app.get("/test-notification")
+async def test_notification_endpoint(db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.push_token != None).first()
+    if not user:
+        return {"error": "No user found with a push token"}
+        
+    success = await send_expo_push_notification(
+        push_token=user.push_token,
+        title="Test Notification 🔔",
+        body="If you see this, the notification system is working perfectly!",
+        data={"test": True}
+    )
+    
+    return {"success": success, "user_id": user.id, "token": user.push_token}
+
 
 # Start notification scheduler (optional)
 @app.on_event("startup")

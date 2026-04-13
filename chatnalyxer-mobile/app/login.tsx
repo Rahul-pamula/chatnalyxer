@@ -7,8 +7,12 @@ import { colors, shadows } from "../src/theme/colors";
 
 export default function Login() {
   const router = useRouter();
-  const { signInWithPassword } = useAuth();
+  const { signInWithPassword, signOut } = useAuth();
 
+  React.useEffect(() => {
+    // Clear any existing automated session when landing on the login page
+    signOut();
+  }, []);
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +29,7 @@ export default function Login() {
       if (!password) return setErr("Please enter your password");
 
       setLoading(true);
-      await signInWithPassword(`+91${phoneNumber}`, password);
+      await signInWithPassword(`+91${phoneNumber}`, password.trim());
       router.replace("/setup");
 
     } catch (error: any) {
@@ -88,6 +92,8 @@ export default function Login() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
                 <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />

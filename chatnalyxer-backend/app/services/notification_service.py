@@ -3,7 +3,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from typing import List
-import httpx
+
 import logging
 import os
 

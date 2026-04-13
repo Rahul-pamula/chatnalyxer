@@ -102,7 +102,7 @@ class CommunicationEngine:
         if event_type == 'exam':
             base_intervals = [24, 3, 1, 0.25]  # 1 day, 3h, 1h, 15min
         elif event_type == 'assignment':
-            base_intervals = [72, 24, 6, 1]  # 3 days, 1 day, 6h, 1h
+            base_intervals = [72, 24, 6, 1, 0.25]  # 3 days, 1 day, 6h, 1h, 15min
         elif event_type == 'meeting':
             base_intervals = [1, 0.25]  # 1h, 15min
         else:
@@ -113,8 +113,8 @@ class CommunicationEngine:
             # Add more reminders
             return base_intervals
         elif frequency == 'medium':
-            # Keep as is
-            return base_intervals[:-1] if len(base_intervals) > 2 else base_intervals
+            # Keep as is, but ensure critical 15min reminder is always kept
+            return base_intervals
         else:  # low
             # Reduce reminders
             return base_intervals[:2] if len(base_intervals) > 2 else [base_intervals[0]]

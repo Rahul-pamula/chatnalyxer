@@ -1,88 +1,34 @@
-#!/usr/bin/env python3
-"""
-Test Supabase database connection
-"""
-import os
+import psycopg2
 import sys
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+def test_connection(url, label):
+    print(f"\n--- Testing {label} ---")
+    print(f"URL: {url.split('@')[-1]}") # Hide password for logs
+    try:
+        conn = psycopg2.connect(url, connect_timeout=5)
+        print(f"OK Success connecting to {label}!")
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"ERROR Failed: {e}")
+        return False
 
-load_dotenv()
+# Base credentials from user's .env
+USER = "postgres.hxbwhzkjvosdrksnrgwg"
+PASSWORD = "@textNLytixs123"
+PROJECT_REF = "hxbwhzkjvosdrksnrgwg"
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+# URLs to test
+pooler_url = f"postgresql://{USER}:%40textNLytixs123@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
+# Standard direct host: db.[PROJECT_REF].supabase.co
+direct_url = f"postgresql://postgres:{PASSWORD}@db.{PROJECT_REF}.supabase.co:5432/postgres"
 
-if not DATABASE_URL:
-    print("❌ DATABASE_URL not found in .env file")
-    sys.exit(1)
+res1 = test_connection(pooler_url, "Port 6543 (Pooler)")
+res2 = test_connection(direct_url, "Port 5432 (Direct)")
 
-print("🔍 Testing Supabase Connection...")
-print(f"📍 Database: {DATABASE_URL.split('@')[1].split('/')[0] if '@' in DATABASE_URL else 'Unknown'}")
-
-# Fix protocol
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    print("✅ Fixed postgres:// -> postgresql://")
-
-# Add SSL mode
-if "supabase" in DATABASE_URL and "sslmode" not in DATABASE_URL:
-    delimiter = "&" if "?" in DATABASE_URL else "?"
-    DATABASE_URL += f"{delimiter}sslmode=require"
-    print("✅ Added sslmode=require")
-
-# Create engine with proper settings
-try:
-    print("\n🔌 Creating database engine...")
-    engine = create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        pool_size=5,
-        max_overflow=10,
-        connect_args={
-            "sslmode": "require",
-            "connect_timeout": 10
-        }
-    )
-    
-    print("✅ Engine created successfully")
-    
-    # Test connection
-    print("\n🧪 Testing connection...")
-    with engine.connect() as conn:
-        result = conn.execute(text("SELECT 1"))
-        print("✅ Connection successful!")
-        
-        # Try to get version
-        result = conn.execute(text("SELECT version()"))
-        version = result.fetchone()[0]
-        print(f"📊 PostgreSQL version: {version.split(',')[0]}")
-        
-        # Check if tables exist
-        result = conn.execute(text("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public'
-        """))
-        tables = [row[0] for row in result.fetchall()]
-        
-        if tables:
-            print(f"\n📋 Found {len(tables)} tables:")
-            for table in tables:
-                print(f"   - {table}")
-        else:
-            print("\n⚠️  No tables found. You may need to run migrations.")
-    
-    print("\n✅ All tests passed! Database is ready.")
-    
-except Exception as e:
-    print(f"\n❌ Connection failed!")
-    print(f"Error: {str(e)}")
-    print("\n🔧 Troubleshooting tips:")
-    print("1. Check if your Supabase project is active")
-    print("2. Verify the DATABASE_URL in .env is correct")
-    print("3. Check if your IP is allowed in Supabase settings")
-    print("4. Ensure you have internet connectivity")
-    sys.exit(1)
+if not res1 and not res2:
+    print("\nWARNING Both connection methods failed. This strongly suggests your Supabase project is PAUSED or the Reference ID is incorrect.")
+elif res2:
+    print("\nINFO Direct connection (5432) works! Recommend updating .env to use this.")
+elif res1:
+    print("\nINFO Pooler connection (6543) works! The earlier crash might have been a transient network issue.")

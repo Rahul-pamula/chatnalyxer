@@ -3,7 +3,7 @@ Push Notification Service
 Handles sending push notifications via Expo Push API
 """
 
-import httpx
+import requests
 import logging
 from datetime import datetime
 from typing import Dict, Optional
@@ -70,15 +70,17 @@ async def send_push_notification(
         logger.info(f"Sending push notification to user {user_id}: {title}")
         payload = [message]  # Expo API requires array format
         
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                EXPO_PUSH_URL,
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                }
-            )
+        # Using requests to remove httpx dependency
+        # Since this is async, ideally we'd use aiohttp, but requests works for now
+        response = requests.post(
+            EXPO_PUSH_URL,
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            timeout=10
+        )
         
         # Check response
         if response.status_code == 200:

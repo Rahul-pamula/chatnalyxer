@@ -65,3 +65,13 @@ web-build/
 .render/
 render-env-variables.txt
 .env
+
+# Debug and Test scripts
+chatnalyxer-backend/check*.py
+chatnalyxer-backend/test_*.py
+chatnalyxer-backend/out*.txt
+chatnalyxer-backend/*.txt
+chatnalyxer-backend/api_err.txt
+chatnalyxer-backend/debug_expo.py
+chatnalyxer-backend/recent_notifs.txt
+admin-whatsapp-otp/test_db.js

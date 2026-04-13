@@ -40,7 +40,7 @@ grpcio-status==1.71.2
 # Azure AI Services (Primary)
 openai==1.54.5
 azure-ai-vision-imageanalysis==1.0.0b2
-azure-core==1.29.5
+azure-core>=1.30.0
 
 # Groq AI (High Speed Alternative)
 groq==0.5.0
@@ -49,7 +49,7 @@ groq==0.5.0
 azure-ai-documentintelligence==1.0.0b1
 azure-ai-vision==0.15.1b1
 azure-cognitiveservices-speech==1.40.0
-azure-core==1.32.0
+# azure-core
 azure-identity==1.19.0
 pymupdf==1.25.1
 

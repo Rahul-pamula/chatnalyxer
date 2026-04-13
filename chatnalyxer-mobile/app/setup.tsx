@@ -116,14 +116,22 @@ export default function SetupScreen() {
             setIsPolling(true);
             setCountdown(60);
             setWhatsappStatusMessage('Generating QR code...');
+
+            // Add a small delay buffer to ensure smooth UI transition and prevent rapid-fire request glitches
+            await new Promise(resolve => setTimeout(resolve, 800));
+
             const response = await fetch(`${BASE_URL}/whatsapp/connect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             });
-            if (!response.ok) { throw new Error('Failed to start WhatsApp'); }
-        } catch (error) {
-            console.error('Error starting WhatsApp:', error);
-            Alert.alert('Error', 'Failed to generate connection code');
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Backend returned ${response.status}:`, errorText);
+                throw new Error(`Failed to start WhatsApp: ${errorText}`);
+            }
+        } catch (error: any) {
+            console.error('Error starting WhatsApp:', error.message || error);
+            Alert.alert('Connection Error', error.message || 'Failed to generate connection code');
             setIsGeneratingQR(false);
             setWhatsappStatusMessage('');
         }

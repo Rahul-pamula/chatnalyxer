@@ -53,7 +53,7 @@ export default function Signup() {
             if (!username.trim()) return setErr("Please enter your full name");
             if (phoneNumber.length !== 10) return setErr("Please enter a valid 10-digit mobile number");
             if (password.length < 6) return setErr("Password must be at least 6 characters");
-            if (password !== confirmPassword) return setErr("Passwords do not match");
+            if (password.trim() !== confirmPassword.trim()) return setErr("Passwords do not match");
 
             setLoading(true);
 
@@ -219,6 +219,8 @@ export default function Signup() {
                                         value={password}
                                         onChangeText={setPassword}
                                         secureTextEntry={!showPassword}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
                                     />
                                     <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 10 }}>
                                         <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.textTertiary} />
@@ -238,6 +240,8 @@ export default function Signup() {
                                         value={confirmPassword}
                                         onChangeText={setConfirmPassword}
                                         secureTextEntry={!showPassword}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
                                     />
                                 </View>
                             </View>

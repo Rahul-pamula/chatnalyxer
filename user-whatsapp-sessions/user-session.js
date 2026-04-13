@@ -30,7 +30,8 @@ const __dirname = path.dirname(__filename);
 
 // Load env from backend
 dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
-dotenv.config(); // Local overrides
+// Explicitly override backend variables with local ones (like DATABASE_URL)
+dotenv.config({ override: true });
 
 // Fix for Render/Heroku protocols
 if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://")) {
@@ -117,13 +118,10 @@ async function connectToWhatsApp(isManualRequest = false) {
             connectionString = connectionString.replace('localhost', '127.0.0.1');
         }
 
-        // Use custom Postgres auth state with dynamic session ID
-        // Fix: Add SSL config for cloud databases (Render/Azure)
-        const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+        // Fix: Explicitly disable SSL for local development environments to prevent "server does not support SSL connections" errors.
         const poolConfig = {
             connectionString,
-            // Only enable SSL for remote databases, and allow self-signed certs (needed for many cloud providers)
-            ssl: isLocal ? false : { rejectUnauthorized: false }
+            ssl: false // Disable SSL for all connections by default in local dev
         };
 
         const pool = new Pool(poolConfig);
@@ -770,11 +768,9 @@ app.post('/validate-session', async (req, res) => {
                 // Fallback manual DB clear if sock isn't ready
                 const { Pool } = await import('pg');
                 const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
-                // Fix: Add SSL config for cloud databases (Render/Azure)
-                const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
                 const poolConfig = {
                     connectionString,
-                    ssl: isLocal ? false : { rejectUnauthorized: false }
+                    ssl: false
                 };
                 const pool = new Pool(poolConfig);
                 await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);

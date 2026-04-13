@@ -109,21 +109,26 @@ def create_whatsapp_message(
     except ImportError:
         can_use_ai = True  # If rate limiter not available, allow AI calls
 
+    # Convert timestamp string to datetime if needed once
+    from datetime import datetime
+    import pytz
+    
+    if isinstance(payload.timestamp, str):
+        created_at = datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00'))
+    else:
+        created_at = payload.timestamp
+        
+    # Ensure created_at is timezone aware (assume UTC if naive)
+    if created_at.tzinfo is None:
+        created_at = pytz.utc.localize(created_at)
+        
     if ai_analyzer and can_use_ai:
         try:
             # 🧠 Few-Shot Learning: Fetch last 5 manual overrides
-            # These are messages the user corrected, which helps the AI learn.
             user_examples = db.query(models.Message).filter(
                 models.Message.is_manual_override == True,
                 models.Message.deleted_at.is_(None)
             ).order_by(models.Message.created_at.desc()).limit(5).all()
-
-            # Convert timestamp string to datetime if needed
-            from datetime import datetime
-            if isinstance(payload.timestamp, str):
-                created_at = datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00'))
-            else:
-                created_at = payload.timestamp
 
             # Get user profile to determine user type (STUDENT/CASUAL/PROFESSIONAL)
             user_profile = db.query(models.UserProfile).filter(
@@ -133,19 +138,8 @@ def create_whatsapp_message(
             
             print(f"👤 Analyzing message for {user_type} user...")
 
-            # CRITICAL FIX: Convert UTC timestamp to IST for AI Context
-            # Gemini thinks "now" is the timestamp we send. If we send UTC (4pm), 
-            # and message says "in 10 mins", Gemini sets deadline to 4:10pm.
-            # User in IST (9:30pm) sees 4:10pm deadline (past).
-            # We must send IST time to AI so it calculates 9:40pm.
-            import pytz
+            # Use IST timezone for Gemini
             ist_tz = pytz.timezone('Asia/Kolkata')
-            
-            # Ensure created_at is timezone aware (assume UTC if naive)
-            if created_at.tzinfo is None:
-                created_at = pytz.utc.localize(created_at)
-            
-            # Convert to IST
             created_at_ist = created_at.astimezone(ist_tz)
             print(f"🕒 Converted AI Context Time: {created_at} (UTC) -> {created_at_ist} (IST)")
 
@@ -153,7 +147,7 @@ def create_whatsapp_message(
             ai_results = ai_analyzer.analyze_message_with_media(
                 content=payload.content,
                 created_at=created_at_ist,  # Pass IST time
-                user_type=user_type,  # NEW: User context for priority detection
+                user_type=user_type,  
                 media_url=payload.media_url,
                 user_examples=user_examples
             )
@@ -162,10 +156,10 @@ def create_whatsapp_message(
             print(f"WARNING: AI Analysis failed: {e}")
             # Fallback to ML analyzer if AI fails
             if ml_analyzer:
-                ai_results = ml_analyzer.analyze_message(payload.content, payload.timestamp)
+                ai_results = ml_analyzer.analyze_message(payload.content, created_at)
     elif ml_analyzer:
         # Fallback if AI analyzer not loaded
-        ai_results = ml_analyzer.analyze_message(payload.content, payload.timestamp)
+        ai_results = ml_analyzer.analyze_message(payload.content, created_at)
 
     # =========================================================================
     # OPTIMIZATION: SKIP STORAGE FOR "LOW" PRIORITY (CASUAL) MESSAGES
@@ -174,21 +168,8 @@ def create_whatsapp_message(
     print(f"🔍 Checking Priority: '{priority_level}' (Raw: {ai_results.get('priority_level')})")
 
     if priority_level == 'LOW':
-        print(f"🗑️ Skipping DB storage for LOW priority message: {payload.content[:30]}...")
-        # Return a dummy response so frontend/script doesn't crash
-        return models.Message(
-            id=0, # Dummy ID
-            content=payload.content,
-            group_id=group.id,
-            sender_id=default_user.id,
-            sender=default_user,       # Required for Pydantic serialization
-            created_at=datetime.now(),
-            priority_level="LOW",
-            is_priority=False,
-            message_category="ignored",
-            is_manual_override=False   # Required field
-        )
-
+        print(f"ℹ️ Saving LOW priority message: {payload.content[:30]}...")
+        # Removed the dummy return block so it saves to the DB below.
     msg = models.Message(
         content=payload.content,
         group_id=group.id,
@@ -292,8 +273,7 @@ def create_whatsapp_message(
             db.add(new_event)
             db.flush() # Generate ID for new_event
             
-            # 🔔 NEW: Create a Notification record so it appears in "Notifications" tab immediately
-            # Schedule reminder for 1 hour before deadline
+            # 🔔 NEW: Create multiple Notification records for deadlines
             from datetime import timedelta
             import pytz
             
@@ -302,42 +282,70 @@ def create_whatsapp_message(
                 ist = pytz.timezone('Asia/Kolkata')
                 deadline_dt = ist.localize(deadline_dt)
                 
-            reminder_time = deadline_dt - timedelta(hours=1)
-            
+            now_ist = get_ist_now()
+
+            # --- 1 Day Reminder ---
+            day_reminder_time = deadline_dt - timedelta(days=1)
+            if day_reminder_time > now_ist:
+                new_day_reminder = models.Notification(
+                     user_id=payload.user_id,
+                     title=f"Upcoming Tomorrow: {new_event.title}",
+                     message=payload.content[:200],
+                     scheduled_time=day_reminder_time,
+                     notification_type="event_reminder",
+                     related_event_id=new_event.id,
+                     priority="MEDIUM",
+                     is_read=False,
+                     is_sent=False
+                )
+                db.add(new_day_reminder)
+
+            # --- 1 Hour Reminder ---
+            hour_reminder_time = deadline_dt - timedelta(hours=1)
             # If deadline is very close (less than 1 hour), schedule for now
-            if reminder_time < get_ist_now():
-                 reminder_time = get_ist_now()
+            if hour_reminder_time < now_ist:
+                 hour_reminder_time = now_ist
                  
-            new_reminder = models.Notification(
+            new_hour_reminder = models.Notification(
                  user_id=payload.user_id,
-                 title=f"Reminder: {new_event.title}",
-                 message=payload.content[:200], # Full context
-                 scheduled_time=reminder_time,
+                 title=f"Reminder (1 Hour): {new_event.title}",
+                 message=payload.content[:200],
+                 scheduled_time=hour_reminder_time,
                  notification_type="event_reminder",
                  related_event_id=new_event.id,
                  priority="HIGH",
                  is_read=False,
                  is_sent=False
             )
-            db.add(new_reminder)
+            db.add(new_hour_reminder)
+            
+            # --- 15 Minute Alarm ---
+            alarm_time = deadline_dt - timedelta(minutes=15)
+            # If deadline is within 15 minutes, trigger alarm now
+            if alarm_time < now_ist:
+                 alarm_time = now_ist
+                 
+            new_alarm = models.Notification(
+                 user_id=payload.user_id,
+                 title=f"ALARM (15 Min): {new_event.title}",
+                 message=payload.content[:200],
+                 scheduled_time=alarm_time,
+                 notification_type="alarm",
+                 related_event_id=new_event.id,
+                 priority="CRITICAL",
+                 is_read=False,
+                 is_sent=False
+            )
+            db.add(new_alarm)
+
             db.commit()
-            print(f"🔔 Notification record created for event {new_event.id} (Scheduled: {reminder_time})")
+            print(f"🔔 Reminders and Alarm created for event {new_event.id}")
         except Exception as e:
             print(f"❌ Error scheduling event/notification: {e}")
             import traceback
             traceback.print_exc()
             # Do not raise here, allow message processing to complete even if scheduling fails
-    
-    return msg
-    
-    
-@router.get("/", response_model=list[schemas.MessageOut])
-def get_messages(
-    current_user: models.User = Depends(get_current_user),
-    limit: int = 50,
-    skip: int = 0,
-    db: Session = Depends(get_db)
-):
+
     # 🤖 Generate AI Summary for extracted content (NEW - Phase 1)
     if payload.extracted_content and ai_analyzer:
         try:
@@ -363,33 +371,55 @@ Title:"""
             print(f"⚠️ Failed to generate AI summary: {e}")
 
     # Log priority message detection
-    if ai_results['is_priority']:
+    if ai_results.get('is_priority'):
         print(
-            f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ai_results['priority_level']}, Score: {ai_results['urgency_score']:.2f})")
-        
-        # 🔔 NEW: Create an immediate notification record for high-priority messages
-        # This ensures they appear in the app's notification center even without a deadline
-        try:
-            new_notification = models.Notification(
-                user_id=payload.user_id,
-                title=f"Priority: {msg.message_category.replace('_', ' ').title()}",
-                message=msg.ai_summary or msg.content[:200],
-                scheduled_time=get_ist_now(), # Immediate
-                notification_type="priority_alert",
-                related_message_id=msg.id,
-                priority="HIGH",
-                is_read=False,
-                is_sent=False
-            )
-            db.add(new_notification)
-            db.commit()
-            print(f"🔔 Immediate notification created for priority message {msg.id}")
-        except Exception as e:
-            print(f"⚠️ Failed to create immediate notification: {e}")
+            f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ai_results.get('priority_level')}, Score: {ai_results.get('urgency_score'):.2f})")
     else:
-        print(f"💾 Saved important message: {payload.content[:50]}...")
+        print(f"💾 Saved message: {payload.content[:50]}...")
 
+    # 🔔 NEW: Create an immediate notification record for ALL messages to trigger a mobile pop-up
+    try:
+        title_prefix = "New Message"
+        if getattr(msg, 'priority_level', None):
+            title_prefix = f"{msg.priority_level} Priority"
+            safe_category = getattr(msg, 'message_category', 'MESSAGE')
+            if safe_category:
+                 title_prefix = f"Priority: {safe_category.replace('_', ' ').title()}"
+                 
+        new_notification = models.Notification(
+            user_id=payload.user_id,
+            title=title_prefix,
+            message=msg.ai_summary or msg.content[:200],
+            scheduled_time=get_ist_now(), # Immediate
+            notification_type="new_message_alert",
+            related_message_id=msg.id,
+            priority=getattr(msg, 'priority_level', 'LOW'),
+            is_read=False,
+            is_sent=False
+        )
+        db.add(new_notification)
+        db.commit()
+        print(f"🔔 Immediate notification created for message {msg.id} to trigger pop-up")
+    except Exception as e:
+        print(f"⚠️ Failed to create immediate notification: {e}")
+        import traceback
+        traceback.print_exc()
+    
     return msg
+    
+    
+@router.get("/", response_model=list[schemas.MessageOut])
+def get_messages(
+    current_user: models.User = Depends(get_current_user),
+    limit: int = 50,
+    skip: int = 0,
+    db: Session = Depends(get_db)
+):
+    messages = db.query(models.Message).filter(
+        models.Message.deleted_at.is_(None),
+        models.Message.receiver_user_id == current_user.id
+    ).order_by(models.Message.created_at.desc()).offset(skip).limit(limit).all()
+    return messages
 
 
 @router.post("", response_model=schemas.MessageOut)
@@ -455,8 +485,7 @@ def list_messages(
     # Filter messages received by this user only
     q = db.query(models.Message).filter(
         models.Message.deleted_at.is_(None),
-        models.Message.receiver_user_id == user.id,  # Filter by receiver
-        models.Message.priority_level.in_(['CRITICAL', 'HIGH', 'MEDIUM'])
+        models.Message.receiver_user_id == user.id  # Filter by receiver
     )
     
     if group_id:

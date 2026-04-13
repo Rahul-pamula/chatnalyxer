@@ -13,10 +13,6 @@ export default function Index() {
     );
   }
 
-  if (!token) {
-    return <Redirect href="/login" />;
-  }
-
-  // User is logged in - go directly to setup page
-  return <Redirect href="/setup" />;
+  // Always redirect to login on app start to force re-authentication, per user request
+  return <Redirect href="/login" />;
 }

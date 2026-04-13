@@ -33,6 +33,7 @@ import SkeletonLoader from './_components/SkeletonLoader';
 import { scheduleLocalNotification, scheduleDeadlineReminders } from '../src/services/notifications';
 import { SoundManager } from './_components/SoundManager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAlarm } from '../src/context/AlarmContext';
 
 
 
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<number>>(new Set());
+  const { triggerAlarm } = useAlarm();
 
   // NEW: WhatsApp Status State
   const [whatsappStatus, setWhatsappStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'CHECKING'>('CHECKING');
@@ -73,6 +75,32 @@ export default function Dashboard() {
   const selectAll = () => {
     const allIds = new Set(messages.map(m => m.id));
     setSelectedIds(allIds);
+  };
+
+  const handleTestAlarm = async () => {
+    console.log('🔔 Manual Test Alarm Triggered');
+    try {
+      // 1. Play deep alarm sound
+      await SoundManager.playUrgentSound();
+      
+      // 2. Schedule local notification (3 seconds)
+      await scheduleLocalNotification(
+        "🚨 Test Alarm Working!",
+        "This is a test to verify your notifications are active.",
+        3,
+        'alarm_channel'
+      );
+
+      // 3. Open the big red alarm modal
+      triggerAlarm("Test Alarm: Everything is working fine! 🚀");
+      
+      if (Platform.OS === 'web') {
+        (window as any).alert("Test alarm triggered!");
+      }
+    } catch (e) {
+      console.error("Test alarm failed:", e);
+      Alert.alert("Error", "Failed to trigger test alarm. Check console.");
+    }
   };
 
   const invertSelection = () => {
@@ -282,6 +310,48 @@ export default function Dashboard() {
     }
   }, [token]);
 
+  // 🕒 NEW: Live Deadline Watcher (Layer 2 Protection)
+  useEffect(() => {
+    const checkUpcomingDeadlines = async () => {
+      if (messages.length === 0) return;
+
+      const now = new Date();
+      // console.log(`🕒 DEBUG: Live Monitor Check at ${now.toLocaleTimeString()}`);
+
+      for (const msg of messages) {
+        if (msg.deadline_extracted) {
+          try {
+            // Fix: Parse the date carefully
+            let dateStr = msg.deadline_extracted.substring(0, 19);
+            const deadline = new Date(dateStr);
+            const diffSeconds = (deadline.getTime() - now.getTime()) / 1000;
+            const diffMinutes = Math.floor(diffSeconds / 60);
+
+            // console.log(`🔍 DEBUG: Msg ${msg.id} | Deadline: ${deadline.toLocaleTimeString()} | diff: ${diffMinutes}m`);
+
+            // 🎯 TRIGGER if within 15-minute window
+            if (diffMinutes === 15 || diffMinutes === 14) {
+              const alarmKey = `alarm_triggered_${msg.id}_15m`;
+              const alreadyTriggered = await AsyncStorage.getItem(alarmKey);
+
+              if (!alreadyTriggered) {
+                console.log(`🚨 !!! 15-MINUTE ALARM TRIGGERED !!! for message ${msg.id}`);
+                await AsyncStorage.setItem(alarmKey, 'true');
+                await SoundManager.playUrgentSound();
+                triggerAlarm(`URGENT: ${msg.group_name || 'Deadline'} in 15 minutes!\n\n${msg.ai_summary || msg.content}`);
+              }
+            }
+          } catch (e) {
+            console.log('Error in live monitor:', e);
+          }
+        }
+      }
+    };
+
+    const watcher = setInterval(checkUpcomingDeadlines, 30000); // Check every 30s
+    return () => clearInterval(watcher);
+  }, [messages]);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
@@ -348,6 +418,9 @@ export default function Dashboard() {
               </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/notifications' as any)} style={styles.headerIconBtn}>
                 <Ionicons name="notifications-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleTestAlarm} style={[styles.headerIconBtn, { backgroundColor: 'rgba(255, 255, 255, 0.4)' }]}>
+                <Ionicons name="notifications-circle-outline" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
