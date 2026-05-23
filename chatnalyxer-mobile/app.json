@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Chatnalyxer",
+    "slug": "chatnalyxer-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/chatnalyxer-logo.png",
+    "scheme": "chatnalyxermobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/chatnalyxer-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chatnalyxer.mobile",
+      "buildNumber": "1.0.0"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/chatnalyxer-logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.chatnalyxer.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/chatnalyxer-logo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/chatnalyxer-logo.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-audio",
+      "@react-native-community/datetimepicker",
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/chatnalyxer-logo.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/sounds/alarm.mp3"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "appRoot": "app"
+      },
+      "eas": {
+        "projectId": "db2028e9-9e10-4807-80b2-34b05256c7d1"
+      }
+    }
+  }
+}

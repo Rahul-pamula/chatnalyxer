@@ -1,0 +1,955 @@
+/**
+ * User WhatsApp Service
+ * Port: 3002
+ * 
+ * Responsibilities:
+ * - WhatsApp connection management
+ * - QR code generation
+ * - Pairing code generation
+ * - Message listening and forwarding
+ * - PDF/Image processing (in-memory, Azure AI)
+ * - OTP sending (for admin service)
+ * 
+ * Does NOT handle:
+ * - Admin dashboard
+ * - Admin authentication
+ */
+
+import express from 'express';
+import { makeWASocket, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import pino from 'pino';
+import QRCode from 'qrcode';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load env from backend
+dotenv.config({ path: path.resolve(__dirname, '../chatnalyxer-backend/.env') });
+// Explicitly override backend variables with local ones (like DATABASE_URL)
+dotenv.config({ override: true });
+
+// Fix for Render/Heroku protocols
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres://")) {
+    process.env.DATABASE_URL = process.env.DATABASE_URL.replace("postgres://", "postgresql://", 1);
+}
+
+const app = express();
+app.use(express.json());
+
+// Get User ID, Port, and Phone Number from command-line arguments
+const userId = parseInt(process.argv[2]) || 1;
+const PORT = parseInt(process.argv[3]) || 3002;
+const phoneNumber = process.argv[4]; // NEW: Phone number for pairing code
+
+console.log(`🚀 Starting User WhatsApp Service v2 for User ${userId} on Port ${PORT}`);
+if (phoneNumber) {
+    console.log(`📞 Phone number: ${phoneNumber}`);
+}
+
+// Global state
+let sock;
+let isClientReady = false;
+let currentQR = null;
+let isExpired = false;
+let pairingCodeRequested = false; // Track if pairing code was requested
+
+// Pairing Code State - will be populated by real Baileys code
+let currentPairingCode = {
+    code: null,
+    expiresAt: null,
+    generatedAt: null
+};
+
+// Get isRender flag
+const isRender = process.env.RENDER;
+
+// Auth state folder - dynamic based on user ID
+// Auth state folder - LEGACY (kept for manual cleanup only)
+const AUTH_FOLDER = isRender
+    ? `/opt/render/.wwebjs-sessions-otp/baileys_auth_info_user_${userId}`
+    : `./sessions/user_${userId}`;
+
+// Ensure auth folder exists IMMEDIATELY
+console.log(`📁 Creating auth folder: ${AUTH_FOLDER}`);
+try {
+    if (!fs.existsSync(AUTH_FOLDER)) {
+        fs.mkdirSync(AUTH_FOLDER, { recursive: true });
+        console.log(`✅ Auth folder created: ${AUTH_FOLDER}`);
+    } else {
+        console.log(`✅ Auth folder already exists: ${AUTH_FOLDER}`);
+    }
+} catch (error) {
+    console.error(`❌ Failed to create auth folder: ${error.message}`);
+    process.exit(1);
+}
+
+// ============================================
+// WHATSAPP CONNECTION LOGIC
+// ============================================
+
+async function connectToWhatsApp(isManualRequest = false) {
+    // If already ready, don't reconnect unless manual
+    if (isClientReady && sock?.ws?.isOpen && !isManualRequest) return;
+
+    // Force cleanup if manual request or replacing socket
+    if (sock) {
+        try {
+            sock.end(undefined);
+            sock = null;
+        } catch (e) { }
+    }
+
+    try {
+        // Use PostgreSQL Auth
+        const { Pool } = await import('pg');
+        const { usePostgresAuthState } = await import('./auth-adapter.js');
+
+        // Get DB connection string from env or default to localhost
+        let connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+
+        // Fix: Force IPv4 (127.0.0.1) instead of localhost to avoid Node.js 17+ IPv6 resolution issues on macOS
+        if (connectionString.includes('localhost')) {
+            console.log("🔧 Replacing 'localhost' with '127.0.0.1' in DB connection string to prevent IPv6 errors");
+            connectionString = connectionString.replace('localhost', '127.0.0.1');
+        }
+
+        // Fix: Explicitly disable SSL for local development environments to prevent "server does not support SSL connections" errors.
+        const poolConfig = {
+            connectionString,
+            ssl: false // Disable SSL for all connections by default in local dev
+        };
+
+        const pool = new Pool(poolConfig);
+
+        // Use custom Postgres auth state with dynamic session ID
+        const { state, saveCreds, clearState } = await usePostgresAuthState(pool, `user_${userId}`);
+        const { version } = await fetchLatestBaileysVersion();
+
+        console.log(`Using WA v${version.join('.')}`);
+
+        sock = makeWASocket({
+            version,
+            auth: state,
+            logger: pino({ level: 'silent' }),
+            printQRInTerminal: false,
+            mobile: false,
+            browser: ['Chatnalyxer', 'Chrome', '120.0.0.0'],
+            connectTimeoutMs: 60000,
+            qrMaxRetries: 2,
+        });
+
+        let qrRotationCount = 0;
+
+        sock.ev.on('creds.update', saveCreds);
+
+
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (qr) {
+                // Generate QR code (only once per session)
+                currentQR = qr;
+                isClientReady = false;
+                isExpired = false;
+                console.log(`📸 QR Code generated - Scan now!`);
+            }
+
+
+            // NEW: Handle pairing code request (when connecting)
+            // STRICT CHECK: Only if NOT ready and NOT registered
+            if (connection === 'connecting' && phoneNumber && !pairingCodeRequested && !sock.authState.creds.registered && !isClientReady) {
+                pairingCodeRequested = true;
+                console.log(`⏰ Phone number provided: ${phoneNumber}`);
+
+                // Wait a moment for connection to stabilize
+                setTimeout(async () => {
+                    try {
+                        console.log(`📡 Requesting Pairing Code for ${phoneNumber}...`);
+                        const code = await sock.requestPairingCode(phoneNumber);
+                        console.log(`✅ Pairing Code received: ${code}`);
+                        console.log(`⏰ Code valid for ~60 seconds. Please enter it in WhatsApp NOW!`);
+
+                        // Store the real pairing code
+                        currentPairingCode = {
+                            code: code,
+                            expiresAt: Date.now() + 60000, // 1 minute
+                            generatedAt: Date.now()
+                        };
+
+                        console.log(`🔑 Real Baileys pairing code: ${code}`);
+                    } catch (err) {
+                        console.log('❌ Failed to request pairing code:', err.message);
+                        isExpired = true;
+                    }
+                }, 3000); // Wait 3 seconds for connection to stabilize
+            }
+
+            if (connection === 'close') {
+                isClientReady = false;
+                currentQR = null;
+
+                const error = lastDisconnect?.error;
+                const statusCode = (error instanceof Boom) ? error.output.statusCode : undefined;
+
+                console.log(`❌ Connection closed. Status: ${statusCode}.`);
+
+                if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                    console.log("🚪 Logged out / Auth Invalid. Clearing session.");
+                    try {
+                        await clearState();
+                        console.log("✅ Session data cleared.");
+                    } catch (e) { console.error("Error clearing state:", e); }
+                    isExpired = true;
+
+                    // CRITICAL: Exit process so Session Manager knows we are dead
+                    console.log("💀 Process exiting due to logout.");
+                    process.exit(0);
+                }
+
+                if (statusCode === DisconnectReason.restartRequired) {
+                    console.log("🔄 Restart Required (515). Reconnecting...");
+                    setTimeout(() => connectToWhatsApp(false), 1000);
+                    return;
+                }
+
+                // NEW: Handle Timeout (408) - Just Retry, don't expire!
+                if (statusCode === DisconnectReason.timedOut || statusCode === 408) {
+                    console.log("⏳ Connection Timed Out (408). Retrying...");
+                    setTimeout(() => connectToWhatsApp(false), 2000);
+                    return;
+                }
+
+                // NEW: Handle Service Unavailable (503) - Retry!
+                if (statusCode === 503) {
+                    console.log("⚠️ Service Unavailable (503). Retrying...");
+                    setTimeout(() => connectToWhatsApp(false), 2000);
+                    return;
+                }
+
+                if (!isClientReady) {
+                    console.log("⚠️ Connection failed during QR phase. Marking as EXPIRED.");
+                    isExpired = true;
+
+                    // Report failure to backend
+                    try {
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+                        await axios.post(`${BASE_URL}/whatsapp/update-status`, {
+                            user_id: userId,
+                            ready: false,
+                            message: "Connection Failed/Expired",
+                            expired: true
+                        });
+                    } catch (e) {
+                        console.error("Failed to report status:", e.message);
+                        if (e.response) console.error("Details:", JSON.stringify(e.response.data));
+                    }
+
+                    return;
+                }
+
+                if (statusCode !== DisconnectReason.loggedOut) {
+                    console.log("🔄 Active connection lost. Reconnecting...");
+                    setTimeout(() => connectToWhatsApp(false), 2000);
+
+                    // Report reconnecting
+                    try {
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+                        await axios.post(`${BASE_URL}/whatsapp/update-status`, {
+                            user_id: userId,
+                            ready: false,
+                            message: "Reconnecting...",
+                            expired: false
+                        });
+                    } catch (e) {
+                        console.error("Failed to report reconnecting:", e.message);
+                        if (e.response) console.error("Details:", JSON.stringify(e.response.data));
+                    }
+                }
+
+            } else if (connection === 'open') {
+                console.log('✅ WhatsApp Connected!');
+                isClientReady = true;
+                currentQR = null;
+                isExpired = false;
+
+                // Report SUCCESS to session manager
+                try {
+                    const axios = (await import('axios')).default;
+                    const SESSION_MANAGER_URL = 'http://localhost:3002';
+                    const userId = parseInt(process.argv[2]) || 1;
+
+                    await axios.post(`${SESSION_MANAGER_URL}/sessions/update-status`, {
+                        user_id: userId,
+                        status: 'open',  // Mark as open/ready
+                        ready: true
+                    });
+                    console.log('📊 Status reported to session manager: open');
+                } catch (e) {
+                    console.error('❌ Failed to report status to session manager:', e.message);
+                }
+
+                // Sync WhatsApp groups to backend (with delay to ensure fetch)
+                setTimeout(async () => {
+                    try {
+                        const axios = (await import('axios')).default;
+                        const userId = parseInt(process.argv[2]) || 1;
+
+                        console.log('📋 Fetching WhatsApp groups...');
+                        const groups = await sock.groupFetchAllParticipating();
+                        const groupsList = Object.values(groups).map(group => ({
+                            whatsapp_id: group.id,
+                            name: group.subject || 'Unknown Group'
+                        }));
+
+                        if (groupsList.length === 0) {
+                            console.log("⚠️ No groups found to sync. Skipping to protect existing data.");
+                            return;
+                        }
+
+                        console.log(`📤 Syncing ${groupsList.length} groups to backend...`);
+                        await axios.post('http://localhost:8000/groups/sync-from-whatsapp', {
+                            user_id: userId,
+                            groups: groupsList
+                        }, {
+                            headers: {
+                                'X-API-Key': 'b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4'
+                            }
+                        });
+                        console.log(`✅ Synced ${groupsList.length} groups successfully!`);
+                    } catch (e) {
+                        console.error('❌ Failed to sync groups:', e.message);
+                    }
+                }, 3000); // Wait 3 seconds for groups to populate
+            }
+        });
+
+        // ============================================
+        // MESSAGE LISTENER - Phase 1 Ephemeral Processing
+        // ============================================
+        sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            if (type !== 'notify') return;
+
+            for (const msg of messages) {
+                if (!msg.message) continue;
+
+                const remoteJid = msg.key.remoteJid;
+                const isGroup = remoteJid.endsWith('@g.us');
+
+                // Log EVERY message received
+                // Log ONLY Group messages (Silence DMs completely)
+                if (isGroup) {
+                    console.log(`📨 Received message from: ${remoteJid} (Group: ${isGroup})`);
+                }
+
+                // ALLOW DMs for Casual/Faculty use cases
+                // if (!isGroup) continue;
+
+                const senderName = msg.pushName || 'Unknown';
+                let msgBody = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+
+                // Media Handling Variables
+                let mediaType = "text";
+                let finalContent = msgBody;
+
+                const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+
+                // 1. Check for Document (PDFs)
+                if (msg.message.documentMessage) {
+                    const doc = msg.message.documentMessage;
+                    mediaType = "pdf";
+                    msgBody = doc.caption || doc.fileName || "[PDF Document]";
+                    finalContent = msgBody;
+
+                    console.log(`📄 PDF detected in ${remoteJid}: ${doc.fileName}`);
+
+                    try {
+                        // Download Media to memory buffer (NO FILE SAVING)
+                        const buffer = await downloadMediaMessage(
+                            msg,
+                            'buffer',
+                            {},
+                            {
+                                logger: pino({ level: 'silent' }),
+                                reuploadRequest: sock.updateMediaMessage
+                            }
+                        );
+
+                        console.log(`✅ Downloaded PDF to memory: ${buffer.length} bytes`);
+
+                        // Send buffer to backend for Azure AI analysis
+                        const FormData = (await import('form-data')).default;
+                        const formData = new FormData();
+                        formData.append('file', buffer, {
+                            filename: doc.fileName || 'document.pdf',
+                            contentType: 'application/pdf'
+                        });
+
+                        // Backend will use Azure Document Intelligence to extract text
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+
+                        const analysisResponse = await axios.post(
+                            `${BASE_URL}/media/analyze-pdf`,
+                            formData,
+                            {
+                                headers: formData.getHeaders(),
+                                maxBodyLength: Infinity,
+                                maxContentLength: Infinity
+                            }
+                        );
+
+                        finalContent = analysisResponse.data.extracted_text || msgBody;
+                        console.log(`✨ Azure AI extracted ${finalContent.length} chars from PDF`);
+
+                        // Buffer automatically garbage collected - no cleanup needed!
+
+                    } catch (e) {
+                        console.error("❌ Failed to process PDF:", e.message);
+                        finalContent = msgBody; // Fallback to caption
+                    }
+                }
+                // 2. Check for Image
+                else if (msg.message.imageMessage) {
+                    const img = msg.message.imageMessage;
+                    mediaType = "image";
+                    msgBody = img.caption || "[Image]";
+                    finalContent = msgBody;
+
+                    try {
+                        // Download Media to memory buffer (NO FILE SAVING)
+                        const buffer = await downloadMediaMessage(
+                            msg,
+                            'buffer',
+                            {},
+                            {
+                                logger: pino({ level: 'silent' }),
+                                reuploadRequest: sock.updateMediaMessage
+                            }
+                        );
+
+                        console.log(`✅ Downloaded image to memory: ${buffer.length} bytes`);
+
+                        // Send buffer to backend for Azure AI analysis
+                        const FormData = (await import('form-data')).default;
+                        const formData = new FormData();
+                        formData.append('file', buffer, {
+                            filename: 'image.jpg',
+                            contentType: 'image/jpeg'
+                        });
+
+                        // Backend will use Azure Vision API to extract text
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+
+                        const analysisResponse = await axios.post(
+                            `${BASE_URL}/media/analyze-image`,
+                            formData,
+                            {
+                                headers: formData.getHeaders(),
+                                maxBodyLength: Infinity,
+                                maxContentLength: Infinity
+                            }
+                        );
+
+                        finalContent = analysisResponse.data.extracted_text || msgBody;
+                        console.log(`✨ Azure AI extracted ${finalContent.length} chars from image`);
+
+                        // Buffer automatically garbage collected - no cleanup needed!
+
+                    } catch (e) {
+                        console.error("❌ Failed to process image:", e.message);
+                        finalContent = msgBody; // Fallback to caption
+                    }
+                }
+
+                // If no text, skip
+                if (!msgBody) continue;
+
+                // ============================================
+                // CHECK IF GROUP IS SELECTED/ACTIVE
+                // ============================================
+                // DEMO MODE: BYPASS SELECTION CHECK
+                // We want to analyze messages from ANY group for the demo
+                // console.log(`✅ Group selection check BYPASSED for demo: ${remoteJid}`);
+
+                // Check Selection ONLY if it is a group
+                // Check Selection ONLY if it is a group
+                if (isGroup) {
+                    try {
+                        const axios = (await import('axios')).default;
+                        const BASE_URL = 'http://localhost:8000';
+                        const API_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4";
+
+                        // Fetch selected groups for this user
+                        const selectedGroupsResponse = await axios.get(
+                            `${BASE_URL}/groups/selected/${userId}`,
+                            {
+                                headers: { 'X-API-Key': API_KEY }
+                            }
+                        );
+
+                        const selectedGroups = selectedGroupsResponse.data;
+                        console.log(`🔍 Checking selection for ${remoteJid}. User has ${selectedGroups.length} selected groups.`);
+
+                        // DEBUG: Log first few selected groups to verify format
+                        if (selectedGroups.length > 0) {
+                            console.log(`🔍 Expecting one of: ${selectedGroups.slice(0, 3).map(g => g.whatsapp_id).join(', ')}...`);
+                        }
+
+                        const isGroupSelected = selectedGroups.some(g => g.whatsapp_id === remoteJid);
+
+                        if (!isGroupSelected) {
+                            console.log(`⏭️  Skipping message from non-selected group: ${remoteJid}`);
+                            continue; // Skip this message
+                        }
+
+                        console.log(`✅ Group is selected, processing message...`);
+                    } catch (e) {
+                        console.error("❌ Failed to check group selection status:", e.message);
+                        // On error, skip the message to be safe
+                        continue;
+                    }
+                } else {
+                    // console.log(`⛔ Direct Message blocked (User Privacy Rule): ${remoteJid}`);
+                    continue; // STRICT BLOCK FOR DMs
+                }
+
+
+                // ============================================
+                // SMART FILTERING - RELAXED FOR DEMO/TESTING
+                // ============================================
+                function shouldAnalyzeMessage(content) {
+                    const contentLower = content.toLowerCase().trim();
+
+                    // 1. Skip very short messages (< 4 chars)
+                    // "Hi", "Ok", "Gm", "Hlo"
+                    if (contentLower.length < 4) {
+                        console.log(`⏭️ SKIPPED (too short): "${content}"`);
+                        return false;
+                    }
+
+                    // 2. Skip common greetings/casual filler
+                    const skipPhrases = [
+                        'good morning', 'good night', 'hello', 'thank you', 'thanks',
+                        'ok', 'okay', 'cool', 'nice', 'lol', 'lmao', 'haha'
+                    ];
+
+                    if (skipPhrases.some(phrase => contentLower === phrase)) {
+                        console.log(`⏭️ SKIPPED (casual): "${content}"`);
+                        return false;
+                    }
+
+                    // 3. Otherwise ACCEPT everything else
+                    console.log(`✅ ANALYZING: "${content.substring(0, 50)}..."`);
+                    return true;
+                }
+
+                // Check if message should be analyzed
+                if (!shouldAnalyzeMessage(msgBody)) {
+                    continue; // Skip this message
+                }
+
+                // Send to Backend
+                try {
+                    const axios = (await import('axios')).default;
+                    const BASE_URL = 'http://localhost:8000';
+                    const API_KEY = "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4";
+
+                    await axios.post(`${BASE_URL}/messages/from-whatsapp`, {
+                        user_id: userId, // Include user ID
+                        content: msgBody,
+                        extracted_content: finalContent !== msgBody ? finalContent : null,
+                        sender_name: senderName,
+                        group_id: remoteJid,
+                        timestamp: new Date().toISOString(),
+                        media_url: null, // No longer saving files
+                        media_type: mediaType
+                    }, {
+                        headers: {
+                            'X-API-Key': API_KEY
+                        }
+                    });
+
+                    console.log(`✅ Message forwarded to backend (${mediaType}): ${msgBody.substring(0, 50)}...`);
+                } catch (e) {
+                    console.error("❌ Failed to forward message to backend:", e.message);
+                }
+            }
+        });
+    } catch (err) {
+        console.error("Setup error:", err);
+        isExpired = true;
+    }
+}
+
+// Initialize on start
+connectToWhatsApp(false);
+
+// ============================================
+// API ENDPOINTS
+// ============================================
+
+// Connect/Reconnect
+app.post('/connect', (req, res) => {
+    console.log("📢 User requested manual connection (Regenerate QR)");
+    isExpired = false;
+    currentQR = null;
+    connectToWhatsApp(true);
+    res.json({ message: 'Connection started' });
+});
+
+// Disconnect
+app.post('/disconnect', async (req, res) => {
+    console.log("🛑 User requested disconnect");
+    try {
+        await sock?.logout();
+    } catch (e) { }
+    isClientReady = false;
+    currentQR = null;
+    res.json({ message: 'Disconnected' });
+});
+
+// Sync Groups - Manual refresh
+app.post('/sync-groups', async (req, res) => {
+    try {
+        if (!sock || !isClientReady) {
+            return res.status(400).json({ error: 'WhatsApp not connected' });
+        }
+
+        const axios = (await import('axios')).default;
+        const userId = parseInt(process.argv[2]) || 1;
+
+        console.log('📋 Manually syncing WhatsApp groups...');
+        const groups = await sock.groupFetchAllParticipating();
+        const groupsList = Object.values(groups).map(group => ({
+            whatsapp_id: group.id,
+            name: group.subject || 'Unknown Group'
+        }));
+
+        console.log(`📤 Syncing ${groupsList.length} groups to backend...`);
+        await axios.post('http://localhost:8000/groups/sync-from-whatsapp', {
+            user_id: userId,
+            groups: groupsList
+        }, {
+            headers: {
+                'X-API-Key': 'b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4'
+            }
+        });
+
+        console.log(`✅ Synced ${groupsList.length} groups successfully!`);
+        res.json({
+            success: true,
+            message: `Synced ${groupsList.length} groups`,
+            count: groupsList.length
+        });
+    } catch (e) {
+        console.error('❌ Failed to sync groups:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get QR Code
+app.get('/qr', async (req, res) => {
+    try {
+        const response = {
+            ready: isClientReady,
+            expired: isExpired,
+            qr: null
+        };
+
+        if (currentQR && !isExpired) {
+            response.qr = await QRCode.toDataURL(currentQR);
+        }
+        res.json(response);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get Pairing Code
+app.get('/pairing-code', (req, res) => {
+    try {
+        const isExpired = !currentPairingCode.code || Date.now() > currentPairingCode.expiresAt;
+        const timeRemaining = currentPairingCode.code
+            ? Math.max(0, currentPairingCode.expiresAt - Date.now())
+            : 0;
+
+        res.json({
+            code: isExpired ? null : currentPairingCode.code,
+            expiresAt: currentPairingCode.expiresAt,
+            generatedAt: currentPairingCode.generatedAt,
+            timeRemaining: Math.floor(timeRemaining / 1000),
+            expired: isExpired,
+            formatted: isExpired ? null : currentPairingCode.code.match(/.{1,4}/g).join(' ')
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Generate New Pairing Code
+app.post('/pairing-code/generate', (req, res) => {
+    try {
+        // Return the real Baileys pairing code (generated during connection)
+        const isExpired = !currentPairingCode.code || Date.now() > currentPairingCode.expiresAt;
+        const timeRemaining = currentPairingCode.code
+            ? Math.max(0, currentPairingCode.expiresAt - Date.now())
+            : 0;
+
+        if (isExpired || !currentPairingCode.code) {
+            return res.status(400).json({
+                error: 'No pairing code available. Please start WhatsApp session first.',
+                expired: true
+            });
+        }
+
+        res.json({
+            code: currentPairingCode.code,
+            expiresAt: currentPairingCode.expiresAt,
+            generatedAt: currentPairingCode.generatedAt,
+            timeRemaining: Math.floor(timeRemaining / 1000),
+            expired: false,
+            formatted: currentPairingCode.code.match(/.{1,4}/g).join(' ')
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Connection Status
+app.get('/status', (req, res) => {
+    res.json({
+        ready: isClientReady,
+        expired: isExpired,
+        message: isClientReady ? 'WhatsApp service is ready' : 'WhatsApp service is not ready'
+    });
+});
+
+/**
+ * Validate Session & Force Clear
+ * - Detects "Zombie" sessions (Registered in DB but not connected)
+ * - Allows forced clearing of DB state to reset QR code
+ */
+app.post('/validate-session', async (req, res) => {
+    const { force_clear } = req.body;
+
+    // Check internal state
+    const isRegistered = sock?.authState?.creds?.registered || false;
+    const isConnected = isClientReady; // true only if connection is 'open'
+
+    // Determining status
+    let status = 'unknown';
+    if (isConnected) {
+        status = 'connected';
+    } else if (isRegistered) {
+        status = 'zombie'; // Registered but not connected (The Issue!)
+    } else if (currentQR) {
+        status = 'qr_ready';
+    } else {
+        status = 'initializing';
+    }
+
+    // Force Clear Logic
+    if (force_clear) {
+        console.log("🧨 FORCE CLEAR requested via API");
+
+        try {
+            // 1. Clear DB State
+            if (sock && sock.authState && sock.authState.clearState) {
+                await sock.authState.clearState();
+            } else {
+                // Fallback manual DB clear if sock isn't ready
+                const { Pool } = await import('pg');
+                const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+                const poolConfig = {
+                    connectionString,
+                    ssl: false
+                };
+                const pool = new Pool(poolConfig);
+                await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
+            }
+            console.log("✅ DB Session cleared");
+
+            // 2. Logout/Disconnect
+            if (sock) {
+                try { await sock.logout(); } catch (e) { }
+                try { sock.end(undefined); } catch (e) { }
+            }
+
+            // 3. Restart Process (Exit so Manager restarts it)
+            console.log("💀 Exiting process to trigger fresh restart...");
+            setTimeout(() => process.exit(0), 500);
+
+            return res.json({ success: true, message: "Session cleared. Process restarting..." });
+
+        } catch (e) {
+            console.error("❌ Force clear failed:", e);
+            return res.status(500).json({ error: e.message });
+        }
+    }
+
+    // Return current status
+    res.json({
+        status,
+        ready: isConnected,
+        registered: isRegistered,
+        qr: !!currentQR,
+        pid: process.pid,
+        uptime: process.uptime()
+    });
+});
+
+// Send OTP (for admin service)
+app.post('/send-otp', async (req, res) => {
+    try {
+        const { phone_number, message } = req.body;
+        if (!phone_number || !message) return res.status(400).json({ error: 'Missing fields' });
+
+        const isSocketOpen = sock?.ws?.isOpen;
+        const hasUser = !!sock?.user;
+
+        if (!isClientReady && !isSocketOpen && !hasUser) {
+            console.log("❌ Service not ready");
+            return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        // Format phone (Baileys requires proper JID)
+        let jid = phone_number.replace(/\\D/g, '');
+        if (!jid.endsWith('@s.whatsapp.net')) jid += '@s.whatsapp.net';
+
+        await sock.sendMessage(jid, { text: message });
+
+        console.log(`✅ OTP sent to ${jid}`);
+        res.json({ success: true, message: 'OTP sent successfully' });
+    } catch (error) {
+        console.error('Error sending OTP:', error);
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// Get WhatsApp groups
+app.get('/groups', async (req, res) => {
+    if (!sock) {
+        return res.status(503).json({ error: 'WhatsApp not connected' });
+    }
+
+    try {
+        // Fetch all groups
+        const groups = await sock.groupFetchAllParticipating();
+
+        // Convert to array
+        const groupsList = Object.values(groups).map(group => ({
+            id: group.id,
+            subject: group.subject,
+            name: group.subject,
+            participants: group.participants?.length || 0,
+            creation: group.creation,
+            owner: group.owner
+        }));
+
+        console.log(`📊 Fetched ${groupsList.length} groups`);
+
+        res.json({
+            success: true,
+            count: groupsList.length,
+            groups: groupsList
+        });
+    } catch (error) {
+        console.error('❌ Error fetching groups:', error);
+        res.status(500).json({
+            error: 'Failed to fetch groups',
+            message: error.message
+        });
+    }
+});
+
+// Health Check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        service: 'user-whatsapp',
+        port: PORT,
+        whatsapp_ready: isClientReady,
+        uptime: process.uptime()
+    });
+});
+
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+
+/**
+ * Graceful shutdown handler
+ * Properly logs out from WhatsApp and cleans up auth files
+ */
+async function gracefulShutdown(signal) {
+    console.log(`🛑 Received ${signal}, shutting down gracefully...`);
+
+    try {
+        // 1. Logout from WhatsApp
+        if (sock) {
+            console.log('📤 Logging out from WhatsApp...');
+            await sock.logout();
+            console.log('✅ WhatsApp logout complete');
+        }
+    } catch (e) {
+        console.log('⚠️ Logout error:', e.message);
+    }
+
+    try {
+        // 2. End socket connection
+        if (sock) {
+            console.log('🔌 Closing socket connection...');
+            sock.end(undefined);
+            sock = null;
+        }
+    } catch (e) {
+        console.log('⚠️ Socket close error:', e.message);
+    }
+
+    // 3. Clean up auth folder AND DB
+    // MODIFIED: Do NOT delete session on simple shutdown. Only on explicit logout.
+    console.log(`ℹ️ Preserving session data for user ${userId} (Use /disconnect to clear)`);
+
+    /* 
+    try {
+        // Clean DB
+        const { Pool } = await import('pg');
+        const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/chatnalyxer';
+        const pool = new Pool({ connectionString });
+        await pool.query('DELETE FROM whatsapp_sessions WHERE session_id = $1', [`user_${userId}`]);
+        console.log(`✅ Cleared PostgreSQL session data for user_${userId}`);
+        
+        // Clean legacy folder (keep for safety)
+        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+        console.log('✅ Auth folder cleaned');
+    } catch (e) {
+        console.log('⚠️ Cleanup error:', e.message);
+    }
+    */
+
+    console.log('✅ Shutdown complete');
+    process.exit(0);
+}
+
+// Handle SIGTERM (from session manager)
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Handle SIGINT (Ctrl+C during development)
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// ============================================
+// START SERVER
+// ============================================
+
+app.listen(PORT, () => {
+    console.log(`✅ User WhatsApp Service running on http://localhost:${PORT}`);
+    console.log(`📱 WhatsApp Status: ${isClientReady ? 'Connected' : 'Initializing...'}`);
+});

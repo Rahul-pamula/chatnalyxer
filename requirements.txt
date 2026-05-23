@@ -1,0 +1,76 @@
+# FastAPI and ASGI Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==21.2.0
+
+# Database
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# PDF Processing
+PyPDF2==3.0.1
+
+# Task Scheduling
+APScheduler==3.10.4
+
+# Authentication & Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
+bcrypt==4.2.1
+
+# Environment & Configuration
+python-dotenv==1.0.1
+pydantic-settings==2.1.0
+
+# HTTP & Requests
+requests==2.32.5
+httpx==0.28.1
+
+# Google Gemini AI (Fallback only)
+google-generativeai==0.8.5
+google-ai-generativelanguage==0.6.15
+google-api-core==2.28.1
+google-api-python-client==2.187.0
+google-auth==2.43.0
+google-auth-httplib2==0.2.1
+googleapis-common-protos==1.72.0
+grpcio==1.76.0
+grpcio-status==1.71.2
+
+# Azure AI Services (Primary)
+openai==1.54.5
+# azure-ai-vision-imageanalysis==1.0.0b2
+azure-ai-vision-imageanalysis
+# azure-core
+
+# Azure AI Services (NEW - for ephemeral media processing)
+# azure-ai-documentintelligence==1.0.0b1
+# azure-ai-vision==0.15.1b1
+azure-cognitiveservices-speech==1.40.0
+azure-core
+azure-identity==1.19.0
+pymupdf==1.25.1
+
+# Supporting Libraries
+python-dateutil==2.8.2
+annotated-types==0.7.0
+cachetools==6.2.2
+certifi==2025.11.12
+charset-normalizer==3.4.4
+httplib2==0.31.0
+idna==3.11
+proto-plus==1.26.1
+protobuf==5.29.5
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pydantic==2.12.5
+pydantic_core==2.41.5
+email-validator==2.2.0
+pyparsing==3.2.5
+rsa==4.9.1
+tqdm==4.67.1
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+uritemplate==4.2.0
+urllib3==2.6.1

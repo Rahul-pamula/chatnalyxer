@@ -1,0 +1,822 @@
+from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import Optional
+from app import models, schemas, utils
+from app.database import get_db
+from app.deps import get_current_user
+from app.utils import get_ist_now
+router = APIRouter(prefix="/messages", tags=["Messages"])
+
+# Enable ML analyzer for priority detection
+try:
+    from app.services.ml_analyzer import analyzer as ml_analyzer
+    print("ML analyzer loaded successfully - priority detection enabled")
+except ImportError as e:
+    ml_analyzer = None
+    print(f"WARNING: ML analyzer import failed: {e} - using fallback values")
+
+# Import Hybrid AI Analyzer (Gemini + Azure)
+try:
+    from ..services.ai_analyzer import ai_analyzer
+    print("✅ Hybrid AI Analyzer loaded successfully")
+except ImportError as e:
+    ai_analyzer = None
+    print(f"⚠️ AI Analyzer import failed: {e}")
+
+# Dependency to check API Key for unauthenticated routes
+
+
+def get_api_key(x_api_key: str = Header(...)):
+    if x_api_key != "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
+
+
+@router.post("/from-whatsapp", response_model=schemas.MessageOut, status_code=status.HTTP_201_CREATED)
+def create_whatsapp_message(
+    payload: schemas.WhatsAppMessageCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    api_key_check: str = Depends(get_api_key)
+):
+    # NEW: Check if user is connected
+    try:
+        user = db.query(models.User).filter(models.User.id == payload.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {payload.user_id} not found")
+        
+        if not user.whatsapp_connected:
+            raise HTTPException(
+                status_code=400, 
+                detail="User WhatsApp is not connected"
+            )
+
+        # 1. Create Message in DB
+        # ... rest of the function ...
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise e
+    
+    # Find the group by WhatsApp ID
+    group = db.query(models.Group).filter(
+        models.Group.whatsapp_id == payload.group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=404, detail=f"Group with WhatsApp ID {payload.group_id} not found")
+
+    # Create or get default user for WhatsApp messages
+    default_user = db.query(models.User).filter(
+        models.User.email == "whatsapp@chatnalyxer.com").first()
+    if not default_user:
+        # Create a default user for WhatsApp messages
+        default_user = models.User(
+            username="whatsapp_user",
+            email="whatsapp@chatnalyxer.com",
+            hashed_password="dummy_hash",
+            phone_number="0000000000",
+            is_verified=1
+        )
+        db.add(default_user)
+        db.commit()
+        db.refresh(default_user)
+
+    # 🔍 PRE-CHECK REMOVED: All messages are now sent to AI Analyzer.
+    # This enables multilingual support (Telugu, Hindi, etc.) which simple keyword matching fails at.
+    # Legacy check was: if ml_analyzer and ml_analyzer.is_casual_message(payload.content): ...
+
+    # ✅ Message is important - analyze with AI
+    ai_results = {
+        'priority_level': 'MEDIUM',
+        'urgency_score': 0.5,
+        'deadline_extracted': None,
+        'extracted_keywords': '[]',
+        'is_priority': 0,
+        'message_category': 'GENERAL',
+        'academic_context': '{}'
+    }
+
+    # Import rate limiter
+    try:
+        from app.utils.rate_limiter import ai_rate_limiter
+        can_use_ai = ai_rate_limiter.can_proceed()
+        
+        if not can_use_ai:
+            status = ai_rate_limiter.get_status()
+            print(f"⚠️ AI quota limit reached ({status['calls_in_last_minute']}/10 calls/min)")
+            print(f"   Wait {status['seconds_until_next_slot']}s or using ML fallback...")
+    except ImportError:
+        can_use_ai = True  # If rate limiter not available, allow AI calls
+
+    # Convert timestamp string to datetime if needed once
+    from datetime import datetime
+    import pytz
+    
+    if isinstance(payload.timestamp, str):
+        created_at = datetime.fromisoformat(payload.timestamp.replace('Z', '+00:00'))
+    else:
+        created_at = payload.timestamp
+        
+    # Ensure created_at is timezone aware (assume UTC if naive)
+    if created_at.tzinfo is None:
+        created_at = pytz.utc.localize(created_at)
+        
+    if ai_analyzer and can_use_ai:
+        try:
+            # 🧠 Few-Shot Learning: Fetch last 5 manual overrides
+            user_examples = db.query(models.Message).filter(
+                models.Message.is_manual_override == True,
+                models.Message.deleted_at.is_(None)
+            ).order_by(models.Message.created_at.desc()).limit(5).all()
+
+            # Get user profile to determine user type (STUDENT/CASUAL/PROFESSIONAL)
+            user_profile = db.query(models.UserProfile).filter(
+                models.UserProfile.user_id == payload.user_id
+            ).first()
+            user_type = user_profile.user_type if user_profile else "STUDENT"
+            
+            print(f"👤 Analyzing message for {user_type} user...")
+
+            # Use IST timezone for Gemini
+            ist_tz = pytz.timezone('Asia/Kolkata')
+            created_at_ist = created_at.astimezone(ist_tz)
+            print(f"🕒 Converted AI Context Time: {created_at} (UTC) -> {created_at_ist} (IST)")
+
+            # Use hybrid analysis (Text + Image + User Feedback + User Context)
+            ai_results = ai_analyzer.analyze_message_with_media(
+                content=payload.content,
+                created_at=created_at_ist,  # Pass IST time
+                user_type=user_type,  
+                media_url=payload.media_url,
+                user_examples=user_examples
+            )
+            print(f"🤖 AI Analysis Result: {ai_results['priority_level']} (for {user_type})")
+        except Exception as e:
+            print(f"WARNING: AI Analysis failed: {e}")
+            # Fallback to ML analyzer if AI fails
+            if ml_analyzer:
+                ai_results = ml_analyzer.analyze_message(payload.content, created_at)
+    elif ml_analyzer:
+        # Fallback if AI analyzer not loaded
+        ai_results = ml_analyzer.analyze_message(payload.content, created_at)
+
+    # =========================================================================
+    # OPTIMIZATION: SKIP STORAGE FOR "LOW" PRIORITY (CASUAL) MESSAGES
+    # =========================================================================
+    priority_level = str(ai_results.get('priority_level', 'LOW')).strip().upper()
+    print(f"🔍 Checking Priority: '{priority_level}' (Raw: {ai_results.get('priority_level')})")
+
+    if priority_level == 'LOW':
+        print(f"ℹ️ Saving LOW priority message: {payload.content[:30]}...")
+        # Removed the dummy return block so it saves to the DB below.
+    msg = models.Message(
+        content=payload.content,
+        group_id=group.id,
+        sender_id=default_user.id,
+        receiver_user_id=payload.user_id,  # Track which user received this message
+        created_at=get_ist_now(), # Use server time
+        priority_level=ai_results['priority_level'],
+        urgency_score=ai_results['urgency_score'],
+        deadline_extracted=ai_results['deadline_extracted'],
+        extracted_keywords=ai_results['extracted_keywords'],
+        is_priority=ai_results['is_priority'],
+        message_category=ai_results.get('message_category', 'GENERAL'),
+        academic_context=ai_results.get('academic_context', '{}'),
+        
+        # RAG Fields (Legacy)
+        media_url=payload.media_url,
+        media_type=payload.media_type,
+        extracted_text=None,
+        
+        # AI Memory System (NEW - Phase 1)
+        extracted_content=payload.extracted_content,  # Full text from Azure AI
+        ai_summary=ai_results.get('ai_summary')  # From AI Analysis
+    )
+    
+    # 📄 RAG Ingestion: Extract text from PDF/Images if present
+    if payload.media_url and payload.media_type in ['document', 'image', 'pdf']:
+        print(f"📄 Processing media for RAG: {payload.media_url} ({payload.media_type})")
+        extracted_text = ""
+        try:
+            # 1. Handle PDF
+            if payload.media_type in ['document', 'pdf'] or payload.media_url.lower().endswith('.pdf'):
+                from ..services.pdf_processor import pdf_processor
+                # If URL starts with http, download it
+                if payload.media_url.startswith(('http://', 'https://')):
+                    import requests
+                    response = requests.get(payload.media_url)
+                    if response.status_code == 200:
+                        extracted_text = pdf_processor.extract_text_from_bytes(response.content)
+                else:
+                    # Assume local path (from whatsapp node service)
+                    extracted_text = pdf_processor.extract_text_from_file(payload.media_url)
+            
+            # 2. Handle Image (OCR via Azure Vision)
+            elif payload.media_type == 'image' and ai_analyzer:
+                # Assuming ai_analyzer can take URL or path logic needs adjustment if path
+                # For now, let's trust ai_analyzer.analyze_image handles URL
+                # If local path, we might need to read bytes
+                if payload.media_url.startswith(('http://', 'https://')):
+                    img_analysis = ai_analyzer.analyze_image(image_url=payload.media_url)
+                    extracted_text = img_analysis.get('ocr_text', '')
+                else:
+                    # Local image file
+                    with open(payload.media_url, "rb") as img_file:
+                        img_bytes = img_file.read()
+                        img_analysis = ai_analyzer.analyze_image(image_url=None, image_data=img_bytes)
+                    extracted_text = img_analysis.get('ocr_text', '')
+            
+            if extracted_text:
+                print(f"✅ Extracted text ({len(extracted_text)} chars). Updating message...")
+                msg.extracted_text = extracted_text
+                
+                # Re-analyze with extracted text context if needed
+                # (For now we just store it)
+
+        except Exception as e:
+            print(f"⚠️ Failed to process media: {e}")
+            
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    # Trigger background tasks if high priority (Notifications etc)
+    if msg.is_priority:
+        from ..services.notification_service import send_expo_push_notification
+        background_tasks.add_task(
+            send_expo_push_notification, 
+            payload.user_id, 
+            "Important Message", 
+            f"{payload.sender_name}: {payload.content[:50]}..."
+        )
+
+    # 4. Check for Deadlines -> Schedule Events
+    if ai_results.get('deadline_extracted'):
+        try:
+            deadline_dt = ai_results['deadline_extracted']
+            print(f"📅 Auto-scheduling event for deadline: {deadline_dt}")
+            
+            # Create Event (Unified Model) instead of ScheduledEvent
+            # This fixes the Foreign Key error (Notification -> Event) and ensures it shows in calendar
+            new_event = models.Event(
+                user_id=payload.user_id,
+                title=f"Deadline: {ai_results.get('message_category', 'Task')}",
+                description=payload.content,
+                event_date=deadline_dt.date(),
+                event_time=deadline_dt.time(),
+                source="ai_detected",
+                source_message_id=msg.id,
+                reminder_minutes=60, # Default to 1 hour reminder
+                is_all_day=False
+            )
+            db.add(new_event)
+            db.flush() # Generate ID for new_event
+            
+            # 🔔 NEW: Create multiple Notification records for deadlines
+            from datetime import timedelta
+            import pytz
+            
+            # Ensure deadline_dt is timezone aware (IST)
+            if deadline_dt.tzinfo is None:
+                ist = pytz.timezone('Asia/Kolkata')
+                deadline_dt = ist.localize(deadline_dt)
+                
+            now_ist = get_ist_now()
+
+            # --- 1 Day Reminder ---
+            day_reminder_time = deadline_dt - timedelta(days=1)
+            if day_reminder_time > now_ist:
+                new_day_reminder = models.Notification(
+                     user_id=payload.user_id,
+                     title=f"Upcoming Tomorrow: {new_event.title}",
+                     message=payload.content[:200],
+                     scheduled_time=day_reminder_time,
+                     notification_type="event_reminder",
+                     related_event_id=new_event.id,
+                     priority="MEDIUM",
+                     is_read=False,
+                     is_sent=False
+                )
+                db.add(new_day_reminder)
+
+            # --- 1 Hour Reminder ---
+            hour_reminder_time = deadline_dt - timedelta(hours=1)
+            # If deadline is very close (less than 1 hour), schedule for now
+            if hour_reminder_time < now_ist:
+                 hour_reminder_time = now_ist
+                 
+            new_hour_reminder = models.Notification(
+                 user_id=payload.user_id,
+                 title=f"Reminder (1 Hour): {new_event.title}",
+                 message=payload.content[:200],
+                 scheduled_time=hour_reminder_time,
+                 notification_type="event_reminder",
+                 related_event_id=new_event.id,
+                 priority="HIGH",
+                 is_read=False,
+                 is_sent=False
+            )
+            db.add(new_hour_reminder)
+            
+            # --- 15 Minute Alarm ---
+            alarm_time = deadline_dt - timedelta(minutes=15)
+            # If deadline is within 15 minutes, trigger alarm now
+            if alarm_time < now_ist:
+                 alarm_time = now_ist
+                 
+            new_alarm = models.Notification(
+                 user_id=payload.user_id,
+                 title=f"ALARM (15 Min): {new_event.title}",
+                 message=payload.content[:200],
+                 scheduled_time=alarm_time,
+                 notification_type="alarm",
+                 related_event_id=new_event.id,
+                 priority="CRITICAL",
+                 is_read=False,
+                 is_sent=False
+            )
+            db.add(new_alarm)
+
+            db.commit()
+            print(f"🔔 Reminders and Alarm created for event {new_event.id}")
+        except Exception as e:
+            print(f"❌ Error scheduling event/notification: {e}")
+            import traceback
+            traceback.print_exc()
+            # Do not raise here, allow message processing to complete even if scheduling fails
+
+    # 🤖 Generate AI Summary for extracted content (NEW - Phase 1)
+    if payload.extracted_content and ai_analyzer:
+        try:
+            import google.generativeai as genai
+            import os
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            model = genai.GenerativeModel('gemini-pro')
+            
+            prompt = f"""Generate a concise title (max 50 words) for this document:
+
+{payload.extracted_content[:2000]}
+
+Title:"""
+            
+            response = model.generate_content(prompt)
+            ai_summary = response.text.strip()
+            
+            # Update message with AI summary
+            msg.ai_summary = ai_summary
+            db.commit()
+            print(f"✨ Generated AI summary: {ai_summary}")
+        except Exception as e:
+            print(f"⚠️ Failed to generate AI summary: {e}")
+
+    # Log priority message detection
+    if ai_results.get('is_priority'):
+        print(
+            f"[PRIORITY] MESSAGE detected: {payload.content[:50]}... (Priority: {ai_results.get('priority_level')}, Score: {ai_results.get('urgency_score'):.2f})")
+    else:
+        print(f"💾 Saved message: {payload.content[:50]}...")
+
+    # 🔔 NEW: Create an immediate notification record for ALL messages to trigger a mobile pop-up
+    try:
+        title_prefix = "New Message"
+        if getattr(msg, 'priority_level', None):
+            title_prefix = f"{msg.priority_level} Priority"
+            safe_category = getattr(msg, 'message_category', 'MESSAGE')
+            if safe_category:
+                 title_prefix = f"Priority: {safe_category.replace('_', ' ').title()}"
+                 
+        new_notification = models.Notification(
+            user_id=payload.user_id,
+            title=title_prefix,
+            message=msg.ai_summary or msg.content[:200],
+            scheduled_time=get_ist_now(), # Immediate
+            notification_type="new_message_alert",
+            related_message_id=msg.id,
+            priority=getattr(msg, 'priority_level', 'LOW'),
+            is_read=False,
+            is_sent=False
+        )
+        db.add(new_notification)
+        db.commit()
+        print(f"🔔 Immediate notification created for message {msg.id} to trigger pop-up")
+    except Exception as e:
+        print(f"⚠️ Failed to create immediate notification: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return msg
+    
+    
+@router.get("/", response_model=list[schemas.MessageOut])
+def get_messages(
+    current_user: models.User = Depends(get_current_user),
+    limit: int = 50,
+    skip: int = 0,
+    db: Session = Depends(get_db)
+):
+    messages = db.query(models.Message).filter(
+        models.Message.deleted_at.is_(None),
+        models.Message.receiver_user_id == current_user.id
+    ).order_by(models.Message.created_at.desc()).offset(skip).limit(limit).all()
+    return messages
+
+
+@router.post("", response_model=schemas.MessageOut)
+async def create_message(
+    payload: schemas.MessageCreate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    print("📩 New message:", payload.content, "from group:", payload.group_id)
+    msg = models.Message(content=payload.content,
+                         group_id=payload.group_id, sender_id=user.id)
+    db.add(msg) # Changed from new_message to msg
+    db.commit()
+    db.refresh(msg) # Changed from new_message to msg
+
+    # ✅ ANALYZE MESSAGE FOR EVENTS (Text, Images, PDFs)
+    try:
+        from ..services.event_detection import detect_events_from_text, create_events_from_detection
+        
+        # Determine what text to analyze
+        text_to_analyze = payload.content
+        
+        # For images with captions or PDFs, use extracted text if available
+        if msg.extracted_text: # Changed from new_message to msg
+            text_to_analyze = msg.extracted_text # Changed from new_message to msg
+        
+        # Only analyze if there's meaningful content
+        if text_to_analyze and len(text_to_analyze.strip()) > 10:
+            logger.info(f"🔍 Analyzing message {msg.id} for events...") # Changed from new_message to msg
+            
+            # Get user profile for context
+            user_type = "CASUAL"
+            # In create_message, 'user' is the authenticated user, not 'default_user'
+            if user and hasattr(user, 'user_profile') and user.user_profile:
+                user_type = user.user_profile.user_type
+            
+            # Detect events
+            events_data = await detect_events_from_text(text_to_analyze, user_type)
+            
+            # Create events if detected
+            if events_data:
+                created_events = await create_events_from_detection(
+                    events_data,
+                    user.id, # Changed from default_user.id to user.id
+                    msg.id, # Changed from new_message.id to msg.id
+                    db
+                )
+                logger.info(f"✅ Created {len(created_events)} events from message {msg.id}") # Changed from new_message to msg
+    
+    except Exception as e:
+        logger.error(f"Event detection failed for message: {e}")
+        # Continue anyway - message is saved
+
+    return msg # Changed from new_message to msg
+
+
+@router.get("", response_model=list[schemas.MessageOut])
+def list_messages(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    # Filter messages received by this user only
+    q = db.query(models.Message).filter(
+        models.Message.deleted_at.is_(None),
+        models.Message.receiver_user_id == user.id  # Filter by receiver
+    )
+    
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    
+    
+    # Smart ordering: deadlines first (closest first), then by priority, then by creation time
+    from sqlalchemy import case, nullslast
+    
+    messages = q.order_by(
+        # Messages with deadlines first (closest deadline at top)
+        nullslast(models.Message.deadline_extracted.asc()),
+        # Then by priority level
+        case(
+            (models.Message.priority_level == 'CRITICAL', 1),
+            (models.Message.priority_level == 'HIGH', 2),
+            (models.Message.priority_level == 'MEDIUM', 3),
+            else_=4
+        ),
+        # Finally by creation time (newest first)
+        models.Message.created_at.desc()
+    ).limit(100).all()
+    
+    # Populate group_name and sender_name for each message
+    for msg in messages:
+        # Get group name
+        group = db.query(models.Group).filter(models.Group.id == msg.group_id).first()
+        msg.group_name = group.name if group else "Unknown Group"
+        
+        # Get sender name from sender relationship
+        msg.sender_name = msg.sender.username if msg.sender else "Unknown"
+    
+    return messages
+
+
+@router.get("/public", response_model=list[schemas.MessageOut])
+def list_messages_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint for testing - fetches messages without authentication"""
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+
+@router.get("/priority", response_model=list[schemas.MessageOut])
+def list_priority_messages(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Get only priority messages based on ML analysis"""
+    q = db.query(models.Message).filter(
+        models.Message.is_priority == 1, models.Message.deleted_at.is_(None))
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+
+@router.get("/priority/public", response_model=list[schemas.MessageOut])
+def list_priority_messages_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Get priority messages received by this user only"""
+    q = db.query(models.Message).filter(
+        models.Message.is_priority == 1,
+        models.Message.deleted_at.is_(None),
+        models.Message.receiver_user_id == user.id  # Filter by receiver, not group
+    )
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.created_at.desc()).limit(100).all()
+
+
+@router.get("/analytics")
+def get_message_analytics(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Get ML analytics data for visualization dashboard"""
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+
+    messages = q.all()
+
+    # Convert to dict format for analytics
+    message_dicts = []
+    for msg in messages:
+        message_dicts.append({
+            'priority_level': msg.priority_level,
+            'urgency_score': msg.urgency_score,
+            'deadline_extracted': msg.deadline_extracted,
+            'extracted_keywords': msg.extracted_keywords,
+            'is_priority': msg.is_priority,
+            'message_category': getattr(msg, 'message_category', 'GENERAL'),
+            'academic_context': getattr(msg, 'academic_context', '{}')
+        })
+
+    if ml_analyzer:
+        analytics_data = ml_analyzer.get_analytics_data(message_dicts)
+    else:
+        # Fallback analytics when ML analyzer is not available
+        analytics_data = {
+            'total_messages': len(message_dicts),
+            'priority_distribution': {'HIGH': 0, 'MEDIUM': len(message_dicts), 'LOW': 0},
+            'urgency_score_avg': 0.5,
+            'messages_with_deadlines': 0,
+            'top_keywords': []
+        }
+    return analytics_data
+
+
+@router.delete("/trash")
+def empty_trash(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Permanently delete ALL messages in trash received by this user"""
+    deleted_count = db.query(models.Message).filter(
+        models.Message.receiver_user_id == user.id,
+        models.Message.deleted_at.is_not(None)
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"message": f"Trash emptied successfully ({deleted_count} messages deleted)"}
+
+
+@router.delete("/{message_id}")
+def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Soft delete a message by ID (only messages received by this user)"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.receiver_user_id == user.id
+    ).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found or not authorized")
+
+    message.deleted_at = get_ist_now()
+    
+    # Also delete associated event(s) if they exist
+    # Using delete() directly allows handling multiple events if they exist
+    deleted_events = db.query(models.ScheduledEvent).filter(
+        models.ScheduledEvent.message_id == message_id
+    ).delete()
+    
+    if deleted_events:
+        print(f"🗑️ Also deleted {deleted_events} scheduled event(s) associated with message {message_id}")
+        
+    # Also delete associated notifications (Priority Alerts)
+    deleted_notifications = db.query(models.Notification).filter(
+        models.Notification.related_message_id == message_id
+    ).delete()
+    
+    if deleted_notifications:
+        print(f"🗑️ Also deleted {deleted_notifications} notification(s) associated with message {message_id}")
+        
+    db.commit()
+    return {"message": "Message and associated event moved to trash successfully"}
+
+
+@router.delete("")
+def delete_all_messages(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Soft delete all messages received by this user"""
+    print(f"Moving all messages to trash for user {user.id}")
+    db.query(models.Message).filter(
+        models.Message.receiver_user_id == user.id
+    ).update({models.Message.deleted_at: get_ist_now()})
+    
+    # Also delete all priority notifications for this user
+    # (Since we moved all messages to trash, we shouldn't alert on them)
+    db.query(models.Notification).filter(
+        models.Notification.user_id == user.id,
+        models.Notification.related_message_id.is_not(None) # Only message-related ones
+    ).delete()
+    
+    db.commit()
+    print(f"All messages received by user {user.id} moved to trash, notifications cleaned")
+    return {"message": "All messages moved to trash successfully"}
+
+
+
+
+
+@router.get("/trash", response_model=list[schemas.MessageOut])
+def list_trash_messages(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """List trashed messages received by this user"""
+    q = db.query(models.Message).filter(
+        models.Message.deleted_at.is_not(None),
+        models.Message.receiver_user_id == user.id
+    )
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+    return q.order_by(models.Message.deleted_at.desc()).limit(100).all()
+
+
+@router.post("/{message_id}/restore", response_model=schemas.MessageOut)
+def restore_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Restore a trashed message received by this user"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.receiver_user_id == user.id,
+        models.Message.deleted_at.is_not(None)
+    ).first()
+    if not message:
+        raise HTTPException(
+            status_code=404, detail="Message not found in trash")
+
+    message.deleted_at = None
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+@router.delete("/{message_id}/permanent")
+def permanent_delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """Permanently delete a trashed message received by this user"""
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.receiver_user_id == user.id,
+        models.Message.deleted_at.is_not(None)
+    ).first()
+    if not message:
+        raise HTTPException(
+            status_code=404, detail="Message not found in trash")
+
+    # Also delete associated event(s) if they exist (just in case they weren't deleted during soft delete)
+    db.query(models.ScheduledEvent).filter(
+        models.ScheduledEvent.message_id == message_id
+    ).delete()
+
+    db.delete(message)
+    db.commit()
+    return {"message": "Message and associated events permanently deleted"}
+
+
+@router.post("/{message_id}/toggle-priority", response_model=schemas.MessageOut)
+def toggle_message_priority(
+    message_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user)
+):
+    """
+    Feedback Loop: User toggles priority. 
+    This trains the system by marking the message as a 'manual override'.
+    """
+    # Verify user received this message
+    message = db.query(models.Message).filter(
+        models.Message.id == message_id,
+        models.Message.receiver_user_id == user.id
+    ).first()
+    
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    # Toggle Priority
+    # If currently priority (1), make it normal (0)
+    # If normal (0), make it priority (1)
+    new_priority = 0 if message.is_priority else 1
+    
+    message.is_priority = new_priority
+    message.is_manual_override = True  # Mark as training example
+    
+    # Update text label for consistency
+    message.priority_level = "HIGH" if new_priority == 1 else "LOW"
+    
+    db.commit()
+    db.refresh(message)
+    
+    print(f"🔄 Feedback: Message {message_id} toggled to Priority={new_priority} (Manual Override)")
+    return message
+
+
+@router.get("/analytics/public")
+def get_message_analytics_public(
+    group_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint for analytics data - for dashboard"""
+    q = db.query(models.Message).filter(models.Message.deleted_at.is_(None))
+    if group_id:
+        q = q.filter(models.Message.group_id == group_id)
+
+    messages = q.all()
+
+    # Convert to dict format for analytics
+    message_dicts = []
+    for msg in messages:
+        message_dicts.append({
+            'priority_level': msg.priority_level,
+            'urgency_score': msg.urgency_score,
+            'deadline_extracted': msg.deadline_extracted,
+            'extracted_keywords': msg.extracted_keywords,
+            'is_priority': msg.is_priority,
+            'message_category': getattr(msg, 'message_category', 'GENERAL'),
+            'academic_context': getattr(msg, 'academic_context', '{}')
+        })
+
+    if ml_analyzer:
+        analytics_data = ml_analyzer.get_analytics_data(message_dicts)
+    else:
+        # Fallback analytics when ML analyzer is not available
+        analytics_data = {
+            'total_messages': len(message_dicts),
+            'priority_distribution': {'HIGH': 0, 'MEDIUM': len(message_dicts), 'LOW': 0},
+            'urgency_score_avg': 0.5,
+            'messages_with_deadlines': 0,
+            'top_keywords': []
+        }
+    return analytics_data

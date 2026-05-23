@@ -1,0 +1,183 @@
+from fastapi import APIRouter, Depends, HTTPException, Header, status
+from sqlalchemy.orm import Session
+from ..database import get_db
+from .. import models, schemas
+from ..deps import get_current_user
+
+router = APIRouter(prefix="/groups", tags=["Groups"])
+
+# Dependency to check API Key for WhatsApp integration routes
+
+
+def get_api_key(x_api_key: str = Header(...)):
+    if x_api_key != "b6323763d2e0a563df26d3ff6392db8f3d82bfd05207f231874d6474cbc376d4":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API Key")
+
+
+@router.post("/", response_model=schemas.GroupOut)
+def create_group(group: schemas.GroupCreate, db: Session = Depends(get_db)):
+    g = models.Group(name=group.name, whatsapp_id=group.whatsapp_id)
+    db.add(g)
+    db.commit()
+    db.refresh(g)
+    return g
+
+
+@router.get("/", response_model=list[schemas.GroupOut])
+def list_groups(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get groups that the current user is a member of (only active groups)"""
+    # Get groups that the current user is a member of
+    # Filter by is_active to exclude deleted WhatsApp groups
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == current_user.id,
+        models.Group.is_active == True  # Only show active groups
+    ).all()
+    return user_groups
+
+
+@router.put("/{group_id}/selection", response_model=schemas.GroupOut)
+def update_group_selection(
+    group_id: int,
+    update: schemas.GroupUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if the user is a member of this group
+    membership = db.query(models.GroupMember).filter(
+        models.GroupMember.user_id == current_user.id,
+        models.GroupMember.group_id == group_id
+    ).first()
+    if not membership:
+        raise HTTPException(
+            status_code=403, detail="You are not a member of this group")
+
+    group = db.query(models.Group).filter(models.Group.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    group.is_selected = 1 if update.is_selected else 0
+    db.commit()
+    db.refresh(group)
+    return group
+
+
+@router.post("/sync-from-whatsapp", status_code=status.HTTP_201_CREATED)
+def sync_groups_from_whatsapp(
+    payload: schemas.WhatsAppGroupSync,
+    db: Session = Depends(get_db),
+    api_key_check: str = Depends(get_api_key)
+):
+    """Sync groups from WhatsApp integration service"""
+    created_count = 0
+    updated_count = 0
+    deactivated_count = 0
+    
+    # Verify user exists
+    user = db.query(models.User).filter(models.User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {payload.user_id} not found"
+        )
+
+    # Get list of current WhatsApp group IDs
+    current_whatsapp_ids = [g.get('whatsapp_id') for g in payload.groups if g.get('whatsapp_id')]
+    
+    # Mark groups as inactive if they're no longer in WhatsApp
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == payload.user_id
+    ).all()
+    
+    for group in user_groups:
+        if group.whatsapp_id not in current_whatsapp_ids and group.is_active:
+            group.is_active = False
+            deactivated_count += 1
+
+    # Process current WhatsApp groups
+    for group_data in payload.groups:
+        whatsapp_id = group_data.get('whatsapp_id')
+        name = group_data.get('name')
+
+        if not whatsapp_id or not name:
+            continue
+
+        # Check if group already exists FOR DIS USAR
+        existing_group = db.query(models.Group).filter(
+            models.Group.whatsapp_id == whatsapp_id,
+            models.Group.user_id == payload.user_id  # ✅ Check user specific
+        ).first()
+
+        if existing_group:
+            # Update name if changed
+            if existing_group.name != name:
+                existing_group.name = name
+                updated_count += 1
+            # Reactivate if it was inactive
+            if not existing_group.is_active:
+                existing_group.is_active = True
+                updated_count += 1
+            group = existing_group
+        else:
+            # Create new group
+            print(f"creating new group {name} for user {payload.user_id}")
+            new_group = models.Group(
+                name=name,
+                whatsapp_id=whatsapp_id,
+                is_selected=0,  # Default to not selected
+                is_active=True,  # New groups are active
+                user_id=payload.user_id # ✅ Link to user directly
+            )
+            db.add(new_group)
+            db.commit()
+            db.refresh(new_group)
+            group = new_group
+            created_count += 1
+
+        # Assign group to the specific user only (GroupMember is still used for queries)
+        membership = db.query(models.GroupMember).filter(
+            models.GroupMember.user_id == payload.user_id,
+            models.GroupMember.group_id == group.id
+        ).first()
+        
+        if not membership:
+            new_membership = models.GroupMember(
+                user_id=payload.user_id,
+                group_id=group.id
+            )
+            db.add(new_membership)
+
+    db.commit()
+
+    return {
+        "message": f"Synced groups for user {payload.user_id}: {created_count} created, {updated_count} updated, {deactivated_count} deactivated",
+        "created": created_count,
+        "updated": updated_count,
+        "deactivated": deactivated_count
+    }
+
+
+@router.get("/selected", response_model=list[schemas.GroupOut])
+def get_selected_groups(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get only selected AND active groups for the current user"""
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == current_user.id,
+        models.Group.is_selected == 1,
+        models.Group.is_active == True  # ✅ Ensure we only return active groups
+    ).all()
+    return user_groups
+
+
+@router.get("/selected/{user_id}", response_model=list[schemas.GroupOut])
+def get_selected_groups_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    api_key_check: str = Depends(get_api_key)
+):
+    """Get selected groups for a specific user (for WhatsApp integration)"""
+    user_groups = db.query(models.Group).join(models.GroupMember).filter(
+        models.GroupMember.user_id == user_id,
+        models.Group.is_selected == 1,
+        models.Group.is_active == True # ✅ Ensure we only processed active groups
+    ).all()
+    return user_groups

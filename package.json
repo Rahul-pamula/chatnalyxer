@@ -1,0 +1,20 @@
+{
+    "name": "chatnalyxer-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "start:dev": "concurrently \"npm run backend\" \"npm run sessions\" \"npm run mobile\"",
+        "backend": "cd chatnalyxer-backend && venv\\Scripts\\activate && uvicorn app.main:app --reload",
+        "backend:mac": "cd chatnalyxer-backend && source venv/bin/activate && uvicorn app.main:app --reload",
+        "sessions": "cd user-whatsapp-sessions && npm start",
+        "mobile": "cd chatnalyxer-mobile && npx expo start",
+        "install:all": "cd chatnalyxer-backend && pip install -r requirements.txt && cd ../user-whatsapp-sessions && npm install && cd ../chatnalyxer-mobile && npm install",
+        "setup:windows": "python setup_windows.py"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "dependencies": {
+        "axios": "^1.13.2"
+    }
+}
