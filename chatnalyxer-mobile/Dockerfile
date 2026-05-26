@@ -1,16 +1,16 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy source
 COPY . .
 
 # Build for web
-RUN npx expo export:web
+RUN npx expo export --platform web
 
 # Production stage with nginx
 FROM nginx:alpine
