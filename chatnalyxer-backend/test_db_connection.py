@@ -18,10 +18,13 @@ USER = "postgres.hxbwhzkjvosdrksnrgwg"
 PASSWORD = "@textNLytixs123"
 PROJECT_REF = "hxbwhzkjvosdrksnrgwg"
 
+import urllib.parse
+encoded_password = urllib.parse.quote(PASSWORD)
+
 # URLs to test
 pooler_url = f"postgresql://{USER}:%40textNLytixs123@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
 # Standard direct host: db.[PROJECT_REF].supabase.co
-direct_url = f"postgresql://postgres:{PASSWORD}@db.{PROJECT_REF}.supabase.co:5432/postgres"
+direct_url = f"postgresql://postgres:{encoded_password}@db.{PROJECT_REF}.supabase.co:5432/postgres"
 
 res1 = test_connection(pooler_url, "Port 6543 (Pooler)")
 res2 = test_connection(direct_url, "Port 5432 (Direct)")
