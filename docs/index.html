@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
 
     <!-- Navigation -->
@@ -27,21 +29,149 @@
         <div class="hero-content">
             <div class="badge">🚀 Coming Soon</div>
             <h1>Unlock Your <br><span class="gradient-text">WhatsApp Potential</span></h1>
-            <p>Automated analysis, procrastination fighting, and smart insights—right in your chat. The first AI-powered companion for your messaging.</p>
+            <p>Turn group chat chaos into organized productivity. Chatnalyxer monitors your group chats, filters out irrelevant spam, automatically extracts deadlines from text messages, syllabus PDFs, or images directly into your calendar, and sets smart priority alarms so you never miss a submission.</p>
+            <div class="hero-highlights">
+                <span class="highlight-item"><i class="fa-regular fa-calendar-check"></i> Auto Calendar Sync</span>
+                <span class="highlight-item"><i class="fa-solid fa-bell"></i> Smart Alarms</span>
+                <span class="highlight-item"><i class="fa-solid fa-shield-halved"></i> E2E Encrypted</span>
+            </div>
             <div class="hero-buttons">
                 <a href="#download" class="btn-primary glow">Join Waiting List <i class="fa-solid fa-arrow-right"></i></a>
                 <a href="#features" class="btn-secondary">Learn More</a>
             </div>
         </div>
         <div class="hero-visual">
-            <!-- Placeholder for Hero Image (using CSS art/gradient for now) -->
             <div class="dashboard-mockup">
                 <div class="screen-content">
-                    <div class="chat-bubble left">Hey, when is the meeting?</div>
-                    <div class="chat-bubble right">Analyzing... 📅 Added to Calendar.</div>
-                    <div class="graph-bar"></div>
-                    <div class="graph-bar"></div>
-                    <div class="graph-bar"></div>
+                    <!-- Chat Header -->
+                    <div class="chat-header">
+                        <div class="chat-avatar">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="chat-info">
+                            <span class="chat-name">Physics Class Group ⚡</span>
+                            <span class="chat-status">Active group</span>
+                        </div>
+                    </div>
+
+                    <!-- Chat History Container -->
+                    <div class="chat-history" id="chat-history-container">
+                        <!-- Noise Message 1 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-1">
+                            <div class="message-sender">Sam</div>
+                            <p>hey, did the professor post the physics grades?</p>
+                            <span class="message-time">4:11 PM</span>
+                        </div>
+
+                        <!-- Noise Message 2 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-2">
+                            <div class="message-sender">Sara</div>
+                            <p>no, not yet. probably next week.</p>
+                            <span class="message-time">4:12 PM</span>
+                        </div>
+
+                        <!-- Noise Message 3 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-3">
+                            <div class="message-sender">John</div>
+                            <p>what about the homework sheet?</p>
+                            <span class="message-time">4:15 PM</span>
+                        </div>
+
+                        <!-- Noise Message 4 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-4">
+                            <div class="message-sender">Emma</div>
+                            <p>I think he sent a PDF in the syllabus folder</p>
+                            <span class="message-time">4:18 PM</span>
+                        </div>
+
+                        <!-- Noise Message 5 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-5">
+                            <div class="message-sender">Sam</div>
+                            <p>Can anyone forward it here?</p>
+                            <span class="message-time">4:20 PM</span>
+                        </div>
+
+                        <!-- Noise Message 6 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-6">
+                            <div class="message-sender">John</div>
+                            <p>Yeah sure, let me check my files.</p>
+                            <span class="message-time">4:22 PM</span>
+                        </div>
+
+                        <!-- Important Deadline Message -->
+                        <div class="chat-bubble left important-msg fade-transition" id="msg-important">
+                            <div class="message-sender">Alex (Class Rep)</div>
+                            <p>Attention everyone! 🚨 You have to submit the physics assignment till 10:00 PM tonight.
+                                Please upload it to the portal on time!</p>
+                            <div class="chat-attachment">
+                                <i class="fa-solid fa-file-pdf"></i>
+                                <div class="attachment-info">
+                                    <span class="attachment-name">Physics_Homework_3.pdf</span>
+                                    <span class="attachment-size">840 KB</span>
+                                </div>
+                            </div>
+                            <span class="message-time">4:30 PM</span>
+                        </div>
+
+                        <!-- Noise Message 7 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-7">
+                            <div class="message-sender">John</div>
+                            <p>oh shoot, thanks Alex! almost forgot</p>
+                            <span class="message-time">4:31 PM</span>
+                        </div>
+
+                        <!-- Noise Message 8 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-8">
+                            <div class="message-sender">Kate</div>
+                            <p>is it the electromagnetism one?</p>
+                            <span class="message-time">4:33 PM</span>
+                        </div>
+
+                        <!-- Noise Message 9 -->
+                        <div class="chat-bubble left noise-msg fade-transition" id="msg-noise-9">
+                            <div class="message-sender">Sam</div>
+                            <p>yes, chapters 4 and 5.</p>
+                            <span class="message-time">4:35 PM</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Processing Indicator (absolute center overlay) -->
+                    <div class="ai-processing fade-transition" id="ai-processor">
+                        <div class="ai-scanner"></div>
+                        <span class="ai-text"><i class="fa-solid fa-brain fa-pulse"></i> Gemini AI Filtering Noise &
+                            Extracting Task...</span>
+                    </div>
+
+                    <!-- Extracted Task Card (absolute bottom overlay) -->
+                    <div class="task-card fade-transition" id="task-event">
+                        <div class="task-header">
+                            <span class="task-badge"><i class="fa-solid fa-calendar-check"></i> Event Detected</span>
+                            <span class="priority-badge high">🔴 High Priority</span>
+                        </div>
+                        <h4 class="task-title">Physics Assignment Submission</h4>
+                        <div class="task-details">
+                            <div class="detail-item">
+                                <i class="fa-regular fa-calendar"></i>
+                                <span>Tonight (10:00 PM)</span>
+                            </div>
+                            <div class="detail-item">
+                                <i class="fa-solid fa-bell"></i>
+                                <span>Alarm: 9:00 PM</span>
+                            </div>
+                        </div>
+                        <div class="task-footer">
+                            <span class="sync-status"><i class="fa-solid fa-circle-check"></i> Added to Calendar</span>
+                            <span class="alarm-status"
+                                style="color: #ff7675; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i
+                                    class="fa-solid fa-bell fa-shake"></i> Alarm Active</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Sandbox Interactive Playground -->
+                <div class="sandbox-input-container">
+                    <input type="text" id="sandbox-input"
+                        placeholder="Type a message (e.g. 'Chemistry lab due tomorrow at 3 PM')..." autocomplete="off">
+                    <button id="sandbox-btn"><i class="fa-solid fa-paper-plane"></i> Test AI</button>
                 </div>
             </div>
         </div>
@@ -52,24 +182,76 @@
         <h2 class="section-title">Why Chatnalyxer?</h2>
         <div class="grid">
             <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_deadline.png" alt="AI Deadline Extraction">
+                </div>
                 <div class="icon-box"><i class="fa-solid fa-brain"></i></div>
-                <h3>AI Analysis</h3>
-                <p>Understand your chat patterns and get smart summaries of long conversations instantly.</p>
+                <h3>AI Deadline Extraction</h3>
+                <p>Filters out daily spam, side conversations, and general chat noise to automatically identify and
+                    extract assignment schedules.</p>
             </div>
             <div class="card">
-                <div class="icon-box"><i class="fa-solid fa-shield-halved"></i></div>
-                <h3>Focus Shield</h3>
-                <p>Stop doom-scrolling. Our "Tough Love" mode blocks distractions when you need to focus.</p>
+                <div class="card-image">
+                    <img src="images/feature_multimodal.png" alt="Multi-Modal Processing">
+                </div>
+                <div class="icon-box"><i class="fa-solid fa-file-pdf"></i></div>
+                <h3>Multi-Modal Processing</h3>
+                <p>Extracts schedule information and tasks directly from uploaded syllabus sheets, PDFs, voice notes,
+                    and screenshot images.</p>
             </div>
             <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_alarm.png" alt="Smart Priority Alarms">
+                </div>
                 <div class="icon-box"><i class="fa-regular fa-calendar-check"></i></div>
-                <h3>Auto-Scheduling</h3>
-                <p>Never miss a date. If a friend mentions "Coffee at 5", we add it to your calendar.</p>
+                <h3>Smart Priority Alarms</h3>
+                <p>Critical deadlines (like assignments due tonight) trigger high-priority, persistent notifications so
+                    you never miss a submission.</p>
             </div>
             <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_security.png" alt="Privacy & Security First">
+                </div>
                 <div class="icon-box"><i class="fa-solid fa-lock"></i></div>
-                <h3>Privacy First</h3>
-                <p>Your data stays on your device. We use local-first processing for maximum security.</p>
+                <h3>Privacy & Security First</h3>
+                <p>End-to-end encryption ensures your chats are processed securely, keeping your personal conversation
+                    details private.</p>
+            </div>
+            <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_calendar.png" alt="Universal Calendar Sync">
+                </div>
+                <div class="icon-box"><i class="fa-solid fa-rotate"></i></div>
+                <h3>Universal Calendar Sync</h3>
+                <p>Syncs scheduled deadlines instantly to Google Calendar, Microsoft Outlook, and your local device's
+                    calendar app.</p>
+            </div>
+            <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_dashboard.png" alt="Interactive Study Dashboard">
+                </div>
+                <div class="icon-box"><i class="fa-solid fa-gauge-high"></i></div>
+                <h3>Interactive Study Dashboard</h3>
+                <p>An organized dashboard to track study timetables, group sync status, and analyze your productivity
+                    trends.</p>
+            </div>
+            <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_collab.png" alt="Collaborative Group Sync">
+                </div>
+                <div class="icon-box"><i class="fa-solid fa-user-group"></i></div>
+                <h3>Collaborative Group Sync</h3>
+                <p>Share extracted tasks and study timetables with classmates instantly, syncing study pipelines across
+                    your study group.</p>
+            </div>
+            <div class="card">
+                <div class="card-image">
+                    <img src="images/feature_analytics.png" alt="AI Learning Analytics">
+                </div>
+                <div class="icon-box"><i class="fa-solid fa-chart-line"></i></div>
+                <h3>AI Learning Analytics</h3>
+                <p>Track your submission patterns, assignment deadlines compliance, and receive personalized tips to
+                    prevent procrastination.</p>
             </div>
         </div>
     </section>
@@ -80,20 +262,51 @@
         <div class="steps">
             <div class="step">
                 <div class="step-num">01</div>
-                <h3>Install App</h3>
-                <p>Download the Chatnalyxer mobile app to your device.</p>
+                <h3>Install & Register</h3>
+                <p>Download the Chatnalyxer app for iOS or Android. Create a secure student profile to house your custom
+                    calendar and alerts.</p>
             </div>
-            <div class="step-connector"></div>
             <div class="step">
                 <div class="step-num">02</div>
-                <h3>Link WhatsApp</h3>
-                <p>Scan the QR code to securely link your WhatsApp account.</p>
+                <h3>Scan Authentication QR</h3>
+                <p>Open WhatsApp on your phone and scan the secure in-app QR code to connect your session to our secure
+                    background listener.</p>
             </div>
-            <div class="step-connector"></div>
             <div class="step">
                 <div class="step-num">03</div>
-                <h3>Get Insights</h3>
-                <p>Let AI analyze your chats and organize your life automatically.</p>
+                <h3>Configure Active Groups</h3>
+                <p>Toggle and select which specific class group chats, study hubs, or project channels you want
+                    Chatnalyxer to monitor.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">04</div>
+                <h3>Real-Time AI Filtering</h3>
+                <p>Gemini NLP actively listens to incoming texts, filtering out day-to-day chatter, greeting spam, and
+                    messages without tasks.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">05</div>
+                <h3>Multi-Modal Processing</h3>
+                <p>Upload a syllabus PDF, snap photos of homework schedules, or forward voice messages. AI parses text,
+                    charts, and speech.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">06</div>
+                <h3>Verify & Adjust Tasks</h3>
+                <p>Review automatically generated event cards. Tweak titles, due dates, or urgency scores with our
+                    built-in AI chat assistant.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">07</div>
+                <h3>Universal Calendar Ingestion</h3>
+                <p>Save events to your personal schedule. Sync is pushed instantly to Google Calendar, Microsoft
+                    Outlook, or local memory.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">08</div>
+                <h3>Persistent Priority Alerts</h3>
+                <p>Urgent tasks trigger mobile alarms. High-priority deadlines persist in your notifications drawer
+                    until marked complete.</p>
             </div>
         </div>
     </section>
@@ -119,5 +332,445 @@
         </div>
     </footer>
 
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const history = document.getElementById("chat-history-container");
+            const bubbles = [
+                document.getElementById("msg-noise-1"),
+                document.getElementById("msg-noise-2"),
+                document.getElementById("msg-noise-3"),
+                document.getElementById("msg-noise-4"),
+                document.getElementById("msg-noise-5"),
+                document.getElementById("msg-noise-6"),
+                document.getElementById("msg-important"),
+                document.getElementById("msg-noise-7"),
+                document.getElementById("msg-noise-8"),
+                document.getElementById("msg-noise-9")
+            ];
+            const ai = document.getElementById("ai-processor");
+            const task = document.getElementById("task-event");
+            const sandboxInput = document.getElementById("sandbox-input");
+            const sandboxBtn = document.getElementById("sandbox-btn");
+
+            // Animation timing managers
+            let activeTimeouts = [];
+
+            function addTimeout(callback, delay) {
+                const id = setTimeout(callback, delay);
+                activeTimeouts.push(id);
+                return id;
+            }
+
+            function clearAllTimeouts() {
+                activeTimeouts.forEach(id => clearTimeout(id));
+                activeTimeouts = [];
+            }
+
+            function getCurrentTime() {
+                const now = new Date();
+                let hours = now.getHours();
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // 0 should be 12
+                return `${hours}:${minutes} ${ampm}`;
+            }
+
+            function getAlarmTime(timeStr) {
+                const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                if (match) {
+                    let hour = parseInt(match[1]);
+                    const minute = match[2];
+                    let ampm = match[3].toUpperCase();
+
+                    hour = hour - 1;
+                    if (hour === 0) {
+                        hour = 12;
+                    } else if (hour === 11 && ampm === "PM" && parseInt(match[1]) === 12) {
+                        ampm = "AM";
+                    } else if (hour === 11 && ampm === "AM" && parseInt(match[1]) === 12) {
+                        ampm = "PM";
+                    }
+                    return `${hour}:${minute} ${ampm}`;
+                }
+                return "1 hour before";
+            }
+
+            function escapeHTML(str) {
+                return str.replace(/[&<>'"]/g,
+                    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+                );
+            }
+
+            // Client-side regex deadline parser simulating Gemini AI
+            function parseMessage(text) {
+                const textLower = text.toLowerCase();
+
+                const subjects = ["physics", "chemistry", "biology", "science", "math", "calculus", "algebra", "history", "coding", "programming", "english", "literature", "lab", "assignment", "homework", "project", "report", "exam", "quiz", "test", "syllabus"];
+                let taskName = "Assignment Submission";
+
+                let foundSubject = "";
+                for (const sub of subjects) {
+                    if (textLower.includes(sub)) {
+                        foundSubject = sub.charAt(0).toUpperCase() + sub.slice(1);
+                        break;
+                    }
+                }
+
+                if (foundSubject) {
+                    if (textLower.includes("report")) {
+                        taskName = `${foundSubject} Report Submission`;
+                    } else if (textLower.includes("lab")) {
+                        taskName = `${foundSubject} Lab Report`;
+                    } else if (textLower.includes("exam") || textLower.includes("quiz") || textLower.includes("test")) {
+                        taskName = `${foundSubject} Quiz/Exam`;
+                    } else if (textLower.includes("project")) {
+                        taskName = `${foundSubject} Project Ingestion`;
+                    } else {
+                        taskName = `${foundSubject} Task`;
+                    }
+                } else {
+                    const submitMatch = textLower.match(/(?:submit|upload|turn in|finish|do)\s+([a-zA-Z0-9\s]{3,20})/);
+                    if (submitMatch && submitMatch[1]) {
+                        taskName = submitMatch[1].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    }
+                }
+
+                let dateStr = "";
+                if (textLower.includes("today")) {
+                    dateStr = "Today";
+                } else if (textLower.includes("tonight")) {
+                    dateStr = "Tonight";
+                } else if (textLower.includes("tomorrow")) {
+                    dateStr = "Tomorrow";
+                } else if (textLower.includes("next monday")) {
+                    dateStr = "Next Monday";
+                } else if (textLower.includes("next tuesday")) {
+                    dateStr = "Next Tuesday";
+                } else if (textLower.includes("next wednesday")) {
+                    dateStr = "Next Wednesday";
+                } else if (textLower.includes("next thursday")) {
+                    dateStr = "Next Thursday";
+                } else if (textLower.includes("next friday")) {
+                    dateStr = "Next Friday";
+                } else if (textLower.includes("monday")) {
+                    dateStr = "Monday";
+                } else if (textLower.includes("tuesday")) {
+                    dateStr = "Tuesday";
+                } else if (textLower.includes("wednesday")) {
+                    dateStr = "Wednesday";
+                } else if (textLower.includes("thursday")) {
+                    dateStr = "Thursday";
+                } else if (textLower.includes("friday")) {
+                    dateStr = "Friday";
+                } else {
+                    const monthMatch = textLower.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d+(?:st|nd|rd|th)?/);
+                    if (monthMatch) {
+                        dateStr = monthMatch[0].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    } else {
+                        dateStr = "Tomorrow";
+                    }
+                }
+
+                let timeStr = "11:59 PM";
+                const timeMatch = textLower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|noon|midnight)/);
+                if (timeMatch) {
+                    const hour = timeMatch[1];
+                    const min = timeMatch[2] ? `:${timeMatch[2]}` : ":00";
+                    const ampm = timeMatch[3].toUpperCase();
+                    if (ampm === "NOON") {
+                        timeStr = "12:00 PM";
+                    } else if (ampm === "MIDNIGHT") {
+                        timeStr = "11:59 PM";
+                    } else {
+                        timeStr = `${hour}${min} ${ampm}`;
+                    }
+                } else if (textLower.includes("noon")) {
+                    timeStr = "12:00 PM";
+                } else if (textLower.includes("midnight")) {
+                    timeStr = "11:59 PM";
+                }
+
+                let priority = "Medium Priority";
+                let priorityBadge = `<span class="priority-badge" style="background: rgba(0, 206, 201, 0.1); color: #00cec9; border: 1px solid rgba(0, 206, 201, 0.2);">Medium Priority</span>`;
+
+                if (textLower.includes("today") || textLower.includes("tonight") || textLower.includes("tomorrow") || textLower.includes("urgent") || textLower.includes("asap")) {
+                    priority = "High Priority";
+                    priorityBadge = `<span class="priority-badge high">🔴 High Priority</span>`;
+                } else if (textLower.includes("next week") || textLower.includes("later")) {
+                    priority = "Low Priority";
+                    priorityBadge = `<span class="priority-badge" style="background: rgba(255, 255, 255, 0.05); color: #b2b2b2; border: 1px solid rgba(255, 255, 255, 0.1);">Low Priority</span>`;
+                }
+
+                const hasDeadlineKeywords = textLower.includes("due") || textLower.includes("submit") || textLower.includes("upload") || textLower.includes("deadline") || textLower.includes("reminder") || textLower.includes("quiz") || textLower.includes("exam") || textLower.includes("test") || textLower.includes("homework") || textLower.includes("assignment") || textLower.includes("till") || textLower.includes("by") || textLower.includes("at");
+
+                return {
+                    isValid: hasDeadlineKeywords,
+                    taskName,
+                    dateStr,
+                    timeStr,
+                    priority,
+                    priorityBadge
+                };
+            }
+
+            function runAnimationCycle() {
+                // Reset states
+                history.classList.remove("analyzing");
+                ai.classList.remove("visible");
+                task.classList.remove("visible");
+
+                // Clear any sandbox bubbles
+                const sandboxMsg = document.querySelectorAll(".sandbox-bubble");
+                sandboxMsg.forEach(m => m.remove());
+
+                bubbles.forEach(b => {
+                    b.classList.remove("visible", "hidden");
+                });
+                history.scrollTop = 0;
+
+                // State 1: Fade in bubbles one by one to simulate incoming chat stream and scroll
+                let delay = 200;
+                bubbles.forEach((b, index) => {
+                    addTimeout(() => {
+                        b.classList.add("visible");
+
+                        // Smoothly scroll history container to bottom
+                        history.scrollTo({
+                            top: history.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }, delay);
+                    delay += 600; // 0.6s stagger between messages
+                });
+
+                // State 2: Trigger AI analyzing (dim noise, highlight important event)
+                addTimeout(() => {
+                    history.classList.add("analyzing");
+                    ai.classList.add("visible");
+
+                    // Scroll to focus on the important message
+                    const impMsg = document.getElementById("msg-important");
+                    history.scrollTo({
+                        top: impMsg.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+
+                    // State 3: Show Default Calendar Task Card overlay, hide AI status
+                    addTimeout(() => {
+                        // Reset defaults on default task card
+                        task.innerHTML = `
+                            <div class="task-header">
+                                <span class="task-badge"><i class="fa-solid fa-calendar-check"></i> Event Detected</span>
+                                <span class="priority-badge high">🔴 High Priority</span>
+                            </div>
+                            <h4 class="task-title">Physics Assignment Submission</h4>
+                            <div class="task-details">
+                                <div class="detail-item">
+                                    <i class="fa-regular fa-calendar"></i>
+                                    <span>Tonight (10:00 PM)</span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="fa-solid fa-bell"></i>
+                                    <span>Alarm: 9:00 PM</span>
+                                </div>
+                            </div>
+                            <div class="task-footer">
+                                <span class="sync-status"><i class="fa-solid fa-circle-check"></i> Added to Calendar</span>
+                                <span class="alarm-status" style="color: #ff7675; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i class="fa-solid fa-bell fa-shake"></i> Alarm Active</span>
+                            </div>
+                        `;
+
+                        ai.classList.remove("visible");
+                        task.classList.add("visible");
+
+                        // State 4: Reset loop after viewing the card
+                        addTimeout(() => {
+                            // Fade out everything
+                            bubbles.forEach(b => {
+                                b.classList.remove("visible");
+                                b.classList.add("hidden");
+                            });
+                            task.classList.remove("visible");
+                            history.classList.remove("analyzing");
+
+                            // Restart after transition
+                            addTimeout(runAnimationCycle, 1000);
+                        }, 5000); // Wait 5s for user to read task card
+
+                    }, 3000); // AI scanning animation runs for 3s
+
+                }, delay + 1000); // Start analysis 1s after last message
+            }
+
+            // Sandbox Submission Handler
+            function handleSandboxSubmit() {
+                const inputValue = sandboxInput.value.trim();
+                if (!inputValue) return;
+
+                // 1. Interrupt loop and reset
+                clearAllTimeouts();
+
+                history.classList.remove("analyzing");
+                ai.classList.remove("visible");
+                task.classList.remove("visible");
+
+                // Fade out current bubbles
+                bubbles.forEach(b => {
+                    b.classList.remove("visible");
+                    b.classList.add("hidden");
+                });
+
+                // Clear previous sandbox test bubbles
+                const prevSandbox = document.querySelectorAll(".sandbox-bubble");
+                prevSandbox.forEach(m => m.remove());
+
+                // 2. Append new user message bubble after layout resets
+                addTimeout(() => {
+                    const userBubble = document.createElement("div");
+                    userBubble.className = "chat-bubble left sandbox-bubble fade-transition";
+                    userBubble.id = "sandbox-msg";
+                    userBubble.innerHTML = `
+                        <div class="message-sender">You (Student)</div>
+                        <p>${escapeHTML(inputValue)}</p>
+                        <span class="message-time">${getCurrentTime()}</span>
+                    `;
+                    history.appendChild(userBubble);
+
+                    // Show custom bubble
+                    addTimeout(() => {
+                        userBubble.classList.add("visible");
+                        history.scrollTo({
+                            top: history.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }, 50);
+
+                    // 3. Start AI Scan
+                    addTimeout(() => {
+                        history.classList.add("analyzing");
+                        ai.classList.add("visible");
+
+                        // Focus on sandbox message
+                        history.scrollTo({
+                            top: userBubble.offsetTop - 20,
+                            behavior: 'smooth'
+                        });
+
+                        // 4. Parse message and populate results
+                        addTimeout(() => {
+                            const parsed = parseMessage(inputValue);
+
+                            if (parsed.isValid) {
+                                let alarmDetail = '';
+                                let alarmFooter = '';
+                                if (parsed.priority === "High Priority") {
+                                    alarmDetail = `
+                                        <div class="detail-item">
+                                            <i class="fa-solid fa-bell" style="color: #ff7675;"></i>
+                                            <span>Alarm: ${escapeHTML(getAlarmTime(parsed.timeStr))}</span>
+                                        </div>
+                                    `;
+                                    alarmFooter = `
+                                        <span class="alarm-status" style="color: #ff7675; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i class="fa-solid fa-bell fa-shake"></i> Alarm Active</span>
+                                    `;
+                                } else if (parsed.priority === "Medium Priority") {
+                                    alarmDetail = `
+                                        <div class="detail-item">
+                                            <i class="fa-regular fa-bell" style="color: #ffeaa7;"></i>
+                                            <span>Reminder: ${escapeHTML(getAlarmTime(parsed.timeStr))}</span>
+                                        </div>
+                                    `;
+                                    alarmFooter = `
+                                        <span class="alarm-status" style="color: #ffeaa7; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i class="fa-regular fa-bell"></i> Reminder Set</span>
+                                    `;
+                                } else {
+                                    alarmDetail = `
+                                        <div class="detail-item">
+                                            <i class="fa-solid fa-bell-slash" style="color: #b2b2b2;"></i>
+                                            <span>No Alarm</span>
+                                        </div>
+                                    `;
+                                    alarmFooter = `
+                                        <span class="alarm-status" style="color: #b2b2b2; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i class="fa-solid fa-bell-slash"></i> Calendar Only</span>
+                                    `;
+                                }
+
+                                task.innerHTML = `
+                                    <div class="task-header">
+                                        <span class="task-badge"><i class="fa-solid fa-calendar-check"></i> Event Detected</span>
+                                        ${parsed.priorityBadge}
+                                    </div>
+                                    <h4 class="task-title">${escapeHTML(parsed.taskName)}</h4>
+                                    <div class="task-details">
+                                        <div class="detail-item">
+                                            <i class="fa-regular fa-calendar"></i>
+                                            <span>${escapeHTML(parsed.dateStr)} (${escapeHTML(parsed.timeStr)})</span>
+                                        </div>
+                                        ${alarmDetail}
+                                    </div>
+                                    <div class="task-footer">
+                                        <span class="sync-status"><i class="fa-solid fa-circle-check"></i> Added to Calendar</span>
+                                        ${alarmFooter}
+                                    </div>
+                                `;
+                            } else {
+                                task.innerHTML = `
+                                    <div class="task-header">
+                                        <span class="task-badge" style="color: #ffeaa7; background: rgba(253, 203, 110, 0.1); border-color: rgba(253, 203, 110, 0.3);"><i class="fa-solid fa-filter"></i> Chat Noise Filtered</span>
+                                        <span class="priority-badge high">🔴 High Priority</span>
+                                    </div>
+                                    <h4 class="task-title">Physics Assignment Submission</h4>
+                                    <div class="task-details">
+                                        <div class="detail-item">
+                                            <i class="fa-regular fa-calendar"></i>
+                                            <span>Tonight (10:00 PM)</span>
+                                        </div>
+                                        <div class="detail-item">
+                                            <i class="fa-solid fa-bell"></i>
+                                            <span>Alarm: 9:00 PM</span>
+                                        </div>
+                                    </div>
+                                    <div class="task-footer">
+                                        <span class="sync-status" style="color: #e67e22;"><i class="fa-solid fa-circle-info"></i> Message ignored as spam. Last deadline kept.</span>
+                                        <span class="alarm-status" style="color: #ff7675; display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.75rem;"><i class="fa-solid fa-bell fa-shake"></i> Alarm Active</span>
+                                    </div>
+                                `;
+                            }
+
+                            ai.classList.remove("visible");
+                            task.classList.add("visible");
+
+                            // 5. Restart normal loop after 8 seconds of viewing
+                            addTimeout(() => {
+                                userBubble.classList.remove("visible");
+                                userBubble.classList.add("hidden");
+                                task.classList.remove("visible");
+                                history.classList.remove("analyzing");
+                                sandboxInput.value = "";
+
+                                addTimeout(runAnimationCycle, 1000);
+                            }, 8000);
+
+                        }, 3000); // Scan for 3s
+
+                    }, 1200); // Pulse AI after user message appears
+
+                }, 400); // Layout clear timeout
+            }
+
+            // Bind sandbox events
+            sandboxBtn.addEventListener("click", handleSandboxSubmit);
+            sandboxInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    handleSandboxSubmit();
+                }
+            });
+
+            // Start the default animation cycle
+            runAnimationCycle();
+        });
+    </script>
 </body>
+
 </html>
