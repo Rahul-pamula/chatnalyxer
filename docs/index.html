@@ -3,121 +3,416 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatnalyxer - Turn WhatsApp into Power</title>
+    <title>Chatnalyxer - Never Miss a WhatsApp Deadline Again</title>
+    <meta name="description" content="Chatnalyxer uses AI to turn messy WhatsApp group chats into organized tasks, deadlines, and smart reminders automatically.">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
     <!-- Navigation -->
-    <nav class="glass-nav">
-        <div class="logo">
-            <i class="fa-solid fa-chart-simple gradient-text"></i> Chatnalyxer
-        </div>
-        <div class="links">
-            <a href="#features">Features</a>
-            <a href="#how-it-works">How it Works</a>
-            <a href="#download" class="btn-primary">Get App</a>
+    <nav class="navbar" id="navbar">
+        <div class="container">
+            <a href="#" class="nav-brand">
+                <img src="logo.png" alt="Chatnalyxer Logo" class="nav-logo" id="nav-logo">
+                <span>Chatnalyxer</span>
+            </a>
+            
+            <div class="nav-menu">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#how-it-works" class="nav-link">How it Works</a>
+            </div>
+
+            <div class="nav-actions">
+                <a href="#download" class="btn btn-primary">Get App</a>
+            </div>
+
+            <button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
         </div>
     </nav>
 
+    <!-- Mobile Navigation Drawer -->
+    <div class="mobile-nav" id="mobile-nav">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#how-it-works" class="nav-link">How it Works</a>
+        <a href="#download" class="btn btn-primary" style="text-align: center; margin-top: 10px;">Get App</a>
+    </div>
+
     <!-- Hero Section -->
-    <header class="hero">
-        <div class="hero-content">
-            <div class="badge">🚀 Coming Soon</div>
-            <h1>Unlock Your <br><span class="gradient-text">WhatsApp Potential</span></h1>
-            <p>Automated analysis, procrastination fighting, and smart insights—right in your chat. The first AI-powered companion for your messaging.</p>
-            <div class="hero-buttons">
-                <a href="#download" class="btn-primary glow">Join Waiting List <i class="fa-solid fa-arrow-right"></i></a>
-                <a href="#features" class="btn-secondary">Learn More</a>
+    <header class="hero section">
+        <div class="container">
+            <div class="hero-content reveal">
+                <div class="badge">🚀 Coming Soon</div>
+                <h1 class="hero-title">Never Miss a Deadline from WhatsApp Again</h1>
+                <p class="hero-subtext">Chatnalyxer uses AI to turn messy WhatsApp group chats into organized tasks, deadlines, and smart reminders automatically.</p>
+                <div class="hero-buttons">
+                    <a href="#download" class="btn btn-primary">Get Early Access</a>
+                    <a href="#how-it-works" class="btn btn-secondary">Watch Demo</a>
+                </div>
             </div>
-        </div>
-        <div class="hero-visual">
-            <!-- Placeholder for Hero Image (using CSS art/gradient for now) -->
-            <div class="dashboard-mockup">
-                <div class="screen-content">
-                    <div class="chat-bubble left">Hey, when is the meeting?</div>
-                    <div class="chat-bubble right">Analyzing... 📅 Added to Calendar.</div>
-                    <div class="graph-bar"></div>
-                    <div class="graph-bar"></div>
-                    <div class="graph-bar"></div>
+            <div class="hero-visual reveal">
+                <div class="hero-bg-blob"></div>
+                <!-- Interactive Product Mockup -->
+                <div class="mockup-container">
+                    <div class="mockup-flow">
+                        
+                        <!-- 1. WhatsApp Message -->
+                        <div class="mockup-wa">
+                            <div class="mockup-wa-header">
+                                <div class="mockup-wa-avatar">SG</div>
+                                <div class="mockup-wa-name">Study Group Chat</div>
+                            </div>
+                            <div class="mockup-wa-body">
+                                Hey team, don't forget we have the <span class="mockup-wa-highlight">Physics Lab Report</span> due <span class="mockup-wa-highlight">this Friday by 11:59 PM</span>. Submissions are on the portal!
+                                <div class="mockup-wa-time">14:32</div>
+                            </div>
+                        </div>
+
+                        <!-- AI Processing status -->
+                        <div class="mockup-ai-status">
+                            <i class="fa-solid fa-bolt"></i> AI Processing...
+                        </div>
+
+                        <!-- 2. Notion-style Task Card -->
+                        <div class="mockup-task">
+                            <div class="mockup-task-top">
+                                <span class="mockup-task-badge">WhatsApp Extraction</span>
+                                <span class="mockup-task-priority">High Priority</span>
+                            </div>
+                            <div class="mockup-task-title">Physics Lab Report Submission</div>
+                            <div class="mockup-task-details">
+                                <div class="mockup-task-detail-item">
+                                    <i class="fa-regular fa-calendar-check"></i> Friday, 11:59 PM
+                                </div>
+                                <div class="mockup-task-detail-item">
+                                    <i class="fa-solid fa-list-check"></i> Tasks
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Calendar Sync -->
+                        <div class="mockup-calendar">
+                            <div class="mockup-cal-date">
+                                <span class="mockup-cal-month">FRI</span>
+                                <span class="mockup-cal-day">31</span>
+                            </div>
+                            <div class="mockup-cal-event">
+                                <div class="mockup-cal-event-title">Physics Lab Report Due</div>
+                                <div class="mockup-cal-event-time">11:59 PM • Calendar Sync</div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Push Notification -->
+                        <div class="mockup-notification">
+                            <i class="fa-solid fa-bell mockup-notif-icon"></i>
+                            <div class="mockup-notif-text">
+                                <div class="mockup-notif-title">Chatnalyxer Reminder</div>
+                                <div>Physics Lab Report is due in 24 hours. Don't forget to submit!</div>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>
     </header>
 
+    <!-- Problem Section -->
+    <section class="section section-alt" id="problem">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="badge">The Problem</div>
+                <h2 class="section-title">Why Group Chats Fail Students</h2>
+                <p class="section-subtext">Managing course schedules inside chaotic social chats is frustrating and inefficient.</p>
+            </div>
+            <div class="problem-grid">
+                <div class="problem-card reveal">
+                    <div class="problem-icon">
+                        <i class="fa-solid fa-comments"></i>
+                    </div>
+                    <h3>Too Many Messages</h3>
+                    <p>Important deadlines get buried under hundreds of daily group chat notifications, memes, and casual conversations.</p>
+                </div>
+                <div class="problem-card reveal">
+                    <div class="problem-icon">
+                        <i class="fa-solid fa-calendar-xmark"></i>
+                    </div>
+                    <h3>Missed Deadlines</h3>
+                    <p>Without centralized tracking, you forget exams, quizzes, or assignments until classmates mention them the night before.</p>
+                </div>
+                <div class="problem-card reveal">
+                    <div class="problem-icon">
+                        <i class="fa-solid fa-circle-question"></i>
+                    </div>
+                    <h3>Constant Confusion</h3>
+                    <p>Sifting through search history just to find dates, submission links, rubrics, and schedules shared weeks ago.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="section" id="solution">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="badge">The Solution</div>
+                <h2 class="section-title">How We Turn Chat into Action</h2>
+                <p class="section-subtext">Chatnalyxer runs in the background, instantly parsing your messages to isolate what matters.</p>
+            </div>
+            <div class="solution-flow reveal">
+                <div class="solution-step">
+                    <div class="solution-step-icon wa">
+                        <i class="fa-brands fa-whatsapp"></i>
+                    </div>
+                    <h4>1. Message</h4>
+                </div>
+                <i class="fa-solid fa-arrow-right solution-arrow"></i>
+                <div class="solution-step">
+                    <div class="solution-step-icon ai">
+                        <i class="fa-solid fa-brain"></i>
+                    </div>
+                    <h4>2. AI Extraction</h4>
+                </div>
+                <i class="fa-solid fa-arrow-right solution-arrow"></i>
+                <div class="solution-step">
+                    <div class="solution-step-icon task">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+                    <h4>3. Task Created</h4>
+                </div>
+                <i class="fa-solid fa-arrow-right solution-arrow"></i>
+                <div class="solution-step">
+                    <div class="solution-step-icon remind">
+                        <i class="fa-solid fa-bell"></i>
+                    </div>
+                    <h4>4. Smart Reminder</h4>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Features Section -->
-    <section id="features" class="section">
-        <h2 class="section-title">Why Chatnalyxer?</h2>
-        <div class="grid">
-            <div class="card">
-                <div class="icon-box"><i class="fa-solid fa-brain"></i></div>
-                <h3>AI Analysis</h3>
-                <p>Understand your chat patterns and get smart summaries of long conversations instantly.</p>
+    <section class="section section-alt" id="features">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="badge">Core Features</div>
+                <h2 class="section-title">Built to Keep You Ahead</h2>
+                <p class="section-subtext">Powerful utilities designed to automate your academic scheduling without adding overhead.</p>
             </div>
-            <div class="card">
-                <div class="icon-box"><i class="fa-solid fa-shield-halved"></i></div>
-                <h3>Focus Shield</h3>
-                <p>Stop doom-scrolling. Our "Tough Love" mode blocks distractions when you need to focus.</p>
-            </div>
-            <div class="card">
-                <div class="icon-box"><i class="fa-regular fa-calendar-check"></i></div>
-                <h3>Auto-Scheduling</h3>
-                <p>Never miss a date. If a friend mentions "Coffee at 5", we add it to your calendar.</p>
-            </div>
-            <div class="card">
-                <div class="icon-box"><i class="fa-solid fa-lock"></i></div>
-                <h3>Privacy First</h3>
-                <p>Your data stays on your device. We use local-first processing for maximum security.</p>
+            <div class="features-grid">
+                
+                <!-- Card 1 -->
+                <div class="feature-card reveal">
+                    <div class="feature-icon-wrapper">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <h3>AI Deadline Extraction</h3>
+                    <p>Our smart AI models parse natural language, messages, and chats in real-time, detecting deadlines and homework dates automatically without any manual input required.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="feature-card reveal">
+                    <div class="feature-icon-wrapper">
+                        <i class="fa-solid fa-photo-film"></i>
+                    </div>
+                    <h3>Multi-Modal Processing</h3>
+                    <p>Send notice board photos, syllabus PDFs, screenshots, or voice recordings directly. Chatnalyxer extracts the raw dates and turns them into organized schedules instantly.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="feature-card reveal">
+                    <div class="feature-icon-wrapper">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </div>
+                    <h3>Smart Notifications</h3>
+                    <p>Get custom nudge alerts on WhatsApp and via system notifications 48 hours, 24 hours, and 1 hour before a deadline hits, keeping you on track effortlessly.</p>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="feature-card reveal">
+                    <div class="feature-icon-wrapper">
+                        <i class="fa-solid fa-calendar-days"></i>
+                    </div>
+                    <h3>Calendar Sync</h3>
+                    <p>Integrate seamlessly with Google Calendar, Apple Calendar, Notion, and structured reminder apps to keep all academic due dates in your personal workspace.</p>
+                </div>
+
             </div>
         </div>
     </section>
 
-    <!-- How It Works -->
-    <section id="how-it-works" class="section alt-bg">
-        <h2 class="section-title">How It Works</h2>
-        <div class="steps">
-            <div class="step">
-                <div class="step-num">01</div>
-                <h3>Install App</h3>
-                <p>Download the Chatnalyxer mobile app to your device.</p>
+    <!-- How It Works Section -->
+    <section class="section" id="how-it-works">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="badge">Process</div>
+                <h2 class="section-title">How It Works</h2>
+                <p class="section-subtext">Get your school deadlines under control in under two minutes.</p>
             </div>
-            <div class="step-connector"></div>
-            <div class="step">
-                <div class="step-num">02</div>
-                <h3>Link WhatsApp</h3>
-                <p>Scan the QR code to securely link your WhatsApp account.</p>
-            </div>
-            <div class="step-connector"></div>
-            <div class="step">
-                <div class="step-num">03</div>
-                <h3>Get Insights</h3>
-                <p>Let AI analyze your chats and organize your life automatically.</p>
+            <div class="steps-layout">
+                
+                <div class="step-card reveal">
+                    <div class="step-number">01</div>
+                    <div class="step-card-content">
+                        <h3>Connect WhatsApp</h3>
+                        <p>Link your account by adding the Chatnalyxer number to your group chat, or set up a secure personal chat forwarder.</p>
+                    </div>
+                </div>
+
+                <div class="step-card reveal">
+                    <div class="step-number">02</div>
+                    <div class="step-card-content">
+                        <h3>AI Detects Deadlines</h3>
+                        <p>Our AI processes incoming chat logs in real-time, isolating deadlines, assignments, exam papers, and project dates.</p>
+                    </div>
+                </div>
+
+                <div class="step-card reveal">
+                    <div class="step-number">03</div>
+                    <div class="step-card-content">
+                        <h3>Get Smart Reminders</h3>
+                        <p>Get automatic notifications and calendar event cards pushed straight to your devices so you never miss another submission.</p>
+                    </div>
+                </div>
+
             </div>
         </div>
     </section>
 
-    <!-- Download / CTA -->
-    <section id="download" class="cta-section">
-        <div class="cta-box glass-panel">
-            <h2>Ready to Upgrade Your Chat?</h2>
-            <p>We are currently in private beta. Sign up to get notified when we launch.</p>
-            <form class="signup-form" onsubmit="event.preventDefault(); alert('Thanks! We will notify you.');">
-                <input type="email" placeholder="Enter your email" required>
-                <button type="submit" class="btn-primary">Notify Me</button>
-            </form>
-            <p class="crypto-note"><small>Available soon on iOS & Android</small></p>
+    <!-- Trust Section -->
+    <section class="section section-alt" id="trust">
+        <div class="container">
+            <div class="section-header reveal">
+                <div class="badge">Security & Privacy</div>
+                <h2 class="section-title">Privacy-First Architecture</h2>
+                <p class="section-subtext">Your academic records are private. We build with security from the ground up.</p>
+            </div>
+            <div class="trust-grid">
+                
+                <div class="trust-card reveal">
+                    <div class="trust-icon-box">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h3>End-to-End Encryption</h3>
+                    <p>All data transit channels are secured with E2E industry-grade SSL encryption protocols, shielding your chat content.</p>
+                </div>
+
+                <div class="trust-card reveal">
+                    <div class="trust-icon-box">
+                        <i class="fa-solid fa-user-lock"></i>
+                    </div>
+                    <h3>Privacy-First</h3>
+                    <p>Choose exactly which group chats or chats you want the AI companion to read. Chatnalyxer will ignore everything else.</p>
+                </div>
+
+                <div class="trust-card reveal">
+                    <div class="trust-icon-box">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </div>
+                    <h3>No Message Storage</h3>
+                    <p>We process messages transiently to extract deadlines. Once tasks are identified, the chat text is deleted permanently from our servers.</p>
+                </div>
+
+            </div>
         </div>
     </section>
 
+    <!-- Final CTA Section -->
+    <section class="section" id="download">
+        <div class="container">
+            <div class="cta-box reveal">
+                <h2>Start Staying Organized Today</h2>
+                <p>Join the waitlist and never miss a deadline again. We'll send you an invitation code as soon as your slot opens.</p>
+                <form class="cta-form" id="waitlist-form" onsubmit="event.preventDefault(); handleWaitlistSubmit();">
+                    <input type="email" placeholder="Enter your academic email" required class="cta-input" id="waitlist-email">
+                    <button type="submit" class="btn btn-primary">Notify Me</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
     <footer>
-        <p>&copy; 2024 Chatnalyxer. All rights reserved.</p>
-        <div class="socials">
-            <a href="#"><i class="fa-brands fa-github"></i></a>
-            <a href="#"><i class="fa-brands fa-twitter"></i></a>
+        <div class="container">
+            <div class="footer-brand">
+                <img src="logo.png" alt="Chatnalyxer Logo" class="footer-logo" id="footer-logo">
+                <span>Chatnalyxer</span>
+            </div>
+            <div class="footer-links">
+                <a href="#features" class="footer-link">Features</a>
+                <a href="mailto:support@chatnalyxer.com" class="footer-link">Contact</a>
+                <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="footer-link"><i class="fa-brands fa-github"></i> GitHub</a>
+            </div>
         </div>
     </footer>
 
+    <!-- Interactive Scripts -->
+    <script>
+        // Hamburger Menu Toggle
+        const menuToggle = document.getElementById('menu-toggle');
+        const mobileNav = document.getElementById('mobile-nav');
+
+        menuToggle.addEventListener('click', () => {
+            mobileNav.classList.toggle('active');
+            const spans = menuToggle.querySelectorAll('span');
+            if (mobileNav.classList.contains('active')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(6px, -6px)';
+            } else {
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            }
+        });
+
+        // Close mobile nav when links are clicked
+        const mobileLinks = mobileNav.querySelectorAll('.nav-link, .btn');
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                mobileNav.classList.remove('active');
+                const spans = menuToggle.querySelectorAll('span');
+                spans[0].style.transform = 'none';
+                spans[1].style.opacity = '1';
+                spans[2].style.transform = 'none';
+            });
+        });
+
+        // Scroll Reveal Animation (Intersection Observer)
+        const reveals = document.querySelectorAll('.reveal');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { 
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+
+        reveals.forEach(reveal => {
+            observer.observe(reveal);
+        });
+
+        // Waitlist Form Handler
+        function handleWaitlistSubmit() {
+            const emailInput = document.getElementById('waitlist-email');
+            const email = emailInput.value.trim();
+            if (email) {
+                alert(`Thank you! ${email} has been added to our early access waitlist.`);
+                emailInput.value = '';
+            }
+        }
+    </script>
 </body>
 </html>
