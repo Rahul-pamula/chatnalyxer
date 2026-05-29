@@ -900,6 +900,77 @@ footer .container {
     transform: translateY(0);
 }
 
+/* Team Section Styling */
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.team-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition-all);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.team-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.team-photo {
+    width: 90px;
+    height: 90px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    border: 2px solid var(--border-color);
+}
+
+.team-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.team-role-tag {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary);
+    background-color: rgba(79, 70, 229, 0.08);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    margin-bottom: 20px;
+    display: inline-block;
+}
+
+.team-socials {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+}
+
+.team-socials a {
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    transition: var(--transition-all);
+}
+
+.team-socials a:hover {
+    color: var(--primary);
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 992px) {
     .hero .container {
@@ -956,6 +1027,11 @@ footer .container {
         max-width: 400px;
         margin: 0 auto;
     }
+
+    .team-grid {
+        grid-template-columns: repeat(2, 1fr);
+        max-width: 680px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -987,6 +1063,11 @@ footer .container {
         flex-direction: column;
         gap: 24px;
         text-align: center;
+    }
+
+    .team-grid {
+        grid-template-columns: 1fr;
+        max-width: 320px;
     }
 }
 
