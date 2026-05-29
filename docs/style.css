@@ -903,9 +903,9 @@ footer .container {
 /* Team Section Styling */
 .team-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 32px;
-    max-width: 1000px;
+    max-width: 1140px;
     margin: 0 auto;
 }
 
