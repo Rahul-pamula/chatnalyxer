@@ -155,10 +155,12 @@ When deployed in separate Web Services on Render, containers cannot communicate 
 
 ---
 
+---
+
 ## 🔒 Security Checklist for Production
 
 *   **Ignore Environment Files**: Add `.env` to your root `.gitignore`. Never commit API keys, passwords, or Supabase credentials.
-*   **Production Database Pooler**: Always use Supabase Pooler (`port 6543`) on Render. Render spinning down free services causes database connection cycles that can quickly exceed Supabase's max direct connection limits.
+*   **Production Database Pooler**: Always use Supabase Pooler (`port 6543`) on Render or VPS.
 *   **Enable CORS Origins**: Restrict backend request acceptance to only your deployed frontend domains inside `app/main.py`:
     ```python
     app.add_middleware(
@@ -169,4 +171,222 @@ When deployed in separate Web Services on Render, containers cannot communicate 
         allow_headers=["*"],
     )
     ```
-*   **Change Default Admin Credentials**: Override `admin` and `admin123` via Render environment variables (`ADMIN_USERNAME` / `ADMIN_PASSWORD`).
+*   **Change Default Admin Credentials**: Override `admin` and `admin123` via environment variables (`ADMIN_USERNAME` / `ADMIN_PASSWORD`).
+
+---
+
+## 💧 Option C: DigitalOcean Droplet Deployment (Recommended & Cost-Effective)
+
+Deploying all 4 services on a single DigitalOcean Droplet (VPS) is the most budget-friendly and robust option. You can host everything on a single **$4 - $6/month (1GB RAM / 1 vCPU / Ubuntu)** Droplet. 
+
+### Step 1: Create a DigitalOcean Droplet
+1. Log in to your DigitalOcean account.
+2. Click **Create > Droplets**.
+3. Choose **Region** (closest to your users).
+4. Choose **OS**: **Ubuntu 22.04 LTS** (or select **Docker on Ubuntu** from the Marketplace tab to skip Step 2).
+5. Choose **Size**: **Basic Plan (Regular CPU)** - `$4/mo` or `$6/mo` (1GB RAM, 1 CPU, 25GB SSD is plenty to start).
+6. Set **Authentication**: SSH keys (recommended) or Root Password.
+7. Click **Create Droplet**.
+
+---
+
+### Step 2: Install Docker & Docker Compose (If using clean Ubuntu)
+SSH into your Droplet (`ssh root@your_droplet_ip`) and run:
+```bash
+# Update package database
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Install Docker Compose v2
+sudo apt install docker-compose-v2 -y
+```
+
+---
+
+### Step 3: Clone Code & Configure Production `.env`
+1. Clone your project repository onto the server:
+   ```bash
+   git clone https://github.com/your-username/chatnalyxer.git /var/www/chatnalyxer
+   cd /var/www/chatnalyxer
+   ```
+2. Create and configure `.env` files in each subfolder. Ensure they point to production resources:
+   * **Backend** (`/var/www/chatnalyxer/chatnalyxer-backend/.env`):
+     ```env
+     DATABASE_URL=postgresql://postgres.[db-id]:[pass]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require
+     SESSION_MANAGER_URL=http://localhost:3002
+     OTP_SERVICE_URL=http://localhost:3001
+     GOOGLE_API_KEY=your_gemini_key
+     ```
+   * **Sessions** (`/var/www/chatnalyxer/user-whatsapp-sessions/.env`):
+     ```env
+     DATABASE_URL=your_supabase_pooler_url
+     BACKEND_URL=http://localhost:8000
+     ```
+   * **Admin** (`/var/www/chatnalyxer/admin-whatsapp-otp/.env`):
+     ```env
+     DATABASE_URL=your_supabase_pooler_url
+     BACKEND_URL=http://localhost:8000
+     SESSION_MANAGER_URL=http://localhost:3002
+     ADMIN_USERNAME=admin
+     ADMIN_PASSWORD=your_secure_password
+     ```
+
+---
+
+### Step 4: Configure Production `docker-compose.yml` (With Session Storage)
+To prevent users and admin accounts from logging out of WhatsApp every time containers restart, map **Docker Volumes** for Baileys auth credentials.
+
+Create or update `/var/www/chatnalyxer/docker-compose.prod.yml`:
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./chatnalyxer-backend
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000" # Expose only locally (Nginx handles public access)
+    environment:
+      - PORT=8000
+    env_file:
+      - ./chatnalyxer-backend/.env
+    restart: always
+
+  session-manager:
+    build:
+      context: ./user-whatsapp-sessions
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3002:3002"
+    env_file:
+      - ./user-whatsapp-sessions/.env
+    volumes:
+      # CRITICAL: Persist user WhatsApp session keys
+      - ./sessions:/app/sessions
+    restart: always
+
+  admin-dashboard:
+    build:
+      context: ./admin-whatsapp-otp
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file:
+      - ./admin-whatsapp-otp/.env
+    volumes:
+      # CRITICAL: Persist admin WhatsApp credentials
+      - ./admin-wa-auth:/app/admin-wa-auth
+    restart: always
+
+  mobile-web:
+    build:
+      context: ./chatnalyxer-mobile
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8081:8080"
+    restart: always
+```
+
+Start the containers:
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+### Step 5: Install Nginx & Set Up Reverse Proxy with SSL (Certbot)
+We want Nginx to listen on ports 80/443 and direct traffic to our Docker containers locally, providing HTTPS SSL validation.
+
+1. **Install Nginx & Certbot**:
+   ```bash
+   sudo apt install nginx certbot python3-certbot-nginx -y
+   ```
+2. **Configure Nginx Server Blocks**:
+   Create a configuration file `sudo nano /etc/nginx/sites-available/chatnalyxer`:
+   ```nginx
+   # 1. Expo Frontend Web (app.yourdomain.com)
+   server {
+       listen 80;
+       server_name app.yourdomain.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:8081;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+
+   # 2. FastAPI Backend (api.yourdomain.com)
+   server {
+       listen 80;
+       server_name api.yourdomain.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+
+   # 3. User Session Manager (sessions.yourdomain.com)
+   server {
+       listen 80;
+       server_name sessions.yourdomain.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:3002;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+
+   # 4. Admin OTP Dashboard (admin.yourdomain.com)
+   server {
+       listen 80;
+       server_name admin.yourdomain.com;
+
+       location / {
+           proxy_pass http://127.0.0.1:3001;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+3. **Enable configuration and restart Nginx**:
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/chatnalyxer /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl restart nginx
+   ```
+4. **Acquire Let's Encrypt SSL Certificates**:
+   Run Certbot to secure all subdomains automatically:
+   ```bash
+   sudo certbot --nginx -d app.yourdomain.com -d api.yourdomain.com -d sessions.yourdomain.com -d admin.yourdomain.com
+   ```
+   *Certbot will automatically obtain certificates and modify Nginx to force redirect all HTTP traffic to secure HTTPS!*
+
+---
+
+### Step 6: Verify Deployment
+* **Frontend UI**: Check `https://app.yourdomain.com`
+* **FastAPI Docs**: Check `https://api.yourdomain.com/docs`
+* **Sessions Status**: Check `https://sessions.yourdomain.com/health`
+* **Admin Login**: Check `https://admin.yourdomain.com`
+
+*To check live Docker logs on the VPS:*
+```bash
+docker compose -f docker-compose.prod.yml logs -f --tail 100
+```
