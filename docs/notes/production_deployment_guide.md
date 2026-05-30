@@ -175,26 +175,24 @@ When deployed in separate Web Services on Render, containers cannot communicate 
 
 ---
 
-## 💰 Resume/Portfolio Cost & Budget Estimation (GitHub Student Pack)
+## 💰 Production Cost & Budget Estimation (GitHub Developer Credits)
 
-Since this is a resume and portfolio project meant to be showcased to interviewers, we want the system to be **always-on (no sleeping/spinning down)**, fast-loading, and completely **free of out-of-pocket costs**. 
-
-By leveraging the **GitHub Student Developer Pack**, we can achieve this:
+For running a cost-effective, high-availability production cluster during early-stage testing and operations, we can leverage developer credits (such as the GitHub Student/Developer Pack) to achieve a zero-cost, always-on environment:
 
 ### 📊 Cost Breakdown Table
 
-| Component | Provider / Service | Specs / Details | Monthly Cost | Student Pack / Free Tier Benefit |
+| Component | Provider / Service | Specs / Details | Monthly Cost | Developer Pack / Free Tier Benefit |
 | :--- | :--- | :--- | :--- | :--- |
 | **Server & Containers** | DigitalOcean (Droplet) | 2 GB RAM / 1 vCPU / 50 GB SSD | **$0.00** *(Deducted)* | $200 DO credit covers this $12/mo plan for **16 Months**. |
 | **Database** | Supabase | Postgres Database (500MB storage) | **$0.00** | Covered under Supabase Free Tier. |
-| **Domain Name** | Namecheap or Name.com | Custom Domain (e.g., `.me`, `.tech`) | **$0.00** | Free 1-year domain name via GitHub Student Pack. |
+| **Domain Name** | Namecheap or Name.com | Custom Domain (e.g., `.me`, `.tech`) | **$0.00** | Free 1-year domain name via Developer Pack. |
 | **SSL Certificate** | Let's Encrypt | HTTPS Certificate for 4 subdomains | **$0.00** | Always free and auto-renewed via Certbot. |
 | **App Builds** | Expo EAS | Native Android/iOS builds | **$0.00** | Free Tier allows up to 30 cloud builds/month. |
 | **TOTAL OUT-OF-POCKET** | | | **$0.00** | **100% Free live hosting for the entire year!** |
 
 > [!TIP]
-> **Why this setup is better than Render/Heroku Free Tiers for Interviews:**
-> * **No Cold Starts:** Free container hosts spin down after 15 minutes of inactivity. When an interviewer clicks your resume link, they will wait 50+ seconds for it to wake up. On DigitalOcean, your droplet is **always awake**, loading the page in milliseconds.
+> **Why this setup is preferred for High-Availability Demos:**
+> * **No Cold Starts:** Free container hosts (like Render Free Tier) spin down after 15 minutes of inactivity. This VPS setup is **always awake**, loading the API and frontend pages instantly in milliseconds.
 > * **Free WhatsApp Sessions:** A single $12/mo VPS runs all 4 containers and persistent storage locally. On Render, you would have to pay a minimum of $7/mo for a Starter instance just to mount a storage disk for WhatsApp keys.
 
 ---
