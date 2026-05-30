@@ -28,23 +28,23 @@ try:
         sys.path.append(os.getcwd())
     
     # Migration 1: Add user_id to groups
-    from migrate_groups_userid import migrate
+    from migrations.migrate_groups_userid import migrate
     migrate()
     
     # Migration 2: Add receiver_user_id to messages
-    from migrate_receiver_user_id import migrate as migrate_receiver
+    from migrations.migrate_receiver_user_id import migrate as migrate_receiver
     migrate_receiver()
     
     # Migration 3: Add scheduled_events table
-    from migrate_scheduled_events import migrate as migrate_events
+    from migrations.migrate_scheduled_events import migrate as migrate_events
     migrate_events()
 
     # Migration 4: Isolate groups per user
-    from migrate_groups_isolation import migrate as migrate_isolation
+    from migrations.migrate_groups_isolation import migrate as migrate_isolation
     migrate_isolation()
 
     # Migration 5: Add consent fields
-    from migrate_user_consent import migrate as migrate_user_consent
+    from migrations.migrate_user_consent import migrate as migrate_user_consent
     migrate_user_consent()
     
     print("✅ Auto-migration success!")
@@ -84,7 +84,7 @@ def fix_database_schema():
         sys.path.append(os.getcwd())
         
     try:
-        from migrate_groups_userid import migrate
+        from migrations.migrate_groups_userid import migrate
         migrate()
         return {"message": "Migration run successfully. Check logs for details."}
     except Exception as e:
