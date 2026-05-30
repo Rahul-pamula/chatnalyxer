@@ -16,8 +16,10 @@ from .consent import require_consent_for_whatsapp
 
 router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 
+import os
+
 # Session Manager URL
-SESSION_MANAGER_URL = "http://localhost:3002"
+SESSION_MANAGER_URL = os.getenv("SESSION_MANAGER_URL", "http://localhost:3002")
 
 
 @router.post("/connect")

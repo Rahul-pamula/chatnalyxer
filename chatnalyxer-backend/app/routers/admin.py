@@ -17,7 +17,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 # Session Manager URL
-SESSION_MANAGER_URL = "http://localhost:3002"
+SESSION_MANAGER_URL = os.getenv("SESSION_MANAGER_URL", "http://localhost:3002")
 
 class AdminLogin(BaseModel):
     username: str
@@ -196,7 +196,7 @@ def get_system_health(db: Session = Depends(get_db)):
     
     # Check Admin OTP
     try:
-        response = requests.get("http://localhost:3001/health", timeout=2)
+        response = requests.get(f"{OTP_SERVICE_URL}/health", timeout=2)
         health_status["admin_otp"]["status"] = "running" if response.status_code == 200 else "stopped"
     except:
         health_status["admin_otp"]["status"] = "stopped"

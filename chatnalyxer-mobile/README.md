@@ -1,50 +1,66 @@
-# Welcome to your Expo app 👋
+# 📱 Chatnalyxer Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is the Expo-based React Native mobile app for **Chatnalyxer**—an AI-powered task and deadline manager.
 
-## Get started
+---
 
-1. Install dependencies
+## 🏗️ Project Structure
 
-   ```bash
-   npm install
-   ```
+The mobile app has been structured to separate template boilerplates, route files, and core application code cleanly:
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+chatnalyxer-mobile/
+├── app/                  # Expo Router file-based screens and navigation layouts
+│   ├── admin/            # Admin dashboard screens
+│   ├── group/            # WhatsApp group details screen
+│   ├── notifications/    # Push notifications list and detail views
+│   └── _components/      # Page-specific components (ignored by navigation router)
+├── assets/               # Local static media and font assets
+├── src/                  # Consolidated application logic and source code
+│   ├── components/       # Global UI components (e.g. AlarmModal, ThemedText, ThemedView)
+│   ├── constants/        # Application constants (e.g. Colors configuration)
+│   ├── context/          # React context providers (e.g. AuthContext)
+│   ├── hooks/            # Custom React hooks (e.g. useNotificationObserver, useColorScheme)
+│   ├── services/         # API, polling, and helper services
+│   ├── theme/            # Styling parameters, gradients, and shadows
+│   └── config.ts         # Base configurations and API endpoint paths
+├── tsconfig.json         # TypeScript compiler configurations and path aliases
+└── package.json          # Node dependencies and npm startup scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## 🔗 Path Aliases
 
-To learn more about developing your project with Expo, look at the following resources:
+To keep import paths clean and prevent deep relative path references (like `../../../../components`), path aliases are mapped in [tsconfig.json](file:///Users/rahul/Desktop/chatnalyxer/chatnalyxer-mobile/tsconfig.json):
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+* `@/*` maps directly to `./src/*`
 
-## Join the community
+For example:
+```typescript
+import { ThemedText } from '@/components/ThemedText';
+import { useColorScheme } from '@/hooks/useColorScheme';
+```
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🚀 Getting Started
+
+### 1. Install Dependencies
+Run the installation command from the mobile directory:
+```bash
+npm install
+```
+
+### 2. Configure Endpoints
+Ensure that [src/config.ts](file:///Users/rahul/Desktop/chatnalyxer/chatnalyxer-mobile/src/config.ts) is configured with the correct backend service endpoint:
+```typescript
+export const BASE_URL = 'http://localhost:8000'; // For local dev
+```
+
+### 3. Start Development Server
+Start Expo with hot reload:
+```bash
+npm run start
+```
+* Scan the QR code with the **Expo Go** app on your phone, or press `a` for Android Emulator / `i` for iOS Simulator.
