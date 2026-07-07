@@ -1,0 +1,37 @@
+\begin{table*}[tbp]
+\centering
+\caption{Comparative Analysis of Related Research Systems. \checkmark = fully supported; $\circ$ = partially supported; -- = not supported. Commercial productivity tools are excluded; comparison is restricted to published research.}
+\label{tab:related_work_comparison}
+\renewcommand{\arraystretch}{1.25}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|l|c|l|l|c|l|c|c|c|}
+\hline
+\textbf{System / Work} & \textbf{Year} & \textbf{Venue} & \textbf{Dataset} & \textbf{Accuracy (F1)} & \textbf{Architecture} & \textbf{Multi-modal} & \textbf{Temporal} & \textbf{Passive Extract} \\
+\hline
+Lample et al.~\cite{lample2016}       & 2016 & NAACL & CoNLL-2003 & 0.90 & BiLSTM-CRF & -- & -- & -- \\
+\hline
+BERT~\cite{bert2019}                  & 2019 & NAACL & GLUE / SQuAD & 0.92 & Transformer & -- & -- & -- \\
+\hline
+SUTime~\cite{chang2012sutime}         & 2012 & LREC & TempEval & 0.85 & Rule-based & -- & $\circ$ & -- \\
+\hline
+HeidelTime~\cite{strotgen2010heideltime} & 2010 & SemEval & TempEval & 0.86 & Rule-based & -- & $\circ$ & -- \\
+\hline
+GPT-3~\cite{brown2020language}        & 2020 & NeurIPS & WebText & N/A & LLM (Dense) & -- & $\circ$ & -- \\
+\hline
+FLAN-T5~\cite{chung2022scaling}       & 2022 & arXiv & Multi-task & N/A & LLM (Enc-Dec) & -- & $\circ$ & -- \\
+\hline
+DEGREE~\cite{hsu2022degree}           & 2022 & NAACL & ACE-2005 & 0.73 & Gen-Template & -- & $\circ$ & -- \\
+\hline
+Whisper~\cite{radford2022whisper}     & 2022 & ICML & Web Audio & (WER: 10\%) & Enc-Dec Transformer & $\circ$ & -- & -- \\
+\hline
+RAG~\cite{lewis2020rag}              & 2020 & NeurIPS & MS MARCO & N/A & Retriever-Generator & -- & -- & -- \\
+\hline
+Shuster et al.~\cite{shuster2021retrieval} & 2021 & EMNLP & Wizard of Wikipedia & N/A & RAG & -- & -- & -- \\
+\hline
+Xu et al.~\cite{xu2021discourse}      & 2021 & ACL & DailyDialog & 0.68 & Discourse-LLM & -- & $\circ$ & -- \\
+\hline
+\textbf{Chatnalyxer (Ours)}          & \textbf{2026} & \textbf{IEEE} & \textbf{CEC-10K} & \textbf{0.94} & \textbf{Async Microservice} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} \\
+\hline
+\end{tabular}
+}
+\end{table*}

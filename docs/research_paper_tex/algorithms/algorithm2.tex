@@ -1,0 +1,13 @@
+\begin{algorithm}[htbp]
+\caption{Temporal Anchoring Extraction}
+\label{alg:temporal_anchoring}
+\begin{algorithmic}[1]
+\REQUIRE $M_{text}$, $T_{now}$ (UTC)
+\ENSURE Structured JSON with ISO-8601 deadline
+\STATE $Prompt \leftarrow \text{Schema Envelope}$
+\STATE $Prompt \leftarrow Prompt + \text{``[SYSTEM TIME: ''} + T_{now} + \text{``]''}$
+\STATE $Prompt \leftarrow Prompt + M_{text}$
+\STATE $Response \leftarrow \text{GeminiAPI}(Prompt, \text{temp}=0.0)$
+\RETURN \text{ParseJSON}(Response)
+\end{algorithmic}
+\end{algorithm}

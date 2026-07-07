@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile version="21.0.0">
+  <diagram id="page-1" name="Page-1">
+    <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="920" pageHeight="410" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" style="fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" />
+        <mxCell id="1" parent="0" style="fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" />
+        <mxCell id="node_0" value="Mobile Interface" style="rounded=0;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_1" value="Edge Ingestion" style="rounded=0;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="220.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_2" value="FastAPI Core" style="rounded=0;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="470.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_3" value="PostgreSQL DB" style="shape=cylinder3;html=1;boundedLbl=1;backgroundOutline=1;size=15;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="720.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_4" value="Azure APIs" style="ellipse;shape=cloud;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="470.0" y="20.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_5" value="Gemini AI" style="ellipse;shape=cloud;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="470.0" y="320.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_0" value="WhatsApp Network" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_0" target="node_1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_1" value="REST API" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_0" target="node_2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_2" value="Internal Async WebHook" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_1" target="node_2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_3" value="Media Processing" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_2" target="node_4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_4" value="Semantic Task Extraction" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_2" target="node_5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_5" value="Normalized Metadata" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_2" target="node_3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

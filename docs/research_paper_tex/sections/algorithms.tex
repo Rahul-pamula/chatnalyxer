@@ -1,0 +1,35 @@
+\section{Algorithmic Specifications}
+\label{sec:algorithms}
+
+To maintain system efficiency and prevent user alert fatigue, Chatnalyxer relies on dynamic heuristic algorithms.
+
+\subsection{Multi-Modal Priority Triage Algorithm}
+To prevent alert fatigue, the system must independently assess the urgency of a task. The Priority Triage Algorithm calculates a heuristic score based on temporal proximity, explicit urgency keywords (e.g., ``ASAP'', ``urgent''), and modality. The heuristic weights (50, 30, 20) were selected empirically during prototype development and serve as a baseline that can be further optimized through systematic hyperparameter tuning in future work.
+
+\begin{algorithm}[htbp]
+\caption{Priority Classification Heuristic}
+\label{alg:priority}
+\begin{algorithmic}[1]
+\REQUIRE $M_{text}$ (flattened message text), $T_{due}$ (deadline timestamp), $T_{now}$ (current time)
+\ENSURE $P_{level} \in \{\text{LOW}, \text{MEDIUM}, \text{HIGH}, \text{CRITICAL}\}$
+\STATE $\Delta t \leftarrow T_{due} - T_{now}$
+\STATE $Score \leftarrow 0$
+\IF{$\Delta t < 24$ hours}
+    \STATE $Score \leftarrow Score + 50$
+\ELSIF{$\Delta t < 72$ hours}
+    \STATE $Score \leftarrow Score + 20$
+\ENDIF
+\IF{ContainsUrgentKeywords($M_{text}$)}
+    \STATE $Score \leftarrow Score + 30$
+\ENDIF
+\IF{$Score \ge 80$}
+    \RETURN \text{CRITICAL}
+\ELSIF{$Score \ge 50$}
+    \RETURN \text{HIGH}
+\ELSE
+    \RETURN \text{STANDARD}
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Complexity Analysis:} The time complexity of Algorithm~\ref{alg:priority} is dominated by the keyword search (line 10), which operates in $\mathcal{O}(|M_{text}|)$ time, where $|M_{text}|$ is the length of the message. The remaining arithmetic and branching operations are $\mathcal{O}(1)$. Thus, the overall time complexity is $\mathcal{O}(|M_{text}|)$, which is highly efficient for real-time edge evaluation. The space complexity is $\mathcal{O}(1)$ beyond the storage of the message string, as only a single integer $Score$ is maintained in memory.

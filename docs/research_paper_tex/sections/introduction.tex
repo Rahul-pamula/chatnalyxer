@@ -1,0 +1,18 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Over the past decade, instant messaging (IM) platforms have quietly displaced email as the dominant medium for distributing organizational and academic logistics. WhatsApp alone processes over 100 billion messages daily \cite{meta2020whatsapp}, a considerable fraction of which contain deadlines, meeting requests, and shared responsibilities. The irony is structural: IM interfaces are designed around chronological recency, not semantic importance. A critical deadline buried three screens deep in a group chat is functionally invisible within hours.
+
+\textbf{Research Prototype Disclaimer:} Chatnalyxer is presented as an academic research prototype intended to investigate automated task extraction from instant messaging platforms. It is not proposed as a production-ready deployment, and additional engineering, security, and compliance work would be required before real-world adoption.
+
+The standard remediation—manually reading each message and copying tasks into Google Calendar or Microsoft To Do—is both fragile and disruptive. It requires sustained attention to multiple channels simultaneously, and any momentary lapse in monitoring results in missed obligations. What is needed is a system that operates continuously in the background, treating task extraction as an infrastructure concern rather than a user responsibility.
+
+We address this with \textbf{Chatnalyxer}, a passive pipeline that monitors WhatsApp at the network edge and automatically converts conversational messages into structured, scheduled tasks. Three specific technical problems motivate the design:
+
+\begin{itemize}
+    \item \textbf{Decoupled Ingestion Architecture:} Processing LLM inference synchronously on each inbound message is architecturally untenable under bursty traffic. We decouple the edge ingestion layer from the NLP core via an HTTP 202 WebHook, so the edge immediately acknowledges receipt and the heavyweight inference executes asynchronously.
+    \item \textbf{UTC-Anchored Temporal Resolution:} LLMs have no grounding in calendar time and cannot reliably resolve deictic expressions (e.g., ``next Tuesday'') without an explicit temporal reference. We inject the message's transmission timestamp directly into the prompt, converting relative expressions into absolute ISO-8601 deadlines without fine-tuning.
+    \item \textbf{Multi-Modal Priority Triage:} Tasks arrive not only as text but embedded in images and voice notes. Treating every extracted item with equal urgency leads to alert fatigue. We introduce a heuristic scoring function that assigns priority based on deadline proximity, explicit urgency markers, and input modality.
+\end{itemize}
+
+Section~\ref{sec:related_work} surveys prior work in information extraction, temporal reasoning, and academic baseline architectures. Section~\ref{sec:system_architecture} describes the overall system design. Algorithmic and mathematical details follow in Sections~\ref{sec:methodology} through~\ref{sec:mathematical_formulations}. Experimental methodology, results, and ablation findings are reported in Sections~\ref{sec:experimental_evaluation} through~\ref{sec:results_discussion}. We close with a discussion of validity threats, future directions, and conclusions.

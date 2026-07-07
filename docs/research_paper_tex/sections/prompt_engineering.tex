@@ -1,0 +1,8 @@
+\section{Priority Heuristics and Triage}
+\label{sec:prompt_engineering}
+
+Extracting every task with equal urgency is straightforwardly counterproductive: in a high-traffic academic group chat, the pipeline would generate a near-continuous stream of push notifications, defeating the purpose of ambient assistance. Priority triage is therefore not an optional feature but a functional prerequisite.
+
+Rather than delegating urgency classification to the LLM—which would make priority sensitive to prompt phrasing and model version—we compute priority through a deterministic scoring function (Algorithm~\ref{alg:priority}). The score accumulates points based on three evidence sources: chronological proximity to the deadline (deadlines within 24 hours contribute $+50$ points; within 72 hours, $+20$), presence of explicit urgency markers in the message body (e.g., ``ASAP'', ``urgent'', contributes $+30$), and the input modality. Tasks derived from audio voice notes receive a slight upward weight on the assumption that the sender chose real-time communication for time-sensitive information.
+
+The resulting score maps to one of three notification tiers—\texttt{STANDARD}, \texttt{HIGH}, or \texttt{CRITICAL}—which controls both delivery timing and display prominence in the mobile application. This design keeps the classification logic fully auditable and reproducible, in contrast to a learned priority model whose behavior would depend on training data distribution.

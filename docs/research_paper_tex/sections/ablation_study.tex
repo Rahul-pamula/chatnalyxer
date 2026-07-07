@@ -1,0 +1,10 @@
+\section{Ablation Study}
+\label{sec:ablation_study}
+
+To confirm that each major architectural component contributes measurably to system performance, we conducted two targeted ablation experiments by selectively disabling components and measuring the resulting degradation.
+
+\subsection{Removing the UTC Temporal Anchor}
+With the UTC timestamp anchor stripped from the prompt, extraction recall on task-containing messages remained broadly intact—the LLM still correctly identified that a message was task-bearing. However, temporal accuracy collapsed. Recall on deictic expressions (``tomorrow'', ``next week'') dropped by over 60\%, with the model either hallucinating arbitrary calendar dates or returning \texttt{null} deadline fields. These results confirm that LLM zero-shot reasoning over relative time is unreliable in the absence of an explicit temporal reference, and that supplying one via the prompt is both necessary and sufficient to restore accuracy.
+
+\subsection{Removing the Asynchronous Decoupling Boundary}
+In the synchronous variant, the Node.js edge layer was configured to await the full LLM API response before processing the next event. Under a JMeter load test at 50 messages per second, the synchronous implementation exhausted the Node.js connection pool within seconds, after which new messages were silently dropped. The asynchronous variant maintained stable ingestion throughout the same load test with no message loss. This experiment demonstrates that the HTTP 202 decoupling is not a premature optimization but an operational prerequisite for deployment in active group chat environments.

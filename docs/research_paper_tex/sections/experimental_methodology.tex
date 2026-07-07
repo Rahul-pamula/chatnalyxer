@@ -1,0 +1,12 @@
+\section{Experimental Methodology}
+\label{sec:experimental_methodology}
+
+\subsection{Dataset: Chatnalyxer Evaluation Corpus (CEC-10K)}
+Because no publicly available benchmark exists for passive IM task extraction due to privacy constraints, we constructed the \textbf{Chatnalyxer Evaluation Corpus (CEC-10K)} to evaluate extraction performance under controlled conditions. Although synthetic, the dataset was manually designed to emulate realistic university communication patterns, including assignment announcements, meeting reminders, event notifications, examination schedules, and informal conversational noise. Future work will evaluate the system using real-world user studies.
+
+The corpus modality split is 60\% plain text, 20\% images (including photos of handwritten notes), and 20\% audio transcripts. To ensure semantic realism, a subset was validated by three human annotators. Inter-annotator agreement on gold-standard task boundaries and priority labels reached a Cohen's Kappa ($\kappa$) of 0.89, indicating high reliability. 
+
+Class imbalance is a defining characteristic of the target domain. Empirically, the vast majority of messages in a group chat carry no actionable content. CEC-10K reflects this with a 25\% pure conversational noise ratio (greetings, off-topic banter) and 75\% actionable tasks. This stress-tests extraction precision by requiring the model to correctly reject noisy inputs.
+
+\subsection{Evaluation Protocol and Hardware Configuration}
+All experiments were conducted on a centralized server equipped with an Intel Xeon E5-2690 v4 CPU, 64 GB RAM, and a single NVIDIA T4 GPU for edge-based operations. Semantic extraction used the Google Gemini \texttt{gemini-1.5-pro-001} endpoint, with inference temperature fixed at $0.0$ to eliminate generation variance across evaluation runs. Azure Cognitive Services provided the OCR and ASR backbone. Temporal accuracy was assessed using a strict exact-match criterion against ISO-8601 ground-truth deadlines, with no partial credit awarded for correct date but incorrect time components.

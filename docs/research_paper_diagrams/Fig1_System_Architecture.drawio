@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile version="21.0.0">
+  <diagram id="page-1" name="Page-1">
+    <mxGraphModel dx="1400" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1160" pageHeight="560" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n0" value="Mobile Interface" style="rounded=0;html=1;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="40" y="248" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="n1" value="Edge Ingestion&#xa;(Node.js / Baileys)" style="rounded=0;html=1;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="320" y="248" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="n2" value="FastAPI Core" style="rounded=0;html=1;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="600" y="248" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="n3" value="PostgreSQL DB" style="shape=cylinder3;html=1;boundedLbl=1;backgroundOutline=1;size=14;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="900" y="248" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="n4" value="Azure Cognitive&#xa;Services (ASR/OCR)" style="ellipse;shape=cloud;html=1;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="600" y="60" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="n5" value="Gemini LLM" style="ellipse;shape=cloud;html=1;whiteSpace=wrap;overflow=hidden;fontFamily=Helvetica;fontSize=11;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;" vertex="1" parent="1"><mxGeometry x="600" y="440" width="220" height="65" as="geometry" /></mxCell>
+        <mxCell id="e0" value="WhatsApp&#xa;Network" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n0" target="n1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e1" value="HTTP 202&#xa;WebHook" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n1" target="n2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="REST API" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n0" target="n2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="Media&#xa;Processing" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n2" target="n4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="Semantic&#xa;Extraction" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n2" target="n5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="Metadata&#xa;Write" style="orthogonalLoop=1;jettySize=auto;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;fontFamily=Helvetica;fontSize=11;fontColor=#000000;labelBackgroundColor=#FFFFFF;labelBorderColor=none;" edge="1" parent="1" source="n2" target="n3"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

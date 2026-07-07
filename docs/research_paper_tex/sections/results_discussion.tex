@@ -1,0 +1,33 @@
+\section{Results and Discussion}
+\label{sec:results_discussion}
+
+Across the CEC-10K evaluation corpus, Chatnalyxer achieves an overall F1 score of 0.94 on plain-text extraction and maintains sub-15 ms ingestion latency under 50 msg/sec burst traffic. Taken together, these results support the core premise: passive, in-stream task extraction from encrypted messaging networks is both technically feasible and architecturally stable at realistic conversational loads.
+
+\subsection{Analytical Breakdown of Performance}
+
+\textbf{Temporal Anchoring:} The zero-shot extraction capability relies heavily on the UTC metadata anchor. Ablation testing (see Section \ref{sec:ablation_study}) reveals that without this anchor, deictic temporal expressions (e.g., ``tomorrow'') fail to resolve correctly in over 60\% of cases, leading to hallucinated deadlines. Providing the exact transmission timestamp gives the LLM the necessary discourse grounding to perform temporal arithmetic reliably.
+
+\textbf{Multi-modal Degradation:} As shown in Figure \ref{fig:extraction_metrics}, performance drops significantly for image (F1=0.80) and audio (F1=0.83) inputs. This is not due to a failure in the extraction logic, but rather the compounding nature of sequential pipelines. When the Azure OCR engine misreads handwritten text (e.g., confusing ``5 pm'' with ``S pm''), this error propagates silently into the LLM. Because the LLM lacks access to the original image for visual verification, it either hallucinates a correction or fails to extract the deadline entirely. Similarly, in noisy audio environments, ASR hallucination causes the LLM to process corrupted semantic structures. 
+
+\textbf{Priority Triage Mechanisms:} The confusion matrix (Figure \ref{fig:confusion_matrix}) highlights that the LLM is exceptionally accurate at identifying High-priority tasks. This success is driven by the prompt engineering strategy (Section \ref{sec:prompt_engineering}), which forces the LLM to evaluate specific dimensions: temporal proximity and semantic urgency (e.g., words like ``urgent'', ``ASAP''). However, errors at the Low/Medium boundary occur when conversational context is highly subjective, suggesting that priority scoring could be improved by personalizing the prompt to individual user behavior patterns.
+
+\textbf{Asynchronous Throughput:} The $\mathcal{O}(1)$ ingestion boundary holds under all tested conditions, validating the asynchronous design. By issuing an immediate HTTP 202 Accepted response, the edge client avoids blocking on LLM inference (which averages $1.37$ seconds). One practical implication of this result is that scaling the inference capacity—for instance, by routing to a faster LLM endpoint or deploying multiple inference workers—does not require any changes to the WhatsApp ingestion architecture.
+
+\subsection{Case Studies and Error Analysis}
+
+To ground these quantitative results, we provide an end-to-end trace of a successful extraction and a characteristic failure case.
+
+\textbf{Successful Extraction (Deictic Resolution):}
+\begin{itemize}
+    \item \textbf{Input:} ``Can you send the Q3 report tomorrow before the all-hands?'' (Sent: Oct 15, 2025, 14:00 UTC)
+    \item \textbf{Extraction:} Task = ``Send Q3 report'', Deadline = ``2025-10-16T10:00:00Z'' (assuming all-hands is a known entity or defaulting to morning).
+    \item \textbf{Priority:} High (temporal proximity is $< 24$ hours).
+\end{itemize}
+
+\textbf{Failure Case (ASR Hallucination):}
+\begin{itemize}
+    \item \textbf{Input (Voice Note):} ``I need the \textit{syslog} by five.''
+    \item \textbf{ASR Transcription Error:} ``I need the \textit{six dogs} by five.''
+    \item \textbf{LLM Output:} Task = ``Acquire six dogs'', Deadline = ``17:00:00Z''.
+    \item \textbf{Analysis:} The pipeline correctly extracted the temporal anchor, but the semantic corruption introduced by the ASR engine resulted in a nonsensical task. Because the LLM evaluates the text purely in the zero-shot regime without acoustic context, it lacks the mechanisms to reject the hallucination as improbable.
+\end{itemize}

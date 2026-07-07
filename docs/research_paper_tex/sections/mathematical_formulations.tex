@@ -1,0 +1,36 @@
+\section{Mathematical Formulations}
+\label{sec:mathematical_formulations}
+
+We evaluate extraction quality using standard Information Retrieval metrics. Let $T_{E}$ denote the set of tasks correctly extracted (true positives), $F_{E}$ the set of non-task messages incorrectly classified as tasks (false positives), and $M_{E}$ the set of actual tasks that the pipeline failed to extract (false negatives).
+
+Extraction precision (Equation~\ref{eq:precision}) measures the fraction of extracted items that correspond to genuine tasks:
+\begin{equation}
+\label{eq:precision}
+P = \frac{|T_{E}|}{|T_{E}| + |F_{E}|}
+\end{equation}
+
+Recall (Equation~\ref{eq:recall}) quantifies the pipeline's coverage over the ground-truth task set:
+\begin{equation}
+\label{eq:recall}
+R = \frac{|T_{E}|}{|T_{E}| + |M_{E}|}
+\end{equation}
+
+Since precision and recall trade against each other—aggressive extraction increases recall at the cost of precision—we report their harmonic mean (Equation~\ref{eq:f1}) as the primary quality metric:
+\begin{equation}
+\label{eq:f1}
+F_1 = 2 \cdot \frac{P \cdot R}{P + R}
+\end{equation}
+
+End-to-end latency $L_{\text{total}}$ decomposes into four sequential stages, bounded by the maximum inference time, as shown in Equation~\ref{eq:latency}:
+\begin{equation}
+\label{eq:latency}
+L_{\text{total}} = L_{\text{ingest}} + L_{\text{pre}} + L_{\text{llm}} + L_{\text{db}} \le L_{\text{max\_timeout}}
+\end{equation}
+where $L_{\text{pre}}$ represents modality-specific preprocessing (e.g., OCR or ASR).
+
+To calculate Priority, the system defines a temporal decay function $\mathcal{D}(\Delta t)$ and a semantic urgency scalar $U(m)$, yielding the final score $S_{priority}$ in Equation~\ref{eq:priority}:
+\begin{equation}
+\label{eq:priority}
+S_{priority} = \mathcal{D}(T_{due} - T_{now}) + \lambda \cdot U(M_{text})
+\end{equation}
+where $\lambda$ is a weighting hyperparameter tuning the influence of explicit urgency keywords.

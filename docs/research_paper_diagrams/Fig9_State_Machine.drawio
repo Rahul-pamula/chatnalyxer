@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile version="21.0.0">
+  <diagram id="page-1" name="Page-1">
+    <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="820" pageHeight="510" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" style="fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" />
+        <mxCell id="1" parent="0" style="fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" />
+        <mxCell id="node_0" value="Detected" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="20.0" y="20.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_1" value="Processing" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="220.0" y="20.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_2" value="Validated" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="420.0" y="20.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_3" value="Stored" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="620.0" y="20.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_4" value="Scheduled" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="620.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_5" value="Reminder Sent" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="620.0" y="320.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_6" value="Completed" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="320.0" y="320.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_7" value="Expired" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="320.0" y="420.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="node_8" value="Deleted" style="rounded=1;html=1;whiteSpace=wrap;html=1;overflow=width;spacing=8;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1.5;whiteSpace=wrap;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="320.0" y="170.0" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_0" value="" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_0" target="node_1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_1" value="Valid JSON" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_1" target="node_2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_2" value="Null / Invalid" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_1" target="node_8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_3" value="SQL INSERT" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_2" target="node_3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_4" value="Retry Limit Hit" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_2" target="node_8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_5" value="Due &lt; Threshold" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_3" target="node_4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_6" value="Time Trigger" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_4" target="node_5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_7" value="User Swipe" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_5" target="node_6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_8" value="Timeout" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_5" target="node_7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge_9" value="User Delete" style="orthogonalLoop=1;jettySize=auto;html=1;labelBackgroundColor=#ffffff;fontFamily=Helvetica;fontSize=14;fontColor=#000000;edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="node_3" target="node_8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

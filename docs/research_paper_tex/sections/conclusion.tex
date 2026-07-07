@@ -1,0 +1,8 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Chatnalyxer addresses a practical problem that affects anyone coordinating via group messaging: the gap between where task information appears (a chat stream) and where it needs to be acted on (a structured calendar or task manager). Rather than training a dedicated model for this domain, the design combines a zero-shot LLM with a prompt-engineering strategy that supplies the temporal grounding the model otherwise lacks—an approach that achieves F1 of 0.94 on plain-text extraction without any task-specific fine-tuning.
+
+The architectural decision to decouple ingestion from inference via an HTTP 202 boundary proved equally important. Without this separation, the pipeline would fail under conditions as ordinary as a moderately active group chat. The ablation results quantify exactly what that coupling costs: complete message loss at 50 messages per second. With it, ingestion latency is bounded at $\mathcal{O}(1)$ regardless of inference load.
+
+The current system has documented limitations—primarily on multi-modal inputs, where transcription quality constrains extraction quality—and it has been evaluated on a synthetic corpus whose domain coverage is intentionally narrow. Extending coverage to real-world multilingual and cross-domain environments, and replacing cloud inference with on-device SLMs, are the two highest-priority directions. The broader contribution of this work is an existence proof that ambient, infrastructure-level task management from encrypted messaging networks is technically achievable with current tooling.

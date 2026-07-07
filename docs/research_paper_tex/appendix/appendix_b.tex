@@ -1,0 +1,46 @@
+\section{LLM Extraction Schema}
+\label{appendix:schema}
+
+To enforce structured output and prevent hallucination of arbitrary keys, the Gemini inference layer is constrained by the following Pydantic JSON schema. If the model output fails validation against this schema, a self-correction loop is triggered.
+
+\lstset{
+  basicstyle=\footnotesize\ttfamily,
+  breaklines=true,
+  columns=fullflexible
+}
+\begin{lstlisting}
+{
+  "title": "TaskExtraction",
+  "type": "object",
+  "properties": {
+    "is_task": {
+      "title": "Is Task",
+      "description": "True if the message contains a clear actionable task or deadline.",
+      "type": "boolean"
+    },
+    "task_description": {
+      "title": "Task Description",
+      "description": "Extracted summary of the task.",
+      "type": "string"
+    },
+    "deadline_iso": {
+      "title": "Deadline Iso",
+      "description": "ISO-8601 UTC timestamp of the deadline.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "priority": {
+      "title": "Priority",
+      "description": "Calculated priority level.",
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      "type": "string"
+    },
+    "assignee": {
+      "title": "Assignee",
+      "description": "Person responsible for the task.",
+      "type": "string"
+    }
+  },
+  "required": ["is_task"]
+}
+\end{lstlisting}

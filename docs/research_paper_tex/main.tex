@@ -1,0 +1,89 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Packages
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{listings}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+% IEEE Float Optimization Parameters
+\setlength{\textfloatsep}{10pt plus 1.0pt minus 2.0pt}
+\setlength{\floatsep}{8pt plus 1.0pt minus 2.0pt}
+\setlength{\intextsep}{8pt plus 1.0pt minus 2.0pt}
+\setlength{\dbltextfloatsep}{12pt plus 2.0pt minus 2.0pt}
+\setlength{\dblfloatsep}{12pt plus 2.0pt minus 2.0pt}
+\setcounter{topnumber}{2}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.85}
+
+\begin{document}
+
+
+\title{Chatnalyxer: Asynchronous Task Extraction and Priority Triage in Multi-Modal Chat Networks}
+
+\author{\IEEEauthorblockN{Pamula Rahul, Duggina Yaswanth Chowdary, Kyatham Aishwarya, Mahira Syed}
+\IEEEauthorblockA{\textit{Department of Computer Science and Engineering (Artificial Intelligence and Machine Learning)} \\
+\textit{Parul University}\\
+Vadodara, Gujarat, India}
+}
+
+\maketitle
+
+\input{sections/abstract}
+
+\begin{IEEEkeywords}
+Natural Language Processing, Large Language Models, Multi-modal Extraction, WhatsApp, Edge Computing.
+\end{IEEEkeywords}
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/related_work_table}
+
+\input{sections/system_architecture}
+\input{sections/whatsapp_integration}
+\input{sections/ai_processing_pipeline}
+\input{sections/rag_chatbot}
+\input{sections/database_layer}
+
+\input{sections/methodology}
+\input{sections/prompt_engineering}
+\input{algorithms/algorithm1}
+\input{algorithms/algorithm2}
+\input{sections/algorithms}
+\input{sections/mathematical_formulations}
+
+\input{sections/experimental_methodology}
+\input{sections/experimental_evaluation}
+\input{sections/ablation_study}
+
+\input{sections/results_discussion}
+
+\input{sections/comparative_analysis}
+
+\input{sections/threats_to_validity}
+\input{sections/future_work}
+\input{sections/conclusion}
+
+\section*{Acknowledgment}
+The authors would like to express their sincere gratitude to Prof. Ritu Agrawal and Prof. Jaswanth Parlapalli for their invaluable guidance, support, and mentorship throughout the development of this project.
+
+\appendices
+\input{appendix/appendix_b}
+\bibliographystyle{IEEEtran}
+\bibliography{bibliography/references}
+
+\end{document}

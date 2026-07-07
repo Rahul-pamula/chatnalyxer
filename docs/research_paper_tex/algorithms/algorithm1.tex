@@ -1,0 +1,17 @@
+\begin{algorithm}[htbp]
+\caption{Edge Message Filtration (WhatsApp WSS)}
+\label{alg:message_filtration}
+\begin{algorithmic}[1]
+\REQUIRE Inbound payload $P$
+\ENSURE HTTP 202 Accepted response
+\IF{$P.\text{type} == \text{status\_update}$ \OR $P.\text{type} == \text{reaction}$}
+    \STATE Drop payload (Noise)
+    \RETURN
+\ENDIF
+\IF{IsEncrypted($P$)}
+    \STATE $M \leftarrow \text{DecryptSignal}(P, \text{LocalKeys})$
+\ENDIF
+\STATE $\text{DispatchWebhook}(M, \text{FastAPI\_Core})$
+\RETURN \text{HTTP 202 Accepted}
+\end{algorithmic}
+\end{algorithm}

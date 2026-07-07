@@ -1,0 +1,8 @@
+\subsection{Conversational Retrieval-Augmented Generation (RAG)}
+\label{subsec:rag_architecture}
+
+Passive task extraction addresses one interaction mode—the system observes and acts. But users also need to query their accumulated history: ``What was the deadline the professor mentioned in the PDF last week?'' Static dashboards are poorly suited to this; they require users to remember where information appeared and to manually navigate to it.
+
+To support natural-language querying of the extracted corpus, Chatnalyxer integrates a Retrieval-Augmented Generation (RAG) layer. During ingestion, text extracted from attached PDFs (via \texttt{pdf\_processor.py}) and images (via Azure OCR) is persisted in the PostgreSQL schema alongside structured task metadata and recent conversational history. When a user submits a natural-language query, the backend retrieves the relevant records—deadlines, conversational context, document text—and injects them as a grounded knowledge block into the Gemini LLM prompt. The model is then constrained to answer solely from the retrieved context rather than from parametric memory.
+
+This approach offers a concrete reliability benefit: because the LLM's answer is conditioned on deterministically retrieved database content rather than on training-time knowledge, the rate of factual hallucination is substantially reduced. Users receive answers that are directly traceable to their own message and document history.

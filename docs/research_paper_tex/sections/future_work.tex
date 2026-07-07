@@ -1,0 +1,13 @@
+\section{Future Work}
+\label{sec:future_work}
+
+Several limitations of the current design point toward concrete research directions.
+
+\subsection{On-Device Inference and Privacy Hardening}
+The current pipeline routes all message content to external cloud APIs, introducing both a latency dependency and a theoretical data exposure surface. Future work will investigate both open-weight and proprietary large language models to improve reproducibility, deployment flexibility, and privacy. Deploying inference entirely on-device via Edge AI and offline inference mechanisms would eliminate the cloud API dependency and provide a stronger privacy guarantee. Future research directions also include personalized ranking, federated learning for privacy-preserving model updates, and adaptive priority learning to dynamically adjust heuristic weights based on user behavior.
+
+\subsection{Graph-Augmented Retrieval for Stateful Context}
+The current RAG implementation retrieves relevant documents and message history through embedding similarity, treating each retrieved item independently. A richer interaction model would maintain a persistent Knowledge Graph linking tasks to the people, documents, and prior obligations from which they originated—allowing queries like ``what assignments are still pending from the syllabus uploaded in September?'' that span multiple ingestion events. Graph-RAG architectures, which traverse entity relationships rather than ranking isolated embeddings, are the natural candidate for this capability. Building such a graph incrementally from streaming chat data, without requiring explicit user annotation, is an open research problem.
+
+\subsection{Multilingual Expansion and Robustness}
+The current priority triage and temporal heuristics were optimized exclusively for English. Future iterations must evaluate the system across linguistically diverse contexts, particularly heavily mixed-code environments (e.g., ``Hinglish'') common in international chat networks. Adapting the prompts and underlying models to handle cross-lingual temporal cues without performance degradation is necessary before the system can be deployed globally.

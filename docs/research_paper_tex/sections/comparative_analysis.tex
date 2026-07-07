@@ -1,0 +1,10 @@
+\section{Comparative Technical Analysis}
+\label{sec:comparative_analysis}
+
+Table~\ref{tab:related_work_comparison} positions Chatnalyxer against representative systems across the dimensions most relevant to passive task management: interaction model, supported modalities, extraction automation, and priority differentiation.
+
+Existing academic literature clusters into two primary categories. One distinct category comprises traditional Information Extraction (IE) pipelines, such as those relying on BiLSTM-CRF \cite{lample2016} or early Transformer architectures \cite{bert2019}. While these systems achieve high precision (e.g., F1=0.92 on benchmark datasets like CoNLL-2003 or GLUE), they operate almost exclusively on monolithic, static text documents. They do not naturally extend to the fragmented, stateful, and highly contextual nature of multi-party chat.
+
+The second category encompasses temporal reasoning systems like SUTime \cite{chang2012sutime} and HeidelTime \cite{strotgen2010heideltime}. These rule-based architectures excel at resolving explicit date formats but struggle significantly with the informal, relative deictic expressions common in instant messaging (e.g., ``EOD tomorrow''). 
+
+The architectural distinction of Chatnalyxer lies in synthesizing these capabilities into a unified, asynchronous microservice. By integrating multi-modal input processing (OCR via Azure and ASR) with a UTC-anchored LLM extraction phase, the system bridges the gap between static document analysis and real-time conversational streaming. The inclusion of a deterministic scoring heuristic for priority differentiation ensures that extracted tasks are triaged according to temporal urgency—a critical requirement for preventing alert fatigue in high-volume environments.
